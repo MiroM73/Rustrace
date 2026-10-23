@@ -33,12 +33,14 @@ if (-not $Version) {
 $exe = Join-Path $root 'target\release\rustrace.exe'
 if (-not (Test-Path $exe)) { throw "$exe not found - run 'cargo build --release' first." }
 
-# Locate 7-Zip and its GUI self-extractor module.
-$sevenZip = (Get-Command 7z.exe -ErrorAction SilentlyContinue).Source
-if (-not $sevenZip) { $sevenZip = Join-Path $env:ProgramFiles '7-Zip\7z.exe' }
-if (-not (Test-Path $sevenZip)) { throw '7-Zip (7z.exe) not found.' }
+# Locate 7-Zip and its GUI self-extractor module. The installation folder is preferred, because a
+# 7z.exe in PATH may be a shim (e.g. Chocolatey) without 7z.sfx next to it.
+$candidates = @(Join-Path $env:ProgramFiles '7-Zip\7z.exe')
+$candidates += Get-Command 7z.exe -All -ErrorAction SilentlyContinue | ForEach-Object Source
+$sevenZip = $candidates | Where-Object { $_ -and (Test-Path (Join-Path (Split-Path $_) '7z.sfx')) } |
+    Select-Object -First 1
+if (-not $sevenZip) { throw '7-Zip with the 7z.sfx module not found (install 7-Zip).' }
 $sfxModule = Join-Path (Split-Path $sevenZip) '7z.sfx'
-if (-not (Test-Path $sfxModule)) { throw "7-Zip SFX module not found: $sfxModule" }
 
 # Stage the folder layout exactly as it should appear after extraction.
 $dist = Join-Path $root 'dist'
