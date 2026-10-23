@@ -10,6 +10,7 @@
         RusTrace\
             rustrace.exe
             lang\*.lang
+            LICENSE
 
     Requires 7-Zip (7z.exe and the 7z.sfx module), found in PATH or in "Program Files\7-Zip".
     Build first with: cargo build --release
@@ -50,6 +51,7 @@ if (Test-Path $stage) { Remove-Item $stage -Recurse -Force }
 New-Item -ItemType Directory -Force (Join-Path $appDir 'lang') | Out-Null
 Copy-Item $exe $appDir
 Copy-Item (Join-Path $root 'lang\*.lang') (Join-Path $appDir 'lang')
+Copy-Item (Join-Path $root 'LICENSE') $appDir
 
 # Archive the RusTrace folder itself, so everything extracts into <destination>\RusTrace.
 $archive = Join-Path $dist 'RusTrace.7z'
