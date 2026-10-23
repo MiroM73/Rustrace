@@ -4,6 +4,21 @@ A desktop application in Rust (egui/eframe) for watching log files like CMTrace 
 with custom color rules, regex search, adjustable automatic refresh, error code lookup, export of
 highlighted rows with their context and a translatable user interface.
 
+## Download
+
+Ready-made Windows builds are on the [Releases](https://github.com/MiroM73/Rustrace/releases) page:
+`RusTrace-<version>-windows-x64.exe` is a self-extracting archive. Run it, choose a destination
+folder, and it creates:
+
+```
+RusTrace\
+    rustrace.exe      the program (no installation, no Visual C++ runtime needed)
+    lang\*.lang       language files – edit or add translations here
+```
+
+The archive is not code-signed, so Windows SmartScreen may ask for confirmation
+("More info" → "Run anyway"). The `.sha256` file next to it contains the checksum.
+
 ## Building
 
 1. Install Rust: https://rustup.rs (on Windows with Visual Studio Build Tools – "Desktop development with C++").
@@ -19,6 +34,19 @@ Open a specific file: `rustrace.exe C:\Windows\CCM\Logs\AppEnforce.log`
 (it can also be set as the default program for `.log` files). Files can be dragged onto the window too.
 
 Tests: `cargo test`
+
+The C runtime is linked statically (`.cargo/config.toml`), so the exe runs without the
+Visual C++ Redistributable.
+
+### Making a release
+
+- Locally: `cargo build --release`, then `scripts\package.ps1` (needs 7-Zip) →
+  `dist\RusTrace-v<version>-windows-x64.exe` + `.sha256`.
+- On GitHub: bump `version` in `Cargo.toml`, commit, then push a tag, e.g.
+  `git tag v0.1.0 && git push origin v0.1.0`. The workflow `.github/workflows/release.yml` runs the
+  tests, builds, packages and creates a **draft** release with the archive attached; review it and
+  publish. A manual run of the workflow (Actions → Release → Run workflow) only builds the archive as
+  a downloadable artifact.
 
 ## Features
 
@@ -166,6 +194,8 @@ The built-in languages live in `lang/*.lang` in the source tree and are embedded
 - `src/app.rs` – user interface
 - `src/main.rs` – window start-up
 - `lang/*.lang` – built-in translations
+- `scripts/package.ps1` – packs the release build into the self-extracting archive
+- `.github/workflows/release.yml` – builds and publishes releases on GitHub
 
 ## How this code was created
 
