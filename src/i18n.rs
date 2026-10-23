@@ -194,7 +194,7 @@ fn scan_available() -> Vec<LangInfo> {
             .remove("language.name")
             .unwrap_or_else(|| l.code.clone());
     }
-    list.sort_by(|a, b| a.code.to_lowercase().cmp(&b.code.to_lowercase()));
+    list.sort_by_key(|a| a.code.to_lowercase());
     list
 }
 

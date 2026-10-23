@@ -17,6 +17,7 @@ menu.file.recent.none = (keine)
 menu.file.recent.clear = Liste leeren
 menu.file.refresh = Aktualisieren
 menu.file.reload = Ganze Datei neu laden
+menu.file.export = Hervorgehobene Zeilen mit Kontext exportieren…
 menu.file.exit = Beenden
 menu.view = Ansicht
 menu.view.details = Detailbereich
@@ -171,6 +172,27 @@ lookup.no_description = Für diesen Code ist keine Beschreibung verfügbar.
 lookup.windows_only = (Windows-Systembeschreibungen sind nur unter Windows verfügbar.)
 lookup.copy = Kopieren
 
+
+# --- Export ---
+export.title = Hervorgehobene Zeilen mit Kontext exportieren
+export.before = Zeilen vor jeder hervorgehobenen Zeile:
+export.after = Zeilen nach jeder hervorgehobenen Zeile:
+export.include = Als hervorgehoben gelten:
+export.inc.rules = Zeilen, die aktiven Hervorhebungsregeln entsprechen
+export.inc.errors = Fehler
+export.inc.warnings = Warnungen
+export.inc.search = Suchtreffer
+export.format = Format:
+export.format.original = Originalzeilen (wieder in CMTrace / RusTrace zu öffnen)
+export.format.readable = Lesbare Tabelle (tabulatorgetrennt, » markiert hervorgehobene Zeilen)
+export.separators = Trennzeile zwischen Blöcken
+export.note = Es wird die ganze Datei verwendet, unabhängig vom aktuellen Filter. Überlappende Bereiche werden zusammengeführt, keine Zeile wird doppelt exportiert.
+export.summary = Hervorgehobene Zeilen: {hits}   Blöcke: {blocks}   Zu exportierende Zeilen: {rows}
+export.button = Exportieren…
+export.nothing = Keine hervorgehobenen Zeilen – nichts zu exportieren.
+export.running = Exportiere…
+export.done = {rows} Zeilen in {blocks} Blöcken nach {path} exportiert
+export.header = Treffer\tZeile\tDatum / Uhrzeit\tSchweregrad\tKomponente\tThread\tMeldung
 # --- Tastenkürzel ---
 help.title = Tastenkürzel
 help.open = Datei öffnen
@@ -183,6 +205,7 @@ help.prev = Vorheriger Treffer
 help.filter = Filter ein/aus
 help.rules = Hervorhebungsregeln
 help.lookup = Fehlercode nachschlagen
+help.export = Hervorgehobene Zeilen mit Kontext exportieren
 help.navigate = In der Tabelle bewegen
 help.end = Zum Ende + Ende folgen
 help.copy = Meldung der ausgewählten Zeile kopieren
@@ -192,6 +215,7 @@ help.open_hint = Eine Datei kann auch durch Ziehen ins Fenster oder als Argument
 # --- Dialoge und Fehler ---
 dialog.filter.logs = Logdateien
 dialog.filter.all = Alle Dateien
+dialog.filter.text = Textdateien
 error.thread = Thread konnte nicht gestartet werden: {error}
 error.read = Die Datei kann nicht gelesen werden: {error}
 error.read_internal = Lesen der Datei fehlgeschlagen (interner Fehler).

@@ -4,6 +4,7 @@
 mod app;
 mod config;
 mod errcodes;
+mod export;
 mod i18n;
 mod parser;
 

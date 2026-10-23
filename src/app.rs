@@ -1,5 +1,6 @@
 use crate::config::{Config, HighlightRule, HighlightScope, IntervalUnit};
 use crate::errcodes::{self, CodeInfo};
+use crate::export::{self, ExportFormat, ReadableRow};
 use crate::i18n;
 use crate::parser::{LogEntry, LogSource, PollResult, Progress, Severity};
 use crate::t;
@@ -130,6 +131,29 @@ pub struct App {
     dark: bool,
     /// Which theme's colors are edited in the rules/colors windows.
     edit_dark: bool,
+
+    /// Change counters – used to know when cached export hits are stale.
+    data_gen: u64,
+    rules_gen: u64,
+    search_gen: u64,
+    show_export: bool,
+    /// Cached highlighted entry indexes for the export: (key, hits).
+    export_hits: Option<(ExportKey, Vec<usize>)>,
+    /// Export running in a background thread; the result is a status message.
+    export_job: Option<mpsc::Receiver<Result<String, String>>>,
+}
+
+/// Everything the list of highlighted rows depends on.
+#[derive(Clone, Copy, PartialEq, Eq)]
+struct ExportKey {
+    data_gen: u64,
+    rules_gen: u64,
+    search_gen: u64,
+    len: usize,
+    rules: bool,
+    errors: bool,
+    warnings: bool,
+    search: bool,
 }
 
 impl App {
@@ -186,6 +210,12 @@ impl App {
             new_lang_code: String::new(),
             dark: cc.egui_ctx.global_style().visuals.dark_mode,
             edit_dark: cc.egui_ctx.global_style().visuals.dark_mode,
+            data_gen: 0,
+            rules_gen: 0,
+            search_gen: 0,
+            show_export: false,
+            export_hits: None,
+            export_job: None,
         };
         app.apply_theme(&cc.egui_ctx);
         app.recompile_rules();
@@ -235,6 +265,7 @@ impl App {
     }
 
     fn recompile_rules(&mut self) {
+        self.rules_gen += 1;
         self.rules.clear();
         self.rule_errors.clear();
         for r in &self.cfg.rules {
@@ -258,6 +289,7 @@ impl App {
     }
 
     fn recompile_search(&mut self) {
+        self.search_gen += 1;
         self.search_err = None;
         self.search_re = None;
         if !self.search_text.is_empty() {
@@ -342,6 +374,7 @@ impl App {
 
     fn open_file(&mut self, path: &str) {
         self.cancel_loading();
+        self.data_gen += 1;
         self.cur_path = Some(PathBuf::from(path));
         self.source = Some(LogSource::new(path, self.cfg.keyword_severity));
         self.entries = Vec::new();
@@ -418,6 +451,9 @@ impl App {
 
     fn apply_result(&mut self, res: std::io::Result<PollResult>) {
         let before = self.filtered.len();
+        if matches!(res, Ok(PollResult::Reset { .. }) | Ok(PollResult::Appended { .. })) {
+            self.data_gen += 1;
+        }
         match res {
             Ok(PollResult::Unchanged) => {
                 self.status_error = None;
@@ -577,6 +613,12 @@ impl App {
         }
 
         let typing = ctx.egui_wants_keyboard_input();
+        let export_key = ctx.input_mut(|i| {
+            i.consume_key(Modifiers::COMMAND | Modifiers::SHIFT, Key::S)
+        });
+        if export_key && self.cur_path.is_some() {
+            self.show_export = true;
+        }
         let (open, f5, ctrl_f5, ctrl_f, f3, sh_f3, pause, ctrl_h, ctrl_l, ctrl_e) =
             ctx.input_mut(|i| {
                 (
@@ -724,6 +766,21 @@ impl App {
                 if ui.button(format!("{}   {}", t!("menu.file.reload"), kb("Ctrl+F5"))).clicked() {
                     ui.close();
                     self.reload_full();
+                }
+                ui.separator();
+                if ui
+                    .add_enabled(
+                        self.cur_path.is_some(),
+                        egui::Button::new(format!(
+                            "📤 {}   {}",
+                            t!("menu.file.export"),
+                            kb("Ctrl+Shift+S")
+                        )),
+                    )
+                    .clicked()
+                {
+                    ui.close();
+                    self.show_export = true;
                 }
                 ui.separator();
                 if ui.button(t!("menu.file.exit")).clicked() {
@@ -1920,6 +1977,260 @@ impl App {
         self.show_lookup = open;
     }
 
+    // ------------------------------------------------------------------
+    // Export around highlighted rows
+    // ------------------------------------------------------------------
+
+    /// Is the entry "highlighted" according to the export criteria?
+    fn is_export_hit(&self, idx: usize) -> bool {
+        let e = &self.entries[idx];
+        let c = &self.cfg;
+        (c.export_errors && e.severity == Severity::Error)
+            || (c.export_warnings && e.severity == Severity::Warning)
+            || (c.export_search && self.is_match.get(idx).copied().unwrap_or(false))
+            || (c.export_rules
+                && self.rules.iter().any(|r| {
+                    r.regex.is_match(&e.message)
+                        || (r.rule.scope == HighlightScope::Row
+                            && r.rule.match_component
+                            && r.regex.is_match(&e.component))
+                }))
+    }
+
+    /// Indexes of highlighted entries (recomputed only when something they depend on changed).
+    fn export_hits(&mut self) -> &[usize] {
+        let key = ExportKey {
+            data_gen: self.data_gen,
+            rules_gen: self.rules_gen,
+            search_gen: self.search_gen,
+            len: self.entries.len(),
+            rules: self.cfg.export_rules,
+            errors: self.cfg.export_errors,
+            warnings: self.cfg.export_warnings,
+            search: self.cfg.export_search,
+        };
+        if self.export_hits.as_ref().is_none_or(|(k, _)| *k != key) {
+            let hits: Vec<usize> = (0..self.entries.len())
+                .filter(|&i| self.is_export_hit(i))
+                .collect();
+            self.export_hits = Some((key, hits));
+        }
+        &self.export_hits.as_ref().unwrap().1
+    }
+
+    fn export_blocks(&mut self) -> (usize, Vec<(usize, usize)>) {
+        let (before, after, len) = (self.cfg.export_before, self.cfg.export_after, self.entries.len());
+        let hits = self.export_hits();
+        let n = hits.len();
+        let blocks = export::merge_ranges(hits, before, after, len);
+        (n, blocks)
+    }
+
+    fn export_window(&mut self, ctx: &egui::Context) {
+        if !self.show_export {
+            return;
+        }
+        let mut open = true;
+        let mut start = false;
+        let mut changed = false;
+        egui::Window::new(format!("📤 {}", t!("export.title")))
+            .id(egui::Id::unique("export_window"))
+            .open(&mut open)
+            .resizable(false)
+            .default_width(520.0)
+            .show(ctx, |ui| {
+                egui::Grid::new("export_grid").spacing([12.0, 6.0]).show(ui, |ui| {
+                    ui.label(t!("export.before"));
+                    changed |= ui
+                        .add(egui::DragValue::new(&mut self.cfg.export_before).range(0..=100_000))
+                        .changed();
+                    ui.end_row();
+                    ui.label(t!("export.after"));
+                    changed |= ui
+                        .add(egui::DragValue::new(&mut self.cfg.export_after).range(0..=100_000))
+                        .changed();
+                    ui.end_row();
+                });
+                ui.separator();
+                ui.label(t!("export.include"));
+                changed |= ui.checkbox(&mut self.cfg.export_rules, t!("export.inc.rules")).changed();
+                changed |= ui.checkbox(&mut self.cfg.export_errors, t!("export.inc.errors")).changed();
+                changed |= ui
+                    .checkbox(&mut self.cfg.export_warnings, t!("export.inc.warnings"))
+                    .changed();
+                changed |= ui
+                    .add_enabled(
+                        self.search_re.is_some(),
+                        egui::Checkbox::new(&mut self.cfg.export_search, t!("export.inc.search")),
+                    )
+                    .changed();
+                ui.separator();
+                ui.label(t!("export.format"));
+                changed |= ui
+                    .radio_value(
+                        &mut self.cfg.export_format,
+                        ExportFormat::Original,
+                        t!("export.format.original"),
+                    )
+                    .changed();
+                changed |= ui
+                    .radio_value(
+                        &mut self.cfg.export_format,
+                        ExportFormat::Readable,
+                        t!("export.format.readable"),
+                    )
+                    .changed();
+                changed |= ui
+                    .checkbox(&mut self.cfg.export_separators, t!("export.separators"))
+                    .changed();
+                ui.separator();
+                ui.weak(t!("export.note"));
+                ui.add_space(4.0);
+
+                let (hits, blocks) = self.export_blocks();
+                let rows = export::row_count(&blocks);
+                ui.strong(t!(
+                    "export.summary",
+                    hits = hits,
+                    blocks = blocks.len(),
+                    rows = rows
+                ));
+                ui.add_space(4.0);
+                ui.horizontal(|ui| {
+                    let busy = self.export_job.is_some() || self.loading.is_some();
+                    if ui
+                        .add_enabled(rows > 0 && !busy, egui::Button::new(format!("💾 {}", t!("export.button"))))
+                        .clicked()
+                    {
+                        start = true;
+                    }
+                    if self.export_job.is_some() {
+                        ui.spinner();
+                        ui.label(t!("export.running"));
+                    } else if rows == 0 {
+                        ui.weak(t!("export.nothing"));
+                    }
+                });
+            });
+        if changed {
+            self.cfg_dirty = true;
+        }
+        if start {
+            self.start_export();
+        }
+        self.show_export = open;
+    }
+
+    /// Asks for the target file and writes the export in a background thread.
+    fn start_export(&mut self) {
+        let Some(src) = self.cur_path.clone() else { return };
+        let (_, blocks) = self.export_blocks();
+        if blocks.is_empty() {
+            return;
+        }
+        let readable = self.cfg.export_format == ExportFormat::Readable;
+        let stem = src
+            .file_stem()
+            .map(|s| s.to_string_lossy().into_owned())
+            .unwrap_or_else(|| "log".into());
+        let (ext, filter) = if readable {
+            ("txt", t!("dialog.filter.text"))
+        } else {
+            ("log", t!("dialog.filter.logs"))
+        };
+        let mut dlg = rfd::FileDialog::new()
+            .add_filter(filter, &[ext])
+            .set_file_name(format!("{stem}_export.{ext}"));
+        if let Some(dir) = src.parent() {
+            dlg = dlg.set_directory(dir);
+        }
+        let Some(target) = dlg.save_file() else { return };
+
+        let line_ranges: Vec<(usize, usize)> = blocks
+            .iter()
+            .map(|&b| export::line_range(&self.entries, b))
+            .collect();
+        let rows = export::row_count(&blocks);
+        let separators = self.cfg.export_separators;
+        // The readable text is built here (it needs translations and date formatting);
+        // the original lines are read from the file in the thread.
+        let readable_text = readable.then(|| {
+            let hits = self.export_hits().to_vec();
+            let row_blocks: Vec<Vec<ReadableRow<'_>>> = blocks
+                .iter()
+                .map(|&(a, b)| {
+                    (a..=b)
+                        .map(|i| {
+                            let e = &self.entries[i];
+                            ReadableRow {
+                                highlighted: hits.binary_search(&i).is_ok(),
+                                line: e.line_no,
+                                datetime: self.display_dt(&e.datetime),
+                                severity: match e.severity {
+                                    Severity::Error => t!("severity.error"),
+                                    Severity::Warning => t!("severity.warning"),
+                                    Severity::Info => t!("severity.info"),
+                                },
+                                entry: e,
+                            }
+                        })
+                        .collect()
+                })
+                .collect();
+            export::build_readable(&t!("export.header"), &row_blocks, &line_ranges, separators)
+        });
+        let nblocks = blocks.len();
+        let (tx, rx) = mpsc::channel();
+        let ctx = self.ctx.clone();
+        let done_msg = t!(
+            "export.done",
+            rows = rows,
+            blocks = nblocks,
+            path = target.display()
+        );
+        let spawned = std::thread::Builder::new()
+            .name("rustrace-export".into())
+            .spawn(move || {
+                let text = match readable_text {
+                    Some(t) => Ok(t),
+                    None => crate::parser::read_line_ranges(&src, &line_ranges)
+                        .map(|lines| export::build_original(&line_ranges, &lines, separators)),
+                };
+                let res = text
+                    .and_then(|t| std::fs::write(&target, t))
+                    .map(|_| done_msg)
+                    .map_err(|e| e.to_string());
+                let _ = tx.send(res);
+                ctx.request_repaint();
+            });
+        match spawned {
+            Ok(_) => self.export_job = Some(rx),
+            Err(e) => self.status_error = Some(t!("error.thread", error = e)),
+        }
+    }
+
+    fn check_export(&mut self) {
+        let Some(rx) = &self.export_job else { return };
+        match rx.try_recv() {
+            Ok(Ok(msg)) => {
+                self.export_job = None;
+                self.status_error = None;
+                self.status_info = Some((msg, Instant::now() + Duration::from_secs(5)));
+            }
+            Ok(Err(e)) => {
+                self.export_job = None;
+                self.status_error = Some(t!("error.export", error = e));
+            }
+            Err(mpsc::TryRecvError::Empty) => {
+                self.ctx.request_repaint_after(Duration::from_millis(100));
+            }
+            Err(mpsc::TryRecvError::Disconnected) => {
+                self.export_job = None;
+                self.status_error = Some(t!("error.export", error = "internal error"));
+            }
+        }
+    }
+
     fn help_window(&mut self, ctx: &egui::Context) {
         egui::Window::new(t!("help.title"))
             .id(egui::Id::unique("help_window"))
@@ -1938,6 +2249,7 @@ impl App {
                         ("Ctrl+L", "help.filter"),
                         ("Ctrl+H", "help.rules"),
                         ("Ctrl+E", "help.lookup"),
+                        ("Ctrl+Shift+S", "help.export"),
                         ("↑ ↓ PgUp PgDn Home", "help.navigate"),
                         ("End", "help.end"),
                         ("Ctrl+C", "help.copy"),
@@ -1983,6 +2295,8 @@ impl eframe::App for App {
         self.colors_window(&ctx);
         self.help_window(&ctx);
         self.lookup_window(&ctx);
+        self.export_window(&ctx);
+        self.check_export();
 
         // Save settings (debounced, so we do not write on every mouse move).
         let closing = ctx.input(|i| i.viewport().close_requested());

@@ -17,6 +17,7 @@ menu.file.recent.none = (žádné)
 menu.file.recent.clear = Vymazat seznam
 menu.file.refresh = Obnovit
 menu.file.reload = Načíst celý soubor znovu
+menu.file.export = Exportovat zvýrazněné řádky s okolím…
 menu.file.exit = Konec
 menu.view = Zobrazit
 menu.view.details = Panel podrobností
@@ -171,6 +172,27 @@ lookup.no_description = Pro tento kód není k dispozici popis.
 lookup.windows_only = (Systémové popisy Windows jsou dostupné jen při běhu na Windows.)
 lookup.copy = Kopírovat
 
+
+# --- Export ---
+export.title = Export zvýrazněných řádků s okolím
+export.before = Řádků před každým zvýrazněným:
+export.after = Řádků za každým zvýrazněným:
+export.include = Zvýrazněné řádky jsou:
+export.inc.rules = Řádky odpovídající zapnutým pravidlům zvýrazňování
+export.inc.errors = Chyby
+export.inc.warnings = Varování
+export.inc.search = Shody hledání
+export.format = Formát:
+export.format.original = Původní řádky (lze znovu otevřít v CMTrace / RusTrace)
+export.format.readable = Čitelná tabulka (oddělená tabulátory, » označuje zvýrazněné řádky)
+export.separators = Oddělovací řádek mezi bloky
+export.note = Použije se celý soubor bez ohledu na aktuální filtr. Překrývající se úseky se sloučí, takže žádný řádek se neexportuje dvakrát.
+export.summary = Zvýrazněné řádky: {hits}   Bloky: {blocks}   Řádků k exportu: {rows}
+export.button = Exportovat…
+export.nothing = Žádné zvýrazněné řádky – není co exportovat.
+export.running = Exportuji…
+export.done = Exportováno {rows} řádků v {blocks} blocích do {path}
+export.header = Zvýr.\tŘádek\tDatum / čas\tZávažnost\tKomponenta\tVlákno\tZpráva
 # --- Klávesové zkratky ---
 help.title = Klávesové zkratky
 help.open = Otevřít soubor
@@ -183,6 +205,7 @@ help.prev = Předchozí shoda
 help.filter = Zapnout/vypnout filtrování
 help.rules = Pravidla zvýrazňování
 help.lookup = Vyhledat chybový kód
+help.export = Exportovat zvýrazněné řádky s okolím
 help.navigate = Pohyb v tabulce
 help.end = Na konec + sledovat konec
 help.copy = Kopírovat zprávu vybraného řádku
@@ -192,6 +215,7 @@ help.open_hint = Soubor můžete otevřít i přetažením do okna nebo jako arg
 # --- Dialogy a chyby ---
 dialog.filter.logs = Log soubory
 dialog.filter.all = Všechny soubory
+dialog.filter.text = Textové soubory
 error.thread = Nepodařilo se spustit vlákno: {error}
 error.read = Soubor nelze číst: {error}
 error.read_internal = Čtení souboru selhalo (interní chyba).

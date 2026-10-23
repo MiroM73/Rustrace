@@ -275,6 +275,42 @@ fn decode(bytes: &[u8], enc: Encoding) -> String {
     }
 }
 
+/// Reads the given ranges of physical lines (1-based, inclusive) from a file, decoded the
+/// same way as for viewing (BOM, UTF-8, ANSI fallback). Used by the export of original lines.
+pub fn read_line_ranges(
+    path: &Path,
+    ranges: &[(usize, usize)],
+) -> std::io::Result<Vec<Vec<String>>> {
+    let bytes = std::fs::read(path)?;
+    let (enc, body): (Encoding, &[u8]) = if let Some(b) = bytes.strip_prefix(&[0xEF, 0xBB, 0xBF]) {
+        (Encoding::Utf8, b)
+    } else if let Some(b) = bytes.strip_prefix(&[0xFF, 0xFE]) {
+        (Encoding::Utf16Le, b)
+    } else if let Some(b) = bytes.strip_prefix(&[0xFE, 0xFF]) {
+        (Encoding::Utf16Be, b)
+    } else if std::str::from_utf8(&bytes).is_ok() {
+        (Encoding::Utf8, &bytes)
+    } else {
+        (Encoding::Ansi, &bytes)
+    };
+    let text = decode(body, enc);
+    drop(bytes);
+    let body = text.strip_suffix('\n').unwrap_or(&text);
+    let lines: Vec<&str> = body
+        .split('\n')
+        .map(|l| l.strip_suffix('\r').unwrap_or(l))
+        .collect();
+    Ok(ranges
+        .iter()
+        .map(|&(a, b)| {
+            (a.max(1)..=b)
+                .filter_map(|n| lines.get(n - 1))
+                .map(|s| (*s).to_owned())
+                .collect()
+        })
+        .collect())
+}
+
 /// Splits text ending with '\n' into lines (without '\r').
 fn split_complete_lines(text: &str) -> impl Iterator<Item = &str> {
     let body = text.strip_suffix('\n').unwrap_or(text);

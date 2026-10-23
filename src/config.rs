@@ -1,6 +1,7 @@
 //! Application settings – stored as JSON in the user's configuration folder
 //! (Windows: %APPDATA%\RusTrace\config.json).
 
+use crate::export::ExportFormat;
 use crate::t;
 use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
@@ -175,6 +176,17 @@ pub struct Config {
     pub font_size: f32,
     /// UI language code ("en", "sk", …); empty = same as the operating system.
     pub language: String,
+
+    /// Export around highlighted rows: context lines before / after each highlighted row.
+    pub export_before: usize,
+    pub export_after: usize,
+    /// Which rows count as highlighted for the export.
+    pub export_rules: bool,
+    pub export_errors: bool,
+    pub export_warnings: bool,
+    pub export_search: bool,
+    pub export_format: ExportFormat,
+    pub export_separators: bool,
 }
 
 impl Default for Config {
@@ -206,6 +218,14 @@ impl Default for Config {
             theme: "system".into(),
             font_size: 13.0,
             language: String::new(),
+            export_before: 5,
+            export_after: 5,
+            export_rules: true,
+            export_errors: true,
+            export_warnings: true,
+            export_search: false,
+            export_format: ExportFormat::Original,
+            export_separators: true,
         }
     }
 }

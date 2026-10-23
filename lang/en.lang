@@ -31,6 +31,7 @@ menu.file.recent.none = (none)
 menu.file.recent.clear = Clear list
 menu.file.refresh = Refresh
 menu.file.reload = Reload whole file
+menu.file.export = Export highlighted rows with context…
 menu.file.exit = Exit
 menu.view = View
 menu.view.details = Details pane
@@ -185,6 +186,27 @@ lookup.no_description = No description is available for this code.
 lookup.windows_only = (Windows system descriptions are available only when running on Windows.)
 lookup.copy = Copy
 
+
+# --- Export ---
+export.title = Export highlighted rows with context
+export.before = Lines before each highlighted row:
+export.after = Lines after each highlighted row:
+export.include = Highlighted rows are:
+export.inc.rules = Rows matching enabled highlight rules
+export.inc.errors = Errors
+export.inc.warnings = Warnings
+export.inc.search = Search matches
+export.format = Format:
+export.format.original = Original lines (opens again in CMTrace / RusTrace)
+export.format.readable = Readable table (tab-separated, » marks highlighted rows)
+export.separators = Separator line between blocks
+export.note = The whole file is used, independent of the current filter. Overlapping ranges are merged, so no row is exported twice.
+export.summary = Highlighted rows: {hits}   Blocks: {blocks}   Rows to export: {rows}
+export.button = Export…
+export.nothing = No highlighted rows – nothing to export.
+export.running = Exporting…
+export.done = Exported {rows} rows in {blocks} blocks to {path}
+export.header = Hit\tLine\tDate / time\tSeverity\tComponent\tThread\tMessage
 # --- Keyboard shortcuts ---
 help.title = Keyboard shortcuts
 help.open = Open file
@@ -197,6 +219,7 @@ help.prev = Previous match
 help.filter = Filter on/off
 help.rules = Highlight rules
 help.lookup = Error code lookup
+help.export = Export highlighted rows with context
 help.navigate = Move in the table
 help.end = Go to end + follow end
 help.copy = Copy message of the selected row
@@ -206,6 +229,7 @@ help.open_hint = You can also open a file by dragging it onto the window or as a
 # --- Dialogs and errors ---
 dialog.filter.logs = Log files
 dialog.filter.all = All files
+dialog.filter.text = Text files
 error.thread = Could not start a thread: {error}
 error.read = The file cannot be read: {error}
 error.read_internal = Reading the file failed (internal error).
