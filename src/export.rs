@@ -38,6 +38,149 @@ pub fn merge_ranges(hits: &[usize], before: usize, after: usize, len: usize) -> 
     blocks
 }
 
+// ----------------------------------------------------------------------
+// Time filter and block limit
+// ----------------------------------------------------------------------
+
+/// Timestamp of an entry as a comparable ISO string ("YYYY-MM-DD HH:MM:SS.mmm"),
+/// or `None` when the log line has no date/time.
+pub fn timestamp(e: &LogEntry) -> Option<&str> {
+    let b = e.datetime.as_bytes();
+    (b.len() >= 10 && b[4] == b'-' && b[7] == b'-' && b[..4].iter().all(u8::is_ascii_digit))
+        .then_some(e.datetime.as_str())
+}
+
+/// Newest timestamp in the log (entries are not always strictly ordered).
+pub fn latest_timestamp(entries: &[LogEntry]) -> Option<String> {
+    entries.iter().filter_map(timestamp).max().map(str::to_owned)
+}
+
+/// Parses a user-entered date/time into the ISO form used by the parser.
+///
+/// Accepts ISO (`2026-10-23 13:05`, `2026-10-23T13:05:30`) and the date order of the
+/// UI language given by `date_pattern` (e.g. `{d}.{m}.{y}` → `23.10.2026 13:05`).
+/// The time is optional (default 00:00:00); seconds and milliseconds are optional.
+pub fn parse_datetime_input(input: &str, date_pattern: &str) -> Option<String> {
+    let input = input.trim();
+    if input.is_empty() {
+        return None;
+    }
+    let (date_part, time_part) = match input.split_once(['T', ' ']) {
+        Some((d, t)) => (d.trim(), t.trim()),
+        None => (input, ""),
+    };
+    let nums: Vec<&str> = date_part
+        .split(|c: char| !c.is_ascii_digit())
+        .filter(|s| !s.is_empty())
+        .collect();
+    if nums.len() != 3 {
+        return None;
+    }
+    // Order of the parts: ISO when the first part has 4 digits, otherwise the language pattern.
+    let order: Vec<char> = if nums[0].len() == 4 {
+        vec!['y', 'm', 'd']
+    } else {
+        let mut o: Vec<(usize, char)> = ['y', 'm', 'd']
+            .into_iter()
+            .filter_map(|k| date_pattern.find(&format!("{{{k}}}")).map(|pos| (pos, k)))
+            .collect();
+        o.sort();
+        o.into_iter().map(|(_, k)| k).collect()
+    };
+    if order.len() != 3 {
+        return None;
+    }
+    let mut y = 0i32;
+    let mut m = 0u32;
+    let mut d = 0u32;
+    for (part, kind) in nums.iter().zip(&order) {
+        let v: u32 = part.parse().ok()?;
+        match kind {
+            'y' => y = if part.len() == 2 { 2000 + v as i32 } else { v as i32 },
+            'm' => m = v,
+            _ => d = v,
+        }
+    }
+    let date = chrono::NaiveDate::from_ymd_opt(y, m, d)?;
+
+    let (mut hh, mut mm, mut ss, mut ms) = (0u32, 0u32, 0u32, 0u32);
+    if !time_part.is_empty() {
+        let (hms, frac) = match time_part.split_once(['.', ',']) {
+            Some((a, b)) => (a, Some(b)),
+            None => (time_part, None),
+        };
+        let parts: Vec<&str> = hms.split(':').collect();
+        if parts.is_empty() || parts.len() > 3 {
+            return None;
+        }
+        let vals: Vec<u32> = parts
+            .iter()
+            .map(|p| p.trim().parse().ok())
+            .collect::<Option<Vec<_>>>()?;
+        hh = vals[0];
+        mm = vals.get(1).copied().unwrap_or(0);
+        ss = vals.get(2).copied().unwrap_or(0);
+        if let Some(f) = frac {
+            let f: String = f.chars().take(3).collect();
+            ms = format!("{f:0<3}").parse().ok()?;
+        }
+    }
+    chrono::NaiveTime::from_hms_milli_opt(hh, mm, ss, ms)?;
+    Some(format!(
+        "{} {hh:02}:{mm:02}:{ss:02}.{ms:03}",
+        date.format("%Y-%m-%d")
+    ))
+}
+
+/// ISO timestamp `hours` before the given ISO timestamp (for "last hour" style presets).
+pub fn hours_before(iso: &str, hours: i64) -> Option<String> {
+    let t = chrono::NaiveDateTime::parse_from_str(&iso[..iso.len().min(23)], "%Y-%m-%d %H:%M:%S%.3f")
+        .or_else(|_| chrono::NaiveDateTime::parse_from_str(&iso[..iso.len().min(19)], "%Y-%m-%d %H:%M:%S"))
+        .ok()?;
+    Some((t - chrono::Duration::hours(hours)).format("%Y-%m-%d %H:%M:%S%.3f").to_string())
+}
+
+/// Keeps only hits at or after `since`. Entries without a timestamp are dropped
+/// when a time filter is active (their time is unknown).
+pub fn filter_hits_since(hits: &[usize], entries: &[LogEntry], since: Option<&str>) -> Vec<usize> {
+    match since {
+        None => hits.to_vec(),
+        Some(since) => hits
+            .iter()
+            .copied()
+            .filter(|&i| timestamp(&entries[i]).is_some_and(|t| t >= since))
+            .collect(),
+    }
+}
+
+/// Removes context rows older than `since` from the start of every block, so the export
+/// does not contain records from before the chosen time. Rows without a timestamp
+/// (e.g. plain lines inside a CMTrace log) are kept.
+pub fn clip_blocks_since(
+    blocks: &[(usize, usize)],
+    entries: &[LogEntry],
+    since: Option<&str>,
+) -> Vec<(usize, usize)> {
+    let Some(since) = since else { return blocks.to_vec() };
+    blocks
+        .iter()
+        .filter_map(|&(a, b)| {
+            let start = (a..=b).find(|&i| timestamp(&entries[i]).is_none_or(|t| t >= since))?;
+            Some((start, b))
+        })
+        .collect()
+}
+
+/// Keeps only the last `n` blocks (the newest ones).
+pub fn keep_last_blocks(mut blocks: Vec<(usize, usize)>, n: Option<usize>) -> Vec<(usize, usize)> {
+    if let Some(n) = n
+        && blocks.len() > n
+    {
+        blocks.drain(..blocks.len() - n);
+    }
+    blocks
+}
+
 /// Number of entries covered by the blocks.
 pub fn row_count(blocks: &[(usize, usize)]) -> usize {
     blocks.iter().map(|(a, b)| b - a + 1).sum()
@@ -241,5 +384,51 @@ mod tests {
         let msgs: Vec<&str> = again.iter().map(|e| e.message.as_str()).collect();
         assert_eq!(msgs, ["two", "ERR A", "four", "ERR B", "multi\nline", "nine", "ERR C"]);
         std::fs::remove_dir_all(&dir).ok();
+    }
+
+    fn timed(i: usize, time: &str) -> LogEntry {
+        LogEntry {
+            line_no: i + 1,
+            message: format!("m{i}"),
+            component: String::new(),
+            datetime: time.to_owned(),
+            thread: String::new(),
+            severity: Severity::Info,
+        }
+    }
+
+    #[test]
+    fn datetime_input_parsing() {
+        let sk = "{d}.{m}.{y}";
+        let en = "{y}-{m}-{d}";
+        assert_eq!(parse_datetime_input("23.10.2026 13:05", sk).unwrap(), "2026-10-23 13:05:00.000");
+        assert_eq!(parse_datetime_input("2026-10-23", sk).unwrap(), "2026-10-23 00:00:00.000");
+        assert_eq!(parse_datetime_input("2026-10-23T13:05:30.5", en).unwrap(), "2026-10-23 13:05:30.500");
+        assert_eq!(parse_datetime_input(" 3.1.26 7:08:09 ", sk).unwrap(), "2026-01-03 07:08:09.000");
+        assert_eq!(parse_datetime_input("10/23/2026 1:02", "{m}/{d}/{y}").unwrap(), "2026-10-23 01:02:00.000");
+        assert!(parse_datetime_input("31.02.2026", sk).is_none());
+        assert!(parse_datetime_input("23.10.2026 25:00", sk).is_none());
+        assert!(parse_datetime_input("yesterday", sk).is_none());
+        assert_eq!(hours_before("2026-10-23 00:30:00.000", 1).unwrap(), "2026-10-22 23:30:00.000");
+    }
+
+    #[test]
+    fn time_filter_and_last_blocks() {
+        let e: Vec<LogEntry> = (0..10)
+            .map(|i| timed(i, &format!("2026-10-23 10:00:{:02}.000", i)))
+            .chain([timed(10, "")]) // a line without a timestamp
+            .collect();
+        let since = Some("2026-10-23 10:00:05.000");
+        assert_eq!(filter_hits_since(&[2, 5, 8, 10], &e, since), vec![5, 8]);
+        assert_eq!(filter_hits_since(&[2, 5], &e, None), vec![2, 5]);
+        // block 3..=7 is clipped to start at entry 5; block 0..=2 disappears completely
+        assert_eq!(clip_blocks_since(&[(0, 2), (3, 7), (8, 10)], &e, since), vec![(5, 7), (8, 10)]);
+        assert_eq!(latest_timestamp(&e).unwrap(), "2026-10-23 10:00:09.000");
+
+        let b = vec![(0, 1), (3, 4), (6, 7)];
+        assert_eq!(keep_last_blocks(b.clone(), Some(2)), vec![(3, 4), (6, 7)]);
+        assert_eq!(keep_last_blocks(b.clone(), Some(5)), b);
+        assert_eq!(keep_last_blocks(b.clone(), None), b);
+        assert!(keep_last_blocks(b, Some(0)).is_empty());
     }
 }

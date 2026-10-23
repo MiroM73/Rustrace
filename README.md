@@ -76,8 +76,20 @@ Tests: `cargo test`
   - **Readable table** – tab-separated: highlight marker `»`, line, date/time, severity, component,
     thread, message (in the UI language, good for e-mails, tickets or Excel)
 - optional separator line between blocks with the original line numbers (`-------- 9 – 15 --------`)
+- **only records from a date/time** (if the log contains timestamps):
+  - entered in the date format of the UI language or as ISO (`23.10.2026 13:05`, `2026-10-23 13:05:30`);
+    the time part, seconds and milliseconds are optional
+  - quick presets: time of the selected row, last hour, last 24 h, last 7 days – relative to the
+    newest record in the log (log time, not the PC clock)
+  - highlighted rows older than the time are ignored and older context lines are cut off, so the
+    export contains nothing from before the chosen time; invalid input is reported and blocks the export
+  - logs without timestamps show a notice instead
+- **only the last N blocks** – keeps the newest N blocks after merging (e.g. "what happened during
+  the last 3 failures"); can be combined with the time filter
 - live preview of the number of highlighted rows, blocks and rows to export; the whole file is used,
   independent of the current filter
+- order of processing: highlighted rows → time filter → context ranges merged → older context
+  clipped → last N blocks
 - writing runs in a background thread; settings are remembered
 
 **Search**
@@ -147,7 +159,8 @@ The built-in languages live in `lang/*.lang` in the source tree and are embedded
 
 - `src/parser.rs` – incremental chunked file reading with progress, encoding detection, format parsing (+ tests)
 - `src/errcodes.rs` – error code detection and lookup (+ tests)
-- `src/export.rs` – export around highlighted rows: range merging, output formats (+ tests)
+- `src/export.rs` – export around highlighted rows: range merging, date/time filter and input
+  parsing, last-N blocks, output formats (+ tests)
 - `src/i18n.rs` – localization: language files, fallback, `t!()` macro (+ tests)
 - `src/config.rs` – settings and rules (serde/JSON)
 - `src/app.rs` – user interface

@@ -187,6 +187,12 @@ pub struct Config {
     pub export_search: bool,
     pub export_format: ExportFormat,
     pub export_separators: bool,
+    /// Export only records from this date/time on (text as entered by the user).
+    pub export_since_enabled: bool,
+    pub export_since: String,
+    /// Export only the last N blocks.
+    pub export_last_enabled: bool,
+    pub export_last_blocks: usize,
 }
 
 impl Default for Config {
@@ -226,6 +232,10 @@ impl Default for Config {
             export_search: false,
             export_format: ExportFormat::Original,
             export_separators: true,
+            export_since_enabled: false,
+            export_since: String::new(),
+            export_last_enabled: false,
+            export_last_blocks: 10,
         }
     }
 }

@@ -141,6 +141,17 @@ pub struct App {
     export_hits: Option<(ExportKey, Vec<usize>)>,
     /// Export running in a background thread; the result is a status message.
     export_job: Option<mpsc::Receiver<Result<String, String>>>,
+    /// Newest timestamp in the log, cached per data generation.
+    latest_ts: Option<(u64, Option<String>)>,
+}
+
+/// What will be exported with the current settings.
+struct ExportPlan {
+    /// Highlighted entries after the time filter.
+    hits: Vec<usize>,
+    blocks: Vec<(usize, usize)>,
+    /// The "since" date/time could not be parsed.
+    since_invalid: bool,
 }
 
 /// Everything the list of highlighted rows depends on.
@@ -216,6 +227,7 @@ impl App {
             show_export: false,
             export_hits: None,
             export_job: None,
+            latest_ts: None,
         };
         app.apply_theme(&cc.egui_ctx);
         app.recompile_rules();
@@ -2018,12 +2030,57 @@ impl App {
         &self.export_hits.as_ref().unwrap().1
     }
 
-    fn export_blocks(&mut self) -> (usize, Vec<(usize, usize)>) {
+    /// Newest timestamp in the log (cached).
+    fn latest_ts(&mut self) -> Option<String> {
+        if self.latest_ts.as_ref().is_none_or(|(g, _)| *g != self.data_gen) {
+            self.latest_ts = Some((self.data_gen, export::latest_timestamp(&self.entries)));
+        }
+        self.latest_ts.as_ref().and_then(|(_, t)| t.clone())
+    }
+
+    /// Computes what will be exported: highlighted rows → time filter → context ranges
+    /// merged → older context clipped → only the last N blocks.
+    fn export_plan(&mut self) -> ExportPlan {
         let (before, after, len) = (self.cfg.export_before, self.cfg.export_after, self.entries.len());
-        let hits = self.export_hits();
-        let n = hits.len();
-        let blocks = export::merge_ranges(hits, before, after, len);
-        (n, blocks)
+        let since = if self.cfg.export_since_enabled {
+            match export::parse_datetime_input(&self.cfg.export_since, &self.date_format) {
+                Some(iso) => Some(iso),
+                None => {
+                    return ExportPlan {
+                        hits: Vec::new(),
+                        blocks: Vec::new(),
+                        since_invalid: true,
+                    };
+                }
+            }
+        } else {
+            None
+        };
+        let all_hits = self.export_hits().to_vec();
+        let hits = export::filter_hits_since(&all_hits, &self.entries, since.as_deref());
+        let blocks = export::merge_ranges(&hits, before, after, len);
+        let blocks = export::clip_blocks_since(&blocks, &self.entries, since.as_deref());
+        let last = self.cfg.export_last_enabled.then_some(self.cfg.export_last_blocks);
+        let blocks = export::keep_last_blocks(blocks, last);
+        // Count only hits that are really exported.
+        let hits = hits
+            .into_iter()
+            .filter(|h| blocks.iter().any(|&(a, b)| (a..=b).contains(h)))
+            .collect();
+        ExportPlan {
+            hits,
+            blocks,
+            since_invalid: false,
+        }
+    }
+
+    /// Date/time formatted for the input field (without milliseconds).
+    fn input_dt(&self, iso: &str) -> String {
+        let s = self.display_dt(iso);
+        match s.rfind('.') {
+            Some(i) if s.len() - i == 4 => s[..i].to_owned(),
+            _ => s,
+        }
     }
 
     fn export_window(&mut self, ctx: &egui::Context) {
@@ -2084,10 +2141,90 @@ impl App {
                     .checkbox(&mut self.cfg.export_separators, t!("export.separators"))
                     .changed();
                 ui.separator();
+
+                // --- Only records from a date/time on ---
+                let latest = self.latest_ts();
+                let example = self.input_dt(latest.as_deref().unwrap_or("2026-10-23 08:00:00.000"));
+                ui.horizontal(|ui| {
+                    changed |= ui
+                        .checkbox(&mut self.cfg.export_since_enabled, t!("export.since"))
+                        .changed();
+                    changed |= ui
+                        .add_enabled(
+                            self.cfg.export_since_enabled,
+                            egui::TextEdit::singleline(&mut self.cfg.export_since)
+                                .hint_text(t!("export.since.hint", example = example))
+                                .desired_width(190.0)
+                                .font(TextStyle::Monospace),
+                        )
+                        .changed();
+                });
+                if self.cfg.export_since_enabled {
+                    let mut preset: Option<String> = None;
+                    ui.horizontal_wrapped(|ui| {
+                        let sel_ts = self
+                            .selected
+                            .and_then(|i| self.entries.get(i))
+                            .and_then(|e| export::timestamp(e).map(str::to_owned));
+                        if ui
+                            .add_enabled(sel_ts.is_some(), egui::Button::new(t!("export.since.selected")))
+                            .clicked()
+                        {
+                            preset = sel_ts;
+                        }
+                        for (hours, key) in [
+                            (1, "export.since.last_hour"),
+                            (24, "export.since.last_day"),
+                            (24 * 7, "export.since.last_week"),
+                        ] {
+                            if ui
+                                .add_enabled(latest.is_some(), egui::Button::new(t!(key)))
+                                .on_hover_text(t!("export.since.presets.tip"))
+                                .clicked()
+                            {
+                                preset = latest.as_deref().and_then(|l| export::hours_before(l, hours));
+                            }
+                        }
+                    });
+                    if let Some(iso) = preset {
+                        self.cfg.export_since = self.input_dt(&iso);
+                        changed = true;
+                    }
+                    if latest.is_none() {
+                        ui.colored_label(ORANGE, t!("export.since.no_time"));
+                    } else {
+                        match export::parse_datetime_input(&self.cfg.export_since, &self.date_format) {
+                            Some(iso) => {
+                                ui.weak(t!("export.since.parsed", time = self.input_dt(&iso)));
+                            }
+                            None => {
+                                ui.colored_label(RED, t!("export.since.invalid", example = example));
+                            }
+                        }
+                    }
+                }
+
+                // --- Only the last N blocks ---
+                ui.horizontal(|ui| {
+                    changed |= ui
+                        .checkbox(&mut self.cfg.export_last_enabled, t!("export.last"))
+                        .changed();
+                    changed |= ui
+                        .add_enabled(
+                            self.cfg.export_last_enabled,
+                            egui::DragValue::new(&mut self.cfg.export_last_blocks).range(1..=100_000),
+                        )
+                        .changed();
+                    ui.label(t!("export.last.unit"));
+                });
+                ui.separator();
                 ui.weak(t!("export.note"));
                 ui.add_space(4.0);
 
-                let (hits, blocks) = self.export_blocks();
+                let plan = self.export_plan();
+                let since_invalid = plan.since_invalid;
+                let hits = plan.hits.len();
+                let blocks = plan.blocks;
                 let rows = export::row_count(&blocks);
                 ui.strong(t!(
                     "export.summary",
@@ -2107,6 +2244,8 @@ impl App {
                     if self.export_job.is_some() {
                         ui.spinner();
                         ui.label(t!("export.running"));
+                    } else if since_invalid {
+                        ui.colored_label(RED, t!("export.since.fix"));
                     } else if rows == 0 {
                         ui.weak(t!("export.nothing"));
                     }
@@ -2124,7 +2263,9 @@ impl App {
     /// Asks for the target file and writes the export in a background thread.
     fn start_export(&mut self) {
         let Some(src) = self.cur_path.clone() else { return };
-        let (_, blocks) = self.export_blocks();
+        let plan = self.export_plan();
+        let blocks = plan.blocks;
+        let hits = plan.hits;
         if blocks.is_empty() {
             return;
         }
@@ -2155,7 +2296,6 @@ impl App {
         // The readable text is built here (it needs translations and date formatting);
         // the original lines are read from the file in the thread.
         let readable_text = readable.then(|| {
-            let hits = self.export_hits().to_vec();
             let row_blocks: Vec<Vec<ReadableRow<'_>>> = blocks
                 .iter()
                 .map(|&(a, b)| {
