@@ -1,0 +1,22 @@
+[package]
+name = "rustrace"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+eframe = "0.37"
+egui_extras = "0.37"
+regex = "1"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+dirs = "6"
+rfd = "0.17"
+encoding_rs = "0.8"
+chrono = { version = "0.4", default-features = false, features = ["clock"] }
+sys-locale = "0.3"
+open = "5"
+
+[profile.release]
+opt-level = 3
+lto = "thin"
+strip = true

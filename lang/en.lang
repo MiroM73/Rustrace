@@ -1,0 +1,280 @@
+# RusTrace language file – English (reference / template)
+#
+# How to add a new language (no recompiling needed):
+#   1. Copy this file and name it by the language code, e.g. "fr.lang", "pl.lang", "pt-BR.lang".
+#      (Or use View → Language → New translation… in the program.)
+#   2. Translate the text after "=" on every line. Keep the key before "=" unchanged.
+#   3. Keep placeholders in curly braces, e.g. {count}, {error}, unchanged (their order may change).
+#   4. Put the file into one of these folders:
+#        - "lang" next to rustrace.exe
+#        - %APPDATA%\RusTrace\lang   (Linux: ~/.config/RusTrace/lang)
+#   5. In the program choose View → Language → Reload language files, then pick the language.
+#
+# Format: one "key = value" per line, lines starting with # are comments,
+# "\n" in a value is a line break. Missing keys fall back to English.
+# A file named like a built-in language (en, sk, cs, de) overrides only the keys it contains.
+
+language.name = English
+
+# Date in the table: {y} = year, {m} = month, {d} = day
+format.date = {y}-{m}-{d}
+
+# Names of modifier keys in shortcuts
+key.ctrl = Ctrl
+key.shift = Shift
+
+# --- Menu ---
+menu.file = File
+menu.file.open = Open…
+menu.file.recent = Recent files
+menu.file.recent.none = (none)
+menu.file.recent.clear = Clear list
+menu.file.refresh = Refresh
+menu.file.reload = Reload whole file
+menu.file.exit = Exit
+menu.view = View
+menu.view.details = Details pane
+menu.view.follow = Follow end of file
+menu.view.theme = Theme:
+menu.view.theme.system = System
+menu.view.theme.light = Light
+menu.view.theme.dark = Dark
+menu.view.font_size = Font size:
+menu.view.language = Language
+menu.highlight = Highlighting
+menu.highlight.rules = Highlight rules…
+menu.highlight.colors = Error, warning and search colors…
+menu.tools = Tools
+menu.tools.lookup = Error code lookup…
+menu.help = Help
+menu.help.shortcuts = Keyboard shortcuts
+menu.help.settings_file = Settings: {path}
+
+# --- Language menu ---
+lang.auto = Automatic (system: {code})
+lang.reload = Reload language files
+lang.reloaded = Language files reloaded
+lang.open_folder = Open language folder
+lang.new = New translation…
+lang.new.hint = Creates a copy of the English file to translate.
+lang.new.code = Language code:
+lang.new.create = Create and open
+lang.new.created = Created {path} – translate it, then reload language files.
+
+# --- Toolbar ---
+toolbar.open = Open
+toolbar.refresh = Refresh
+toolbar.refresh.tip = F5 – read new lines\nCtrl+F5 – reload the whole file
+toolbar.pause = Pause
+toolbar.pause.tip = Pause automatic refresh (Ctrl+P)
+toolbar.resume = Resume
+toolbar.resume.tip = Resume automatic refresh (Ctrl+P)
+toolbar.interval = Refresh every
+toolbar.presets = Interval presets
+toolbar.follow = Follow end
+toolbar.follow.tip = Scroll to the end automatically when new lines arrive (End)
+toolbar.highlighting = Highlighting…
+toolbar.theme.tip = Theme: {theme} – click to switch (System → Light → Dark)
+
+# --- Severity ---
+severity.info = Info
+severity.warning = Warning
+severity.error = Error
+severity.info.plural = Info
+severity.warning.plural = Warnings
+severity.error.plural = Errors
+
+# --- Search ---
+search.hint = Search text or regex…
+search.regex.tip = The search text is a regular expression (Rust `regex` syntax)
+search.case.tip = Match case
+search.filter = Filter
+search.filter.tip = Show only rows that match the search (Ctrl+L)
+search.prev.tip = Previous (Shift+F3)
+search.next.tip = Next (F3 / Enter)
+search.invalid_regex = Invalid regex
+search.matches = Matches: {count}
+search.clear.tip = Clear search
+search.not_found = Not found
+
+# --- Status bar ---
+status.entries = Entries: {count}
+status.shown = Shown {shown} of {total}
+status.refresh_every = every {value} {unit}
+status.paused = Refresh paused
+status.last_change = Last change: {time}
+status.no_file = No file
+
+# --- Table ---
+table.empty = Open a log file (Ctrl+O) or drag it here.
+column.line = Line
+column.message = Message
+column.component = Component
+column.datetime = Date / time
+column.thread = Thread
+
+# --- Row context menu ---
+context.copy_message = Copy message
+context.copy_row = Copy whole row
+context.explain_code = Explain code {code}
+context.search_component = Search component "{component}"
+context.highlight_component = Highlight component "{component}"…
+
+# --- Details pane ---
+details.empty = Select a row to see the full message.
+details.line = Line {line}
+details.component = Component: {component}
+details.time = Time: {time}
+details.thread = Thread: {thread}
+details.code.open_tip = Open in error code lookup (Ctrl+E)
+
+# --- Highlight rules ---
+rules.title = Highlight rules
+rules.help = Rules are evaluated from top to bottom. For "Whole row" the first matching rule wins and takes precedence over error/warning colors. "Text only" colors just the matched text in the Message column.
+rules.col.on = On
+rules.col.name = Name
+rules.col.pattern = Pattern (text / regex)
+rules.col.scope = Scope
+rules.col.component = Also component
+rules.col.text = Text
+rules.col.background = Background
+rules.col.preview = Preview
+rules.pattern.hint = e.g. error|fail
+rules.scope.row = Whole row
+rules.scope.text = Text only
+rules.component.tip = Also match the Component column (whole row only)
+rules.preview_text = Sample text
+rules.delete = Delete
+rules.add = Add rule
+rules.import = Import…
+rules.export = Export…
+rules.restore_defaults = Restore defaults
+rule.new_name = New rule
+rule.component_name = Component {component}
+rule.default.success = Success
+rule.default.error_codes = Error codes 0x…
+rule.default.exit_code = Exit code (example, disabled)
+
+# --- Colors window ---
+colors.title = Colors and severity
+colors.by_severity = Color rows by severity (like CMTrace)
+colors.keyword_severity = Detect errors/warnings by the words error, fail, warn (rows without a type)
+colors.search_match = Search match
+colors.restore_defaults = Restore default colors
+colors.for_theme = Colors for theme:
+colors.copy_from = Copy colors from {theme} theme
+colors.copy_from.tip = Copies the colors of all rules from the other theme to the theme being edited
+
+# --- Loading ---
+progress.title = Loading log…
+progress.text = Loading {percent} %  ({done} / {total})
+progress.cancel = Cancel
+progress.cancelled = Loading cancelled – automatic refresh paused
+
+# --- Error code lookup ---
+lookup.title = Error code lookup
+lookup.code = Code:
+lookup.hint = Enter a code in hex (0x…), as a negative number or a Win32/MSI code.
+lookup.invalid = Invalid code format.
+lookup.hex = Hex:
+lookup.decimal = Decimal:
+lookup.decimal.value = {signed}  (unsigned {unsigned})
+lookup.win32 = Win32 code:
+lookup.facility = Facility:
+lookup.no_description = No description is available for this code.
+lookup.windows_only = (Windows system descriptions are available only when running on Windows.)
+lookup.copy = Copy
+
+# --- Keyboard shortcuts ---
+help.title = Keyboard shortcuts
+help.open = Open file
+help.refresh = Refresh (read new lines)
+help.reload = Reload the whole file
+help.pause = Pause / resume automatic refresh
+help.search = Go to search
+help.next = Next match
+help.prev = Previous match
+help.filter = Filter on/off
+help.rules = Highlight rules
+help.lookup = Error code lookup
+help.navigate = Move in the table
+help.end = Go to end + follow end
+help.copy = Copy message of the selected row
+help.zoom = Zoom the whole window
+help.open_hint = You can also open a file by dragging it onto the window or as an argument: rustrace.exe C:\\path\\file.log
+
+# --- Dialogs and errors ---
+dialog.filter.logs = Log files
+dialog.filter.all = All files
+error.thread = Could not start a thread: {error}
+error.read = The file cannot be read: {error}
+error.read_internal = Reading the file failed (internal error).
+error.import = Import failed: {error}
+error.export = Export failed: {error}
+error.save_settings = Settings cannot be saved: {error}
+error.open_folder = The folder cannot be opened: {error}
+error.create_lang = The language file cannot be created: {error}
+
+# --- Error codes ---
+# Key = "code." + HRESULT in hex (8 digits, upper case). Win32/MSI codes use 0x8007xxxx.
+# You can add your own codes here (or in your own language file).
+code.success = Success (S_OK / ERROR_SUCCESS).
+code.unknown = Unknown code ({facility})
+code.source.description = Description
+code.source.windows = Windows
+code.0x80004001 = E_NOTIMPL – not implemented.
+code.0x80004002 = E_NOINTERFACE – no such interface supported.
+code.0x80004004 = E_ABORT – operation aborted.
+code.0x80004005 = E_FAIL – unspecified error.
+code.0x8000FFFF = E_UNEXPECTED – unexpected failure.
+code.0x80041001 = WBEM_E_FAILED – generic WMI failure.
+code.0x80041002 = WBEM_E_NOT_FOUND – WMI object not found.
+code.0x80041010 = WBEM_E_INVALID_CLASS – invalid WMI class (often a corrupted WMI repository or missing client class).
+code.0x80070002 = ERROR_FILE_NOT_FOUND – the system cannot find the file specified.
+code.0x80070003 = ERROR_PATH_NOT_FOUND – the system cannot find the path specified.
+code.0x80070005 = E_ACCESSDENIED – access is denied.
+code.0x80070008 = ERROR_NOT_ENOUGH_MEMORY – not enough memory to process this command.
+code.0x8007000E = E_OUTOFMEMORY – out of memory.
+code.0x80070020 = ERROR_SHARING_VIOLATION – the file is being used by another process.
+code.0x80070057 = E_INVALIDARG – the parameter is incorrect.
+code.0x80070070 = ERROR_DISK_FULL – there is not enough space on the disk.
+code.0x800700B7 = ERROR_ALREADY_EXISTS – the file already exists.
+code.0x80070422 = ERROR_SERVICE_DISABLED – the service is disabled and cannot be started.
+code.0x8007045B = ERROR_SHUTDOWN_IN_PROGRESS – a system shutdown is in progress.
+code.0x80070490 = ERROR_NOT_FOUND – element not found.
+code.0x800705B4 = ERROR_TIMEOUT – the operation timed out.
+code.0x800706BA = RPC_S_SERVER_UNAVAILABLE – the RPC server is unavailable.
+code.0x80070641 = MSI 1601 – the Windows Installer service could not be accessed.
+code.0x80070642 = MSI 1602 – the installation was cancelled by the user.
+code.0x80070643 = MSI 1603 – fatal error during installation (look for "Return value 3" in the MSI log).
+code.0x80070645 = MSI 1605 – this action is only valid for products that are currently installed.
+code.0x80070652 = MSI 1618 – another installation is already in progress; finish it first.
+code.0x80070653 = MSI 1619 – the installation package could not be opened (missing or not accessible).
+code.0x80070654 = MSI 1620 – the installation package could not be opened; it is not a valid Windows Installer package.
+code.0x80070659 = MSI 1625 – the installation is forbidden by system policy.
+code.0x80070661 = MSI 1633 – the package is not supported by this processor platform.
+code.0x80070666 = MSI 1638 – another version of this product is already installed.
+code.0x80070669 = MSI 1641 – the installer has initiated a restart to complete the installation.
+code.0x80070BC2 = 3010 – success, a restart is required to complete the operation.
+code.0x80070BC9 = 3017 – the operation failed, a restart is required to roll back the changes.
+code.0x80072EE2 = 12002 – the request timed out (WinINet/WinHTTP).
+code.0x80072EE7 = 12007 – the server name could not be resolved (DNS).
+code.0x80072EFD = 12029 – a connection to the server could not be established.
+code.0x80072F8F = 12175 – secure channel error (TLS / certificate).
+code.0x80240017 = WU_E_NOT_APPLICABLE – no applicable updates.
+code.0x8024001E = WU_E_SERVICE_STOP – the operation did not complete because the service or system was being shut down.
+code.0x80240022 = WU_E_ALL_UPDATES_FAILED – the operation failed for all the updates.
+code.0x80240438 = WU_E_PT_ENDPOINT_UNREACHABLE – there is no network connection to the update server.
+code.0x8024200D = WU_E_UH_NEEDANOTHERDOWNLOAD – the update needs to download more content.
+code.0x80244019 = WU_E_PT_HTTP_STATUS_NOT_FOUND – HTTP 404, the file was not found on the server.
+code.0x8024401C = WU_E_PT_HTTP_STATUS_REQUEST_TIMEOUT – HTTP 408, the request timed out.
+code.0x80244022 = WU_E_PT_HTTP_STATUS_SERVICE_UNAVAIL – HTTP 503, the service is unavailable.
+code.0x8024402C = WU_E_PT_WINHTTP_NAME_NOT_RESOLVED – the proxy or server name could not be resolved.
+code.0x87D00314 = ConfigMgr – CI Version Info timed out (policy or content not available yet).
+code.0x87D00324 = ConfigMgr – the application was not detected after installation completed (check the detection method).
+code.0x87D00325 = ConfigMgr – the application was still detected after uninstall completed.
+code.0x87D00607 = ConfigMgr – content not found (no distribution point with the content).
+code.0x87D00664 = ConfigMgr – the updates handler job was cancelled.
+code.0x87D00668 = ConfigMgr – the software update is still detected as actionable after apply.
+code.0x87D00692 = ConfigMgr – group policy conflict (WSUS server setting).
+code.0x87D01106 = ConfigMgr – failed to verify the executable file is valid or to construct the command line.

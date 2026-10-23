@@ -1,0 +1,264 @@
+# RusTrace – čeština
+# Formát a návod na přidání jazyka najdete v souboru en.lang.
+
+language.name = Čeština
+
+format.date = {d}.{m}.{y}
+
+# Names of modifier keys in shortcuts
+key.ctrl = Ctrl
+key.shift = Shift
+
+# --- Menu ---
+menu.file = Soubor
+menu.file.open = Otevřít…
+menu.file.recent = Nedávné soubory
+menu.file.recent.none = (žádné)
+menu.file.recent.clear = Vymazat seznam
+menu.file.refresh = Obnovit
+menu.file.reload = Načíst celý soubor znovu
+menu.file.exit = Konec
+menu.view = Zobrazit
+menu.view.details = Panel podrobností
+menu.view.follow = Sledovat konec souboru
+menu.view.theme = Motiv:
+menu.view.theme.system = Podle systému
+menu.view.theme.light = Světlý
+menu.view.theme.dark = Tmavý
+menu.view.font_size = Velikost písma:
+menu.view.language = Jazyk
+menu.highlight = Zvýrazňování
+menu.highlight.rules = Pravidla zvýrazňování…
+menu.highlight.colors = Barvy chyb, varování a hledání…
+menu.tools = Nástroje
+menu.tools.lookup = Vyhledat chybový kód…
+menu.help = Nápověda
+menu.help.shortcuts = Klávesové zkratky
+menu.help.settings_file = Nastavení: {path}
+
+# --- Jazyk ---
+lang.auto = Automaticky (systém: {code})
+lang.reload = Znovu načíst jazykové soubory
+lang.reloaded = Jazykové soubory byly znovu načteny
+lang.open_folder = Otevřít složku jazyků
+lang.new = Nový překlad…
+lang.new.hint = Vytvoří kopii anglického souboru k přeložení.
+lang.new.code = Kód jazyka:
+lang.new.create = Vytvořit a otevřít
+lang.new.created = Vytvořen {path} – přeložte ho a pak znovu načtěte jazykové soubory.
+
+# --- Panel nástrojů ---
+toolbar.open = Otevřít
+toolbar.refresh = Obnovit
+toolbar.refresh.tip = F5 – načte nové řádky\nCtrl+F5 – načte celý soubor znovu
+toolbar.pause = Pozastavit
+toolbar.pause.tip = Pozastavit automatické obnovování (Ctrl+P)
+toolbar.resume = Spustit
+toolbar.resume.tip = Spustit automatické obnovování (Ctrl+P)
+toolbar.interval = Obnovovat každých
+toolbar.presets = Předvolby intervalu
+toolbar.follow = Sledovat konec
+toolbar.follow.tip = Při nových řádcích automaticky posouvat na konec (End)
+toolbar.highlighting = Zvýrazňování…
+toolbar.theme.tip = Motiv: {theme} – kliknutím přepnete (Podle systému → Světlý → Tmavý)
+
+# --- Závažnost ---
+severity.info = Info
+severity.warning = Varování
+severity.error = Chyba
+severity.info.plural = Info
+severity.warning.plural = Varování
+severity.error.plural = Chyby
+
+# --- Hledání ---
+search.hint = Hledaný text nebo regex…
+search.regex.tip = Hledaný text je regulární výraz (syntaxe Rust `regex`)
+search.case.tip = Rozlišovat velká a malá písmena
+search.filter = Filtrovat
+search.filter.tip = Zobrazit jen řádky, které odpovídají hledání (Ctrl+L)
+search.prev.tip = Předchozí (Shift+F3)
+search.next.tip = Další (F3 / Enter)
+search.invalid_regex = Neplatný regex
+search.matches = Shody: {count}
+search.clear.tip = Zrušit hledání
+search.not_found = Nenalezeno
+
+# --- Stavový řádek ---
+status.entries = Záznamy: {count}
+status.shown = Zobrazeno {shown} z {total}
+status.refresh_every = každých {value} {unit}
+status.paused = Obnovování pozastaveno
+status.last_change = Poslední změna: {time}
+status.no_file = Žádný soubor
+
+# --- Tabulka ---
+table.empty = Otevřete log soubor (Ctrl+O) nebo ho sem přetáhněte myší.
+column.line = Řádek
+column.message = Zpráva
+column.component = Komponenta
+column.datetime = Datum / čas
+column.thread = Vlákno
+
+# --- Kontextové menu ---
+context.copy_message = Kopírovat zprávu
+context.copy_row = Kopírovat celý řádek
+context.explain_code = Vysvětlit kód {code}
+context.search_component = Hledat komponentu „{component}“
+context.highlight_component = Zvýraznit komponentu „{component}“…
+
+# --- Podrobnosti ---
+details.empty = Vyberte řádek pro zobrazení celé zprávy.
+details.line = Řádek {line}
+details.component = Komponenta: {component}
+details.time = Čas: {time}
+details.thread = Vlákno: {thread}
+details.code.open_tip = Otevřít ve vyhledávání kódů (Ctrl+E)
+
+# --- Pravidla zvýrazňování ---
+rules.title = Pravidla zvýrazňování
+rules.help = Pravidla se vyhodnocují shora dolů. U „Celý řádek“ vyhrává první shodné pravidlo a má přednost před barvami chyb/varování. „Jen text“ obarví pouze nalezený text ve sloupci Zpráva.
+rules.col.on = Zap.
+rules.col.name = Název
+rules.col.pattern = Vzor (text / regex)
+rules.col.scope = Rozsah
+rules.col.component = I komponenta
+rules.col.text = Text
+rules.col.background = Pozadí
+rules.col.preview = Ukázka
+rules.pattern.hint = např. error|fail
+rules.scope.row = Celý řádek
+rules.scope.text = Jen text
+rules.component.tip = Hledat shodu i ve sloupci Komponenta (jen pro celý řádek)
+rules.preview_text = Ukázka textu
+rules.delete = Smazat
+rules.add = Přidat pravidlo
+rules.import = Import…
+rules.export = Export…
+rules.restore_defaults = Obnovit výchozí
+rule.new_name = Nové pravidlo
+rule.component_name = Komponenta {component}
+rule.default.success = Úspěch
+rule.default.error_codes = Chybové kódy 0x…
+rule.default.exit_code = Exit code (příklad, vypnuto)
+
+# --- Barvy ---
+colors.title = Barvy a závažnost
+colors.by_severity = Barvit řádky podle závažnosti (jako CMTrace)
+colors.keyword_severity = Rozpoznat chyby/varování podle slov error, fail, warn (u řádků bez typu)
+colors.search_match = Shoda hledání
+colors.restore_defaults = Obnovit výchozí barvy
+colors.for_theme = Barvy pro motiv:
+colors.copy_from = Kopírovat barvy z motivu {theme}
+colors.copy_from.tip = Zkopíruje barvy všech pravidel z druhého motivu do upravovaného motivu
+
+# --- Načítání ---
+progress.title = Načítám log…
+progress.text = Načítám {percent} %  ({done} / {total})
+progress.cancel = Zrušit
+progress.cancelled = Načítání zrušeno – automatické obnovování pozastaveno
+
+# --- Vyhledání chybového kódu ---
+lookup.title = Vyhledat chybový kód
+lookup.code = Kód:
+lookup.hint = Zadejte kód v hex tvaru (0x…), jako záporné číslo nebo Win32/MSI kód.
+lookup.invalid = Neplatný formát kódu.
+lookup.hex = Hex:
+lookup.decimal = Desítkově:
+lookup.decimal.value = {signed}  (bez znaménka {unsigned})
+lookup.win32 = Win32 kód:
+lookup.facility = Oblast:
+lookup.no_description = Pro tento kód není k dispozici popis.
+lookup.windows_only = (Systémové popisy Windows jsou dostupné jen při běhu na Windows.)
+lookup.copy = Kopírovat
+
+# --- Klávesové zkratky ---
+help.title = Klávesové zkratky
+help.open = Otevřít soubor
+help.refresh = Obnovit (načíst nové řádky)
+help.reload = Načíst celý soubor znovu
+help.pause = Pozastavit / spustit automatické obnovování
+help.search = Přejít do hledání
+help.next = Další shoda
+help.prev = Předchozí shoda
+help.filter = Zapnout/vypnout filtrování
+help.rules = Pravidla zvýrazňování
+help.lookup = Vyhledat chybový kód
+help.navigate = Pohyb v tabulce
+help.end = Na konec + sledovat konec
+help.copy = Kopírovat zprávu vybraného řádku
+help.zoom = Přiblížení celého okna
+help.open_hint = Soubor můžete otevřít i přetažením do okna nebo jako argument: rustrace.exe C:\\cesta\\soubor.log
+
+# --- Dialogy a chyby ---
+dialog.filter.logs = Log soubory
+dialog.filter.all = Všechny soubory
+error.thread = Nepodařilo se spustit vlákno: {error}
+error.read = Soubor nelze číst: {error}
+error.read_internal = Čtení souboru selhalo (interní chyba).
+error.import = Import selhal: {error}
+error.export = Export selhal: {error}
+error.save_settings = Nastavení nelze uložit: {error}
+error.open_folder = Složku nelze otevřít: {error}
+error.create_lang = Jazykový soubor nelze vytvořit: {error}
+
+# --- Chybové kódy ---
+code.success = Úspěch (S_OK / ERROR_SUCCESS).
+code.unknown = Neznámý kód ({facility})
+code.source.description = Popis
+code.source.windows = Windows
+code.0x80004001 = E_NOTIMPL – funkce není implementována.
+code.0x80004002 = E_NOINTERFACE – rozhraní není podporováno.
+code.0x80004004 = E_ABORT – operace byla přerušena.
+code.0x80004005 = E_FAIL – nespecifikovaná chyba.
+code.0x8000FFFF = E_UNEXPECTED – neočekávaná chyba.
+code.0x80041001 = WBEM_E_FAILED – obecná chyba WMI.
+code.0x80041002 = WBEM_E_NOT_FOUND – objekt WMI nebyl nalezen.
+code.0x80041010 = WBEM_E_INVALID_CLASS – neplatná třída WMI (často poškozené WMI / chybějící třída klienta).
+code.0x80070002 = ERROR_FILE_NOT_FOUND – systém nemůže nalézt uvedený soubor.
+code.0x80070003 = ERROR_PATH_NOT_FOUND – systém nemůže nalézt uvedenou cestu.
+code.0x80070005 = E_ACCESSDENIED – přístup byl odepřen.
+code.0x80070008 = ERROR_NOT_ENOUGH_MEMORY – nedostatek paměti pro zpracování příkazu.
+code.0x8007000E = E_OUTOFMEMORY – nedostatek paměti.
+code.0x80070020 = ERROR_SHARING_VIOLATION – soubor používá jiný proces.
+code.0x80070057 = E_INVALIDARG – parametr je nesprávný.
+code.0x80070070 = ERROR_DISK_FULL – na disku není dostatek místa.
+code.0x800700B7 = ERROR_ALREADY_EXISTS – soubor již existuje.
+code.0x80070422 = ERROR_SERVICE_DISABLED – služba je zakázána a nelze ji spustit.
+code.0x8007045B = ERROR_SHUTDOWN_IN_PROGRESS – probíhá vypínání systému.
+code.0x80070490 = ERROR_NOT_FOUND – prvek nebyl nalezen.
+code.0x800705B4 = ERROR_TIMEOUT – operace skončila vypršením časového limitu.
+code.0x800706BA = RPC_S_SERVER_UNAVAILABLE – server RPC není k dispozici.
+code.0x80070641 = MSI 1601 – nelze získat přístup ke službě Windows Installer.
+code.0x80070642 = MSI 1602 – instalaci zrušil uživatel.
+code.0x80070643 = MSI 1603 – závažná chyba během instalace (podrobnosti hledejte v MSI logu: „Return value 3“).
+code.0x80070645 = MSI 1605 – akce je platná jen pro nainstalované produkty.
+code.0x80070652 = MSI 1618 – probíhá jiná instalace, nejprve ji dokončete.
+code.0x80070653 = MSI 1619 – instalační balíček nelze otevřít (chybí nebo není přístupný).
+code.0x80070654 = MSI 1620 – instalační balíček nelze otevřít, není to platný balíček Windows Installer.
+code.0x80070659 = MSI 1625 – instalace je zakázána systémovou zásadou.
+code.0x80070661 = MSI 1633 – balíček není podporován na této platformě procesoru.
+code.0x80070666 = MSI 1638 – jiná verze produktu je již nainstalována.
+code.0x80070669 = MSI 1641 – instalátor spustil restart k dokončení instalace.
+code.0x80070BC2 = 3010 – úspěch, k dokončení je nutný restart.
+code.0x80070BC9 = 3017 – operace selhala, k vrácení změn je nutný restart.
+code.0x80072EE2 = 12002 – vypršel časový limit požadavku (WinINet/WinHTTP).
+code.0x80072EE7 = 12007 – název serveru nelze přeložit (DNS).
+code.0x80072EFD = 12029 – nelze se připojit k serveru.
+code.0x80072F8F = 12175 – chyba zabezpečeného kanálu (TLS / certifikát).
+code.0x80240017 = WU_E_NOT_APPLICABLE – žádné použitelné aktualizace.
+code.0x8024001E = WU_E_SERVICE_STOP – operace nedokončena, služba nebo systém se vypíná.
+code.0x80240022 = WU_E_ALL_UPDATES_FAILED – operace selhala pro všechny aktualizace.
+code.0x80240438 = WU_E_PT_ENDPOINT_UNREACHABLE – k serveru aktualizací není síťové připojení.
+code.0x8024200D = WU_E_UH_NEEDANOTHERDOWNLOAD – aktualizace potřebuje stáhnout další obsah.
+code.0x80244019 = WU_E_PT_HTTP_STATUS_NOT_FOUND – HTTP 404, soubor nebyl na serveru nalezen.
+code.0x8024401C = WU_E_PT_HTTP_STATUS_REQUEST_TIMEOUT – HTTP 408, vypršel časový limit.
+code.0x80244022 = WU_E_PT_HTTP_STATUS_SERVICE_UNAVAIL – HTTP 503, služba není dostupná.
+code.0x8024402C = WU_E_PT_WINHTTP_NAME_NOT_RESOLVED – název proxy nebo serveru nelze přeložit.
+code.0x87D00314 = ConfigMgr – vypršel časový limit CI Version Info (zásada nebo obsah ještě nejsou k dispozici).
+code.0x87D00324 = ConfigMgr – aplikace nebyla po dokončení instalace detekována (zkontrolujte metodu detekce).
+code.0x87D00325 = ConfigMgr – aplikace byla po odinstalaci stále detekována.
+code.0x87D00607 = ConfigMgr – obsah nebyl nalezen (žádný distribuční bod s obsahem).
+code.0x87D00664 = ConfigMgr – úloha obsluhy aktualizací byla zrušena.
+code.0x87D00668 = ConfigMgr – aktualizace je po použití stále detekována jako potřebná.
+code.0x87D00692 = ConfigMgr – konflikt zásad skupiny (nastavení serveru WSUS).
+code.0x87D01106 = ConfigMgr – nepodařilo se ověřit spustitelný soubor nebo sestavit příkazový řádek.

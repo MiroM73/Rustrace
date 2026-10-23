@@ -1,0 +1,264 @@
+# RusTrace – Deutsch
+# Format und Anleitung zum Hinzufügen einer Sprache: siehe en.lang.
+
+language.name = Deutsch
+
+format.date = {d}.{m}.{y}
+
+# Names of modifier keys in shortcuts
+key.ctrl = Strg
+key.shift = Umschalt
+
+# --- Menü ---
+menu.file = Datei
+menu.file.open = Öffnen…
+menu.file.recent = Zuletzt geöffnet
+menu.file.recent.none = (keine)
+menu.file.recent.clear = Liste leeren
+menu.file.refresh = Aktualisieren
+menu.file.reload = Ganze Datei neu laden
+menu.file.exit = Beenden
+menu.view = Ansicht
+menu.view.details = Detailbereich
+menu.view.follow = Dateiende folgen
+menu.view.theme = Design:
+menu.view.theme.system = System
+menu.view.theme.light = Hell
+menu.view.theme.dark = Dunkel
+menu.view.font_size = Schriftgröße:
+menu.view.language = Sprache
+menu.highlight = Hervorhebung
+menu.highlight.rules = Hervorhebungsregeln…
+menu.highlight.colors = Farben für Fehler, Warnungen und Suche…
+menu.tools = Extras
+menu.tools.lookup = Fehlercode nachschlagen…
+menu.help = Hilfe
+menu.help.shortcuts = Tastenkürzel
+menu.help.settings_file = Einstellungen: {path}
+
+# --- Sprache ---
+lang.auto = Automatisch (System: {code})
+lang.reload = Sprachdateien neu laden
+lang.reloaded = Sprachdateien wurden neu geladen
+lang.open_folder = Sprachordner öffnen
+lang.new = Neue Übersetzung…
+lang.new.hint = Erstellt eine Kopie der englischen Datei zum Übersetzen.
+lang.new.code = Sprachcode:
+lang.new.create = Erstellen und öffnen
+lang.new.created = {path} erstellt – übersetzen Sie die Datei und laden Sie dann die Sprachdateien neu.
+
+# --- Symbolleiste ---
+toolbar.open = Öffnen
+toolbar.refresh = Aktualisieren
+toolbar.refresh.tip = F5 – neue Zeilen lesen\nStrg+F5 – ganze Datei neu laden
+toolbar.pause = Pausieren
+toolbar.pause.tip = Automatische Aktualisierung pausieren (Strg+P)
+toolbar.resume = Fortsetzen
+toolbar.resume.tip = Automatische Aktualisierung fortsetzen (Strg+P)
+toolbar.interval = Aktualisieren alle
+toolbar.presets = Intervall-Vorgaben
+toolbar.follow = Ende folgen
+toolbar.follow.tip = Bei neuen Zeilen automatisch ans Ende scrollen (Ende)
+toolbar.highlighting = Hervorhebung…
+toolbar.theme.tip = Design: {theme} – klicken zum Umschalten (System → Hell → Dunkel)
+
+# --- Schweregrad ---
+severity.info = Info
+severity.warning = Warnung
+severity.error = Fehler
+severity.info.plural = Info
+severity.warning.plural = Warnungen
+severity.error.plural = Fehler
+
+# --- Suche ---
+search.hint = Suchtext oder Regex…
+search.regex.tip = Der Suchtext ist ein regulärer Ausdruck (Rust-`regex`-Syntax)
+search.case.tip = Groß-/Kleinschreibung beachten
+search.filter = Filtern
+search.filter.tip = Nur Zeilen anzeigen, die der Suche entsprechen (Strg+L)
+search.prev.tip = Vorheriger (Umschalt+F3)
+search.next.tip = Nächster (F3 / Eingabe)
+search.invalid_regex = Ungültiger Regex
+search.matches = Treffer: {count}
+search.clear.tip = Suche löschen
+search.not_found = Nicht gefunden
+
+# --- Statusleiste ---
+status.entries = Einträge: {count}
+status.shown = {shown} von {total} angezeigt
+status.refresh_every = alle {value} {unit}
+status.paused = Aktualisierung pausiert
+status.last_change = Letzte Änderung: {time}
+status.no_file = Keine Datei
+
+# --- Tabelle ---
+table.empty = Öffnen Sie eine Logdatei (Strg+O) oder ziehen Sie sie hierher.
+column.line = Zeile
+column.message = Meldung
+column.component = Komponente
+column.datetime = Datum / Uhrzeit
+column.thread = Thread
+
+# --- Kontextmenü ---
+context.copy_message = Meldung kopieren
+context.copy_row = Ganze Zeile kopieren
+context.explain_code = Code {code} erklären
+context.search_component = Komponente „{component}“ suchen
+context.highlight_component = Komponente „{component}“ hervorheben…
+
+# --- Details ---
+details.empty = Wählen Sie eine Zeile, um die ganze Meldung zu sehen.
+details.line = Zeile {line}
+details.component = Komponente: {component}
+details.time = Zeit: {time}
+details.thread = Thread: {thread}
+details.code.open_tip = In der Fehlercode-Suche öffnen (Strg+E)
+
+# --- Hervorhebungsregeln ---
+rules.title = Hervorhebungsregeln
+rules.help = Regeln werden von oben nach unten ausgewertet. Bei „Ganze Zeile“ gewinnt die erste passende Regel und hat Vorrang vor den Fehler-/Warnungsfarben. „Nur Text“ färbt nur den gefundenen Text in der Spalte Meldung.
+rules.col.on = Ein
+rules.col.name = Name
+rules.col.pattern = Muster (Text / Regex)
+rules.col.scope = Bereich
+rules.col.component = Auch Komponente
+rules.col.text = Text
+rules.col.background = Hintergrund
+rules.col.preview = Vorschau
+rules.pattern.hint = z. B. error|fail
+rules.scope.row = Ganze Zeile
+rules.scope.text = Nur Text
+rules.component.tip = Auch in der Spalte Komponente suchen (nur ganze Zeile)
+rules.preview_text = Beispieltext
+rules.delete = Löschen
+rules.add = Regel hinzufügen
+rules.import = Importieren…
+rules.export = Exportieren…
+rules.restore_defaults = Standard wiederherstellen
+rule.new_name = Neue Regel
+rule.component_name = Komponente {component}
+rule.default.success = Erfolg
+rule.default.error_codes = Fehlercodes 0x…
+rule.default.exit_code = Exit code (Beispiel, deaktiviert)
+
+# --- Farben ---
+colors.title = Farben und Schweregrad
+colors.by_severity = Zeilen nach Schweregrad färben (wie CMTrace)
+colors.keyword_severity = Fehler/Warnungen an den Wörtern error, fail, warn erkennen (Zeilen ohne Typ)
+colors.search_match = Suchtreffer
+colors.restore_defaults = Standardfarben wiederherstellen
+colors.for_theme = Farben für Design:
+colors.copy_from = Farben aus Design „{theme}“ übernehmen
+colors.copy_from.tip = Übernimmt die Farben aller Regeln aus dem anderen Design in das bearbeitete Design
+
+# --- Laden ---
+progress.title = Log wird geladen…
+progress.text = Lade {percent} %  ({done} / {total})
+progress.cancel = Abbrechen
+progress.cancelled = Laden abgebrochen – automatische Aktualisierung pausiert
+
+# --- Fehlercode nachschlagen ---
+lookup.title = Fehlercode nachschlagen
+lookup.code = Code:
+lookup.hint = Geben Sie einen Code hexadezimal (0x…), als negative Zahl oder als Win32/MSI-Code ein.
+lookup.invalid = Ungültiges Codeformat.
+lookup.hex = Hex:
+lookup.decimal = Dezimal:
+lookup.decimal.value = {signed}  (vorzeichenlos {unsigned})
+lookup.win32 = Win32-Code:
+lookup.facility = Bereich:
+lookup.no_description = Für diesen Code ist keine Beschreibung verfügbar.
+lookup.windows_only = (Windows-Systembeschreibungen sind nur unter Windows verfügbar.)
+lookup.copy = Kopieren
+
+# --- Tastenkürzel ---
+help.title = Tastenkürzel
+help.open = Datei öffnen
+help.refresh = Aktualisieren (neue Zeilen lesen)
+help.reload = Ganze Datei neu laden
+help.pause = Automatische Aktualisierung pausieren / fortsetzen
+help.search = Zur Suche springen
+help.next = Nächster Treffer
+help.prev = Vorheriger Treffer
+help.filter = Filter ein/aus
+help.rules = Hervorhebungsregeln
+help.lookup = Fehlercode nachschlagen
+help.navigate = In der Tabelle bewegen
+help.end = Zum Ende + Ende folgen
+help.copy = Meldung der ausgewählten Zeile kopieren
+help.zoom = Ganzes Fenster zoomen
+help.open_hint = Eine Datei kann auch durch Ziehen ins Fenster oder als Argument geöffnet werden: rustrace.exe C:\\Pfad\\Datei.log
+
+# --- Dialoge und Fehler ---
+dialog.filter.logs = Logdateien
+dialog.filter.all = Alle Dateien
+error.thread = Thread konnte nicht gestartet werden: {error}
+error.read = Die Datei kann nicht gelesen werden: {error}
+error.read_internal = Lesen der Datei fehlgeschlagen (interner Fehler).
+error.import = Import fehlgeschlagen: {error}
+error.export = Export fehlgeschlagen: {error}
+error.save_settings = Einstellungen können nicht gespeichert werden: {error}
+error.open_folder = Der Ordner kann nicht geöffnet werden: {error}
+error.create_lang = Die Sprachdatei kann nicht erstellt werden: {error}
+
+# --- Fehlercodes ---
+code.success = Erfolg (S_OK / ERROR_SUCCESS).
+code.unknown = Unbekannter Code ({facility})
+code.source.description = Beschreibung
+code.source.windows = Windows
+code.0x80004001 = E_NOTIMPL – nicht implementiert.
+code.0x80004002 = E_NOINTERFACE – Schnittstelle wird nicht unterstützt.
+code.0x80004004 = E_ABORT – Vorgang abgebrochen.
+code.0x80004005 = E_FAIL – unbekannter Fehler.
+code.0x8000FFFF = E_UNEXPECTED – unerwarteter Fehler.
+code.0x80041001 = WBEM_E_FAILED – allgemeiner WMI-Fehler.
+code.0x80041002 = WBEM_E_NOT_FOUND – WMI-Objekt nicht gefunden.
+code.0x80041010 = WBEM_E_INVALID_CLASS – ungültige WMI-Klasse (oft beschädigtes WMI / fehlende Client-Klasse).
+code.0x80070002 = ERROR_FILE_NOT_FOUND – das System kann die angegebene Datei nicht finden.
+code.0x80070003 = ERROR_PATH_NOT_FOUND – das System kann den angegebenen Pfad nicht finden.
+code.0x80070005 = E_ACCESSDENIED – Zugriff verweigert.
+code.0x80070008 = ERROR_NOT_ENOUGH_MEMORY – nicht genügend Speicher, um den Befehl auszuführen.
+code.0x8007000E = E_OUTOFMEMORY – nicht genügend Speicher.
+code.0x80070020 = ERROR_SHARING_VIOLATION – die Datei wird von einem anderen Prozess verwendet.
+code.0x80070057 = E_INVALIDARG – falscher Parameter.
+code.0x80070070 = ERROR_DISK_FULL – nicht genügend Speicherplatz auf dem Datenträger.
+code.0x800700B7 = ERROR_ALREADY_EXISTS – die Datei existiert bereits.
+code.0x80070422 = ERROR_SERVICE_DISABLED – der Dienst ist deaktiviert und kann nicht gestartet werden.
+code.0x8007045B = ERROR_SHUTDOWN_IN_PROGRESS – das System wird heruntergefahren.
+code.0x80070490 = ERROR_NOT_FOUND – Element nicht gefunden.
+code.0x800705B4 = ERROR_TIMEOUT – Zeitüberschreitung beim Vorgang.
+code.0x800706BA = RPC_S_SERVER_UNAVAILABLE – der RPC-Server ist nicht verfügbar.
+code.0x80070641 = MSI 1601 – auf den Windows Installer-Dienst konnte nicht zugegriffen werden.
+code.0x80070642 = MSI 1602 – die Installation wurde vom Benutzer abgebrochen.
+code.0x80070643 = MSI 1603 – schwerwiegender Fehler bei der Installation (Details im MSI-Log: „Return value 3“).
+code.0x80070645 = MSI 1605 – die Aktion ist nur für installierte Produkte gültig.
+code.0x80070652 = MSI 1618 – eine andere Installation läuft bereits; zuerst abschließen.
+code.0x80070653 = MSI 1619 – das Installationspaket kann nicht geöffnet werden (fehlt oder nicht zugänglich).
+code.0x80070654 = MSI 1620 – das Installationspaket kann nicht geöffnet werden; es ist kein gültiges Windows Installer-Paket.
+code.0x80070659 = MSI 1625 – die Installation ist durch eine Systemrichtlinie verboten.
+code.0x80070661 = MSI 1633 – das Paket wird auf dieser Prozessorplattform nicht unterstützt.
+code.0x80070666 = MSI 1638 – eine andere Version des Produkts ist bereits installiert.
+code.0x80070669 = MSI 1641 – der Installer hat einen Neustart eingeleitet, um die Installation abzuschließen.
+code.0x80070BC2 = 3010 – erfolgreich, zum Abschluss ist ein Neustart erforderlich.
+code.0x80070BC9 = 3017 – der Vorgang ist fehlgeschlagen, zum Rückgängigmachen ist ein Neustart erforderlich.
+code.0x80072EE2 = 12002 – Zeitüberschreitung der Anforderung (WinINet/WinHTTP).
+code.0x80072EE7 = 12007 – der Servername konnte nicht aufgelöst werden (DNS).
+code.0x80072EFD = 12029 – es konnte keine Verbindung zum Server hergestellt werden.
+code.0x80072F8F = 12175 – Fehler im sicheren Kanal (TLS / Zertifikat).
+code.0x80240017 = WU_E_NOT_APPLICABLE – keine anwendbaren Updates.
+code.0x8024001E = WU_E_SERVICE_STOP – Vorgang nicht abgeschlossen, Dienst oder System wird heruntergefahren.
+code.0x80240022 = WU_E_ALL_UPDATES_FAILED – der Vorgang ist für alle Updates fehlgeschlagen.
+code.0x80240438 = WU_E_PT_ENDPOINT_UNREACHABLE – keine Netzwerkverbindung zum Updateserver.
+code.0x8024200D = WU_E_UH_NEEDANOTHERDOWNLOAD – das Update muss weitere Inhalte herunterladen.
+code.0x80244019 = WU_E_PT_HTTP_STATUS_NOT_FOUND – HTTP 404, die Datei wurde auf dem Server nicht gefunden.
+code.0x8024401C = WU_E_PT_HTTP_STATUS_REQUEST_TIMEOUT – HTTP 408, Zeitüberschreitung der Anforderung.
+code.0x80244022 = WU_E_PT_HTTP_STATUS_SERVICE_UNAVAIL – HTTP 503, der Dienst ist nicht verfügbar.
+code.0x8024402C = WU_E_PT_WINHTTP_NAME_NOT_RESOLVED – der Proxy- oder Servername konnte nicht aufgelöst werden.
+code.0x87D00314 = ConfigMgr – Zeitüberschreitung bei CI Version Info (Richtlinie oder Inhalt noch nicht verfügbar).
+code.0x87D00324 = ConfigMgr – die Anwendung wurde nach Abschluss der Installation nicht erkannt (Erkennungsmethode prüfen).
+code.0x87D00325 = ConfigMgr – die Anwendung wurde nach der Deinstallation weiterhin erkannt.
+code.0x87D00607 = ConfigMgr – Inhalt nicht gefunden (kein Verteilungspunkt mit dem Inhalt).
+code.0x87D00664 = ConfigMgr – der Auftrag des Update-Handlers wurde abgebrochen.
+code.0x87D00668 = ConfigMgr – das Softwareupdate wird nach der Anwendung weiterhin als erforderlich erkannt.
+code.0x87D00692 = ConfigMgr – Gruppenrichtlinienkonflikt (WSUS-Servereinstellung).
+code.0x87D01106 = ConfigMgr – die ausführbare Datei konnte nicht überprüft oder die Befehlszeile nicht erstellt werden.
