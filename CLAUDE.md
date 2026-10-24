@@ -202,6 +202,8 @@ Features (all implemented, see README for user-facing details):
     order, active definition with its file shown, warning when several match (owner's report).
 25. Own definitions no longer replace predefined ones with the same file name (both offered),
     setting which groups are used, notice of new / changed predefined definitions after updates.
+26. Release v0.4.0 (IIS columns fix, horizontal scroll bar, log definition priority / groups /
+    update notice).
 20. Test logs generator (`scripts/gen_testlogs.py`, `testlogs/` not in git) + `testlogs_overview`;
     it found that a `.lo_` opened directly was merged with itself – fixed (rotated parts opened
     directly are never merged).
