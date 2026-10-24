@@ -143,7 +143,13 @@ pub struct App {
     export_job: Option<mpsc::Receiver<Result<String, String>>>,
     /// Newest timestamp in the log, cached per data generation.
     latest_ts: Option<(u64, Option<String>)>,
+    /// The mouse pointer is over the log text (table or message in the details pane) in this frame.
+    hover_log: bool,
 }
+
+/// Limits of Ctrl + mouse wheel zoom.
+const FONT_SIZE_RANGE: std::ops::RangeInclusive<f32> = 6.0..=48.0;
+const UI_ZOOM_RANGE: std::ops::RangeInclusive<f32> = 0.5..=3.0;
 
 /// What will be exported with the current settings.
 struct ExportPlan {
@@ -228,8 +234,11 @@ impl App {
             export_hits: None,
             export_job: None,
             latest_ts: None,
+            hover_log: false,
         };
         app.apply_theme(&cc.egui_ctx);
+        let zoom = app.cfg.ui_zoom.clamp(*UI_ZOOM_RANGE.start(), *UI_ZOOM_RANGE.end());
+        cc.egui_ctx.set_zoom_factor(zoom);
         app.recompile_rules();
         if let Some(p) = path {
             app.open_file(&p);
@@ -248,6 +257,27 @@ impl App {
             _ => egui::ThemePreference::System,
         };
         ctx.set_theme(pref);
+    }
+
+    /// Ctrl + mouse wheel: over the log text it changes the log font size, anywhere else it zooms
+    /// the whole user interface. Also remembers the UI zoom changed with Ctrl+plus / minus / 0.
+    fn handle_zoom(&mut self, ctx: &egui::Context) {
+        let delta = ctx.input(|i| i.zoom_delta());
+        if delta != 1.0 {
+            if self.hover_log {
+                self.cfg.font_size = (self.cfg.font_size * delta)
+                    .clamp(*FONT_SIZE_RANGE.start(), *FONT_SIZE_RANGE.end());
+            } else {
+                let zoom = (ctx.zoom_factor() * delta)
+                    .clamp(*UI_ZOOM_RANGE.start(), *UI_ZOOM_RANGE.end());
+                ctx.set_zoom_factor(zoom);
+            }
+            self.cfg_dirty = true;
+        }
+        if (ctx.zoom_factor() - self.cfg.ui_zoom).abs() > 0.001 {
+            self.cfg.ui_zoom = ctx.zoom_factor();
+            self.cfg_dirty = true;
+        }
     }
 
     /// Cycles the theme: system → light → dark → system.
@@ -833,7 +863,11 @@ impl App {
                 ui.horizontal(|ui| {
                     ui.label(t!("menu.view.font_size"));
                     if ui
-                        .add(egui::Slider::new(&mut self.cfg.font_size, 9.0..=24.0).step_by(0.5))
+                        .add(
+                            egui::Slider::new(&mut self.cfg.font_size, FONT_SIZE_RANGE)
+                                .step_by(0.5)
+                                .fixed_decimals(1),
+                        )
                         .changed()
                     {
                         self.cfg_dirty = true;
@@ -1305,16 +1339,18 @@ impl App {
             });
         }
         ui.separator();
-        egui::ScrollArea::vertical()
+        let font = FontId::monospace(self.cfg.font_size);
+        let out = egui::ScrollArea::vertical()
             .auto_shrink([false, false])
             .show(ui, |ui| {
                 let mut s = e.message.as_str();
                 ui.add(
                     egui::TextEdit::multiline(&mut s)
                         .desired_width(f32::INFINITY)
-                        .font(TextStyle::Monospace),
+                        .font(font),
                 );
             });
+        self.hover_log |= ui.rect_contains_pointer(out.inner_rect);
         if open_code.is_some() {
             self.open_lookup(open_code);
         }
@@ -1386,6 +1422,7 @@ impl App {
     }
 
     fn table(&mut self, ui: &mut egui::Ui) {
+        self.hover_log |= ui.rect_contains_pointer(ui.max_rect());
         if self.loading.is_some() && self.entries.is_empty() {
             ui.vertical_centered(|ui| {
                 ui.add_space(ui.available_height() * 0.35);
@@ -2399,6 +2436,9 @@ impl App {
                         ui.label(t!(d));
                         ui.end_row();
                     }
+                    ui.monospace(kb(&format!("Ctrl + {}", t!("key.wheel"))));
+                    ui.label(t!("help.zoom_wheel"));
+                    ui.end_row();
                 });
                 ui.separator();
                 ui.label(t!("help.open_hint"));
@@ -2419,6 +2459,7 @@ impl eframe::App for App {
         self.tick_auto_refresh(&ctx);
         self.update_title(&ctx);
 
+        self.hover_log = false;
         egui::Panel::top("menu").show(ui, |ui| self.menu_bar(ui));
         egui::Panel::top("toolbar").show(ui, |ui| self.toolbar(ui));
         egui::Panel::bottom("status").show(ui, |ui| self.status_bar(ui));
@@ -2430,6 +2471,7 @@ impl eframe::App for App {
                 .show(ui, |ui| self.details(ui));
         }
         egui::CentralPanel::default().show(ui, |ui| self.table(ui));
+        self.handle_zoom(&ctx);
 
         self.rules_window(&ctx);
         self.colors_window(&ctx);

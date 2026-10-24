@@ -28,6 +28,9 @@ Features (all implemented, see README for user-facing details):
 - Highlight rules: text or regex, case, scope whole row / text only, also-component, order = priority,
   JSON import/export, **separate colors for light and dark theme**; severity + search colors per theme.
 - Themes: system / light / dark (View menu + quick toggle button in the toolbar).
+- Zoom: Ctrl + mouse wheel over the log text (table, details message) → `cfg.font_size` (6–48);
+  elsewhere → whole-UI `zoom_factor` (0.5–3.0, saved as `cfg.ui_zoom`, also Ctrl+plus/minus/0).
+  Hover is tracked per frame in `hover_log`, applied in `handle_zoom` after the panels are drawn.
 - Search: text/regex, next/prev, filter mode, info/warning/error toggles.
 - Error code lookup (Ctrl+E) + automatic explanation in the details pane; descriptions from language
   files (`code.0xXXXXXXXX`) + Windows `FormatMessageW` (also wininet/winhttp).
@@ -70,7 +73,10 @@ Features (all implemented, see README for user-facing details):
   `RusTrace\` with `rustrace.exe` + `lang\` + `LICENSE`) and `.sha256`. Needs 7-Zip.
 - Releases: push tag `v<version>` (matching `Cargo.toml`) → GitHub Actions `release.yml` tests,
   builds, packages and creates a **draft** release; then publish it. Manual workflow run = artifact only.
-- The owner's PC has **no local Rust toolchain**; builds/tests run in GitHub Actions.
+- Rust (rustup, stable MSVC) is installed on the owner's PC since 2026-10-24 (VS 2019 C++ tools);
+  `cargo` is in `%USERPROFILE%\.cargo\bin` – add it to PATH in shells started before that.
+- Do not leave test runs touching `%APPDATA%\RusTrace\config.json`: back it up and restore it
+  (or delete it if it did not exist before).
 - CRT is linked statically via `.cargo/config.toml` (no VC++ redistributable needed).
 
 ## History (2026-10-23)
@@ -85,6 +91,7 @@ Features (all implemented, see README for user-facing details):
 8. Release packaging (7-Zip SFX), GitHub Actions release workflow, static CRT; first release v0.1.0
    (https://github.com/MiroM73/Rustrace/releases/tag/v0.1.0, published 2026-10-23).
 9. Unlicense added, AI-authorship notice moved to the top of the README, CLAUDE.md committed.
+10. (2026-10-24) Ctrl + mouse wheel zoom: log text vs. whole UI depending on the pointer position.
 
 ## Ideas not done yet (offered to the owner)
 - Several logs at once in tabs / merged by time (like CMTrace "Merge").

@@ -22,6 +22,7 @@ format.date = {y}-{m}-{d}
 # Names of modifier keys in shortcuts
 key.ctrl = Ctrl
 key.shift = Shift
+key.wheel = wheel
 
 # --- Menu ---
 menu.file = File
@@ -237,6 +238,7 @@ help.navigate = Move in the table
 help.end = Go to end + follow end
 help.copy = Copy message of the selected row
 help.zoom = Zoom the whole window
+help.zoom_wheel = Over the log text: change the log font size; elsewhere: zoom the whole window
 help.open_hint = You can also open a file by dragging it onto the window or as an argument: rustrace.exe C:\\path\\file.log
 
 # --- Dialogs and errors ---

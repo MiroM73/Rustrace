@@ -173,7 +173,10 @@ pub struct Config {
     pub show_details: bool,
     /// "system" | "dark" | "light"
     pub theme: String,
+    /// Font size of the log text (table and message in the details pane).
     pub font_size: f32,
+    /// Zoom factor of the whole user interface (1.0 = 100 %).
+    pub ui_zoom: f32,
     /// UI language code ("en", "sk", …); empty = same as the operating system.
     pub language: String,
 
@@ -223,6 +226,7 @@ impl Default for Config {
             show_details: true,
             theme: "system".into(),
             font_size: 13.0,
+            ui_zoom: 1.0,
             language: String::new(),
             export_before: 5,
             export_after: 5,

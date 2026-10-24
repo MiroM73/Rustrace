@@ -92,6 +92,13 @@ Visual C++ Redistributable.
   matching background and a "Copy colors from … theme" button
 - rules from older versions or imported files get their light colors for the dark theme as a start
 
+**Zoom**
+- **Ctrl + mouse wheel over the log text** (the table or the message in the details pane) changes
+  the font size of the log only (6 – 48 pt, also View → Font size)
+- **Ctrl + mouse wheel anywhere else** (menu, toolbar, status bar, …) zooms the whole user
+  interface (50 – 300 %); Ctrl+plus / Ctrl+minus / Ctrl+0 zoom the whole window from the keyboard
+- both the log font size and the window zoom are remembered
+
 **Error codes** (Tools → Error code lookup, Ctrl+E)
 - the details pane automatically explains codes found in the selected message
   (`0x80070005`, `-2147024891`, `exit code 1603` …)
@@ -191,6 +198,8 @@ The built-in languages live in `lang/*.lang` in the source tree and are embedded
 | Ctrl+Shift+S | Export highlighted rows with context |
 | ↑ ↓ PgUp PgDn Home End | Move in the table |
 | Ctrl+C | Copy message of the selected row |
+| Ctrl + mouse wheel | Over the log: log font size; elsewhere: zoom the whole window |
+| Ctrl+plus / Ctrl+minus / Ctrl+0 | Zoom the whole window in / out / reset |
 
 ## Source layout
 
