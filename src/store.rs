@@ -348,6 +348,22 @@ impl TextArena {
             TextArena::Mapped(m) => m.len = m.len.min(len),
         }
     }
+
+    /// Removes the first `n` bytes (an entry boundary); the rest moves to the front.
+    fn drop_front(&mut self, n: usize) {
+        match self {
+            TextArena::Memory(t) => {
+                t.drain(..n);
+            }
+            TextArena::Mapped(m) => {
+                let len = m.len;
+                if let Some(map) = m.map.as_mut() {
+                    map.copy_within(n..len, 0);
+                }
+                m.len = len - n;
+            }
+        }
+    }
 }
 
 // ----------------------------------------------------------------------
@@ -489,6 +505,61 @@ impl LogStore {
         }
         for (c, col) in self.extra.iter_mut().enumerate() {
             col.push(e.extra.get(c).map_or(0, |v| self.strings.intern(v)));
+        }
+    }
+
+    /// Moves the text from memory to a memory-mapped temporary file (when a watched log grew
+    /// big). Returns false when the temporary file cannot be used (the text stays in memory).
+    pub fn move_text_to_temp_file(&mut self) -> bool {
+        let TextArena::Memory(t) = &self.text else { return true };
+        let Ok(mut m) = MappedText::new() else { return false };
+        if m.reserve_total(t.len()).and_then(|_| m.push_str(t)).is_err() {
+            return false;
+        }
+        self.text = TextArena::Mapped(m);
+        true
+    }
+
+    /// Index of the first entry whose message starts at or after text position `pos`.
+    pub fn first_at_or_after(&self, pos: usize) -> usize {
+        self.recs.partition_point(|r| (r.start as usize) < pos)
+    }
+
+    /// Removes the oldest `k` entries (memory limit of a long-watched log). The interner is
+    /// rebuilt, so values used only by the removed entries are freed too.
+    pub fn drop_front(&mut self, k: usize) {
+        let k = k.min(self.recs.len());
+        if k == 0 {
+            return;
+        }
+        let base = self.recs.get(k).map_or(self.text.len(), |r| r.start as usize);
+        self.text.drop_front(base);
+        self.recs.drain(..k);
+        for c in &mut self.extra {
+            c.drain(..k);
+        }
+        let old = std::mem::replace(&mut self.strings, Interner::new());
+        let mut ids = vec![NO_ID; old.len()];
+        let strings = &mut self.strings;
+        let mut map = |id: u32| {
+            let slot = &mut ids[id as usize];
+            if *slot == NO_ID {
+                *slot = strings.intern(old.get(id));
+            }
+            *slot
+        };
+        for r in &mut self.recs {
+            r.start -= base as u64;
+            r.component = map(r.component);
+            r.thread = map(r.thread);
+            if (TS_RAW..TS_RAW_END).contains(&r.ts) {
+                r.ts = TS_RAW + map((r.ts - TS_RAW) as u32) as i64;
+            }
+        }
+        for c in &mut self.extra {
+            for id in c.iter_mut() {
+                *id = map(*id);
+            }
         }
     }
 
@@ -703,6 +774,43 @@ mod tests {
         assert_eq!(s.text_len(), 10 * line.len());
         s.push(entry(11, "end", "C", "", &[]), 0);
         assert_eq!(s.message(10), "end");
+    }
+
+    /// Removing the oldest entries (memory limit), in memory and in the temporary file.
+    #[test]
+    fn drop_front_and_move_to_temp_file() {
+        for mapped in [false, true] {
+            let mut s = LogStore::new();
+            s.push(entry(1, "old one", "OldComp", "raw old", &["gone"]), 0);
+            s.push(entry(2, "old two", "Comp", "", &["x"]), 0);
+            s.push(entry(3, "keep ž", "Comp", "2026-10-23 10:00:00.000", &["y"]), 1);
+            s.push(entry(4, "last", "Comp2", "raw new", &["y"]), 1);
+            if mapped {
+                assert!(s.move_text_to_temp_file());
+                assert!(s.is_mapped());
+            }
+            assert_eq!(s.first_at_or_after(0), 0);
+            assert_eq!(s.first_at_or_after(7), 1); // "old one" is 7 bytes
+            assert_eq!(s.first_at_or_after(8), 2);
+            s.drop_front(2);
+            assert_eq!(s.len(), 2);
+            let e = s.at(0);
+            assert_eq!((e.message, e.component, e.line_no, e.file), ("keep ž", "Comp", 3, 1));
+            assert_eq!(s.datetime(0), "2026-10-23 10:00:00.000");
+            assert_eq!(s.datetime(1), "raw new");
+            assert_eq!((s.extra(0, 0), s.extra(1, 0)), ("y", "y"));
+            assert_eq!(s.text_len(), "keep ž".len() + "last".len());
+            // Values of the removed entries are gone from the interner:
+            // "", thread, Comp, "y", Comp2, "raw new".
+            assert_eq!(s.strings.len(), 6);
+            // Appending keeps working after the removal.
+            s.push(entry(5, "new", "Comp", "", &[]), 1);
+            assert_eq!(s.message(1), "last");
+            assert_eq!(s.message(2), "new");
+            s.drop_front(10);
+            assert!(s.is_empty());
+            assert_eq!(s.text_len(), 0);
+        }
     }
 
     #[test]

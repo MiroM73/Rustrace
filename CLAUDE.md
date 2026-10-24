@@ -45,6 +45,12 @@ Features (all implemented, see README for user-facing details):
   Otherwise (or without merging) a full reset. UI: `App::columns()` adds `ColumnKind::File` first
   when `files.len() > 1`; status bar 📚 with the list. Export: `export::segments` splits blocks by
   file; original lines are read per file, overwritten parts fall back to the message texts.
+- **Memory limits for long-watched logs** (`App::enforce_memory_limits`, after every poll):
+  text in memory ≥ temp file threshold → `LogStore::move_text_to_temp_file`; text >
+  `cfg.max_log_mb` (default 1000, `cfg.max_log_enabled`) → `LogStore::drop_front(k)` down to ¾ of
+  the limit (never provisional rows), interner rebuilt; App shifts `filtered`, `is_match`,
+  `selected`, `committed_len` by k, bumps `data_gen`, counts `dropped` (✂ in the status bar, reset
+  by a full read). Known limit: the first read of a huge file still loads it whole before trimming.
 - **Compact storage** (`src/store.rs`, `LogStore`): the parser still produces `LogEntry` (Strings)
   per line, but they go straight into a `LogStore` – 32-byte `Rec` (message start in the text arena,
   `i64` ms timestamp or tagged interned raw text, line, interned component/thread, severity), one
@@ -116,7 +122,7 @@ Features (all implemented, see README for user-facing details):
 
 ## Commands
 - `cargo build --release` → `target\release\rustrace.exe`
-- `cargo test` (37 tests: rotated parts (naming, merge on open, rotation while watching, replaced
+- `cargo test` (38 tests: store drop_front / move to temp file, rotated parts (naming, merge on open, rotation while watching, replaced
   file), export segments by file, time range bounds, column filter syntax, parsers, chunked/ANSI/UTF-16 reading, log definitions (CBS, DISM, IIS,
   choice by name/content, appending across refreshes), store (32-byte record, ISO ↔ ms, push /
   truncate / append, mapped temp file growing past 64 MB, interner), export incl. end-to-end and
@@ -162,6 +168,8 @@ Features (all implemented, see README for user-facing details):
     `export::parse_range_bound` (inclusive end fills up the missing day/hour/minute/second).
 17. Merging of rotated logs (owner: only concatenation for now, also the dated history files,
     File column only for logs of several files) incl. rotation while watching.
+18. Memory protection for long-watched logs: automatic move to the temp file + size limit that
+    removes the oldest records (owner agreed to dropping old records from memory and view).
 
 ## Ideas not done yet (offered to the owner)
 - Merge **different** logs into one view sorted by time (like CMTrace File → Open → "Merge

@@ -169,6 +169,8 @@ pub struct App {
     /// and their labels for the File column.
     files: Vec<SourceFile>,
     file_labels: Vec<String>,
+    /// Number of oldest entries removed because of the memory limit (since the last full read).
+    dropped: usize,
 }
 
 /// Limits of Ctrl + mouse wheel zoom.
@@ -271,6 +273,7 @@ impl App {
             time_invalid: (false, false),
             files: Vec::new(),
             file_labels: Vec::new(),
+            dropped: 0,
         };
         app.load_defs();
         app.apply_theme(&cc.egui_ctx);
@@ -529,6 +532,56 @@ impl App {
         }
     }
 
+    /// Protection of a long-watched log against filling the memory:
+    /// 1. message text that grew past the temp file threshold moves to the temporary file,
+    /// 2. above the size limit the oldest entries are removed (down to ¾ of the limit, so this
+    ///    happens rarely and in one go).
+    fn enforce_memory_limits(&mut self) {
+        let mb = |v: u32| (v as usize) << 20;
+        if self.cfg.temp_file_enabled
+            && !self.entries.is_mapped()
+            && self.entries.text_len() >= mb(self.cfg.temp_file_threshold_mb)
+        {
+            self.entries.move_text_to_temp_file();
+        }
+        if !self.cfg.max_log_enabled {
+            return;
+        }
+        let limit = mb(self.cfg.max_log_mb.max(1));
+        let len = self.entries.text_len();
+        if len <= limit {
+            return;
+        }
+        let k = self
+            .entries
+            .first_at_or_after(len - limit / 4 * 3)
+            .min(self.committed_len);
+        if k == 0 {
+            return;
+        }
+        let pos_selected = self.selected.and_then(|s| self.filtered.binary_search(&s).ok());
+        self.entries.drop_front(k);
+        self.committed_len -= k;
+        self.dropped += k;
+        self.data_gen += 1;
+        // Shift every entry index by k; indexes of removed entries disappear.
+        let gone = self.filtered.partition_point(|&i| i < k);
+        self.filtered.drain(..gone);
+        for i in &mut self.filtered {
+            *i -= k;
+        }
+        self.is_match.drain(..k.min(self.is_match.len()));
+        self.match_count = self.is_match.iter().filter(|&&b| b).count();
+        self.selected = self.selected.and_then(|s| s.checked_sub(k));
+        self.code_cache = None;
+        // Keep the selected row in view (the rows above it disappeared).
+        if !self.cfg.auto_scroll
+            && let Some(p) = pos_selected.and_then(|p| p.checked_sub(gone))
+        {
+            self.scroll_to = Some(p);
+        }
+    }
+
     /// Table columns: the columns of the log type, plus the File column first when the log is
     /// merged from several files (rotated parts).
     fn columns(&self) -> Vec<LogColumn> {
@@ -614,6 +667,7 @@ impl App {
         self.format_choice = FormatChoice::Auto;
         self.schema = Schema::default();
         self.set_files(Vec::new());
+        self.dropped = 0;
         self.entries = LogStore::new();
         self.filtered.clear();
         self.is_match.clear();
@@ -691,6 +745,7 @@ impl App {
                 }
                 self.source = Some(src);
                 self.apply_result(res);
+                self.enforce_memory_limits();
                 self.last_refresh = Some(Instant::now());
             }
             Err(mpsc::TryRecvError::Empty) => {}
@@ -721,6 +776,7 @@ impl App {
             }) => {
                 self.status_error = None;
                 self.entries = committed;
+                self.dropped = 0;
                 self.committed_len = self.entries.len();
                 for e in provisional {
                     self.entries.push(e, active);
@@ -1108,6 +1164,25 @@ impl App {
                         .changed();
                     if changed {
                         self.cfg_dirty = true;
+                    }
+                });
+                ui.horizontal(|ui| {
+                    let mut changed = ui
+                        .checkbox(&mut self.cfg.max_log_enabled, t!("menu.view.max_log"))
+                        .on_hover_text(t!("menu.view.max_log.tip"))
+                        .changed();
+                    changed |= ui
+                        .add_enabled(
+                            self.cfg.max_log_enabled,
+                            egui::DragValue::new(&mut self.cfg.max_log_mb)
+                                .range(10..=1_000_000)
+                                .suffix(" MB"),
+                        )
+                        .on_hover_text(t!("menu.view.max_log.tip"))
+                        .changed();
+                    if changed {
+                        self.cfg_dirty = true;
+                        self.enforce_memory_limits();
                     }
                 });
                 if ui
@@ -1643,6 +1718,11 @@ impl App {
                 ui.separator();
                 if self.file_size > 0 {
                     ui.label(format_size(self.file_size));
+                    ui.separator();
+                }
+                if self.dropped > 0 {
+                    ui.colored_label(ORANGE, format!("✂ {}", t!("status.dropped", count = self.dropped)))
+                        .on_hover_text(t!("status.dropped.tip", limit = self.cfg.max_log_mb));
                     ui.separator();
                 }
                 if self.files.len() > 1 {

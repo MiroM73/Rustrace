@@ -102,6 +102,14 @@ Visual C++ Redistributable.
   swapping the program. The status bar shows 💾 when it is used. Applies when a file is read from
   the start (open, Ctrl+F5). The log file itself is never mapped, so the program writing it can
   still truncate or rotate it.
+- **protection for logs watched for a long time** (a rotating log keeps growing in memory,
+  because nothing read so far is dropped):
+  - when the message text of a watched log grows past the temporary file threshold, it moves to
+    the temporary file automatically (not only when the file is opened)
+  - **View → "Keep at most … MB"** (default on, 1000 MB of message text): above the limit the
+    oldest records are removed from memory and from the view, in one go down to three quarters of
+    the limit; the status bar shows ✂ with the number of removed records, Ctrl+F5 reads the file
+    again; the file on disk is not changed. Removed records are no longer exported.
 - on Windows the window is drawn with Direct3D 12 when available (the graphics drivers alone take
   ~190 MB less than with the default choice); `WGPU_BACKEND=vulkan|gl` overrides it
 - measured with a 400 MB CMTrace log (1.8 million lines), private bytes of the whole program:
