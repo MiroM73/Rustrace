@@ -344,6 +344,7 @@ The built-in languages live in `lang/*.lang` in the source tree and are embedded
 | Ctrl+E | Error code lookup |
 | Ctrl+Shift+S | Export highlighted rows with context |
 | ↑ ↓ PgUp PgDn Home End | Move in the table |
+| Shift + mouse wheel | Scroll the table horizontally (when the columns do not fit; also the scroll bar below the table) |
 | Ctrl+C | Copy message of the selected row |
 | Ctrl + mouse wheel | Over the log: log font size; elsewhere: zoom the whole window |
 | Ctrl+plus / Ctrl+minus / Ctrl+0 | Zoom the whole window in / out / reset |

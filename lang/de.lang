@@ -266,6 +266,7 @@ help.end = Zum Ende + Ende folgen
 help.copy = Meldung der ausgewählten Zeile kopieren
 help.zoom = Ganzes Fenster zoomen
 help.zoom_wheel = Über dem Logtext: Schriftgröße des Logs; sonst: ganzes Fenster zoomen
+help.hscroll = Tabelle horizontal scrollen (Spalten, die nicht passen)
 help.open_hint = Eine Datei kann auch durch Ziehen ins Fenster oder als Argument geöffnet werden: rustrace.exe C:\\Pfad\\Datei.log
 
 # --- Dialoge und Fehler ---

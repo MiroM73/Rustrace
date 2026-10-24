@@ -74,6 +74,12 @@ Features (all implemented, see README for user-facing details):
   elsewhere → whole-UI `zoom_factor` (0.5–3.0, saved as `cfg.ui_zoom`, also Ctrl+plus/minus/0).
   Hover is tracked per frame in `hover_log`, applied in `handle_zoom` after the panels are drawn.
 - Search: text/regex, next/prev, filter mode, info/warning/error toggles.
+- Horizontal scrolling of the table (`App::table`): egui_extras tables only scroll vertically, so
+  the table is laid out in a child Ui shifted left by `table_scroll_x` and clipped to the visible
+  rect – its right edge with the vertical scroll bar stays in view; a separate horizontal
+  `ScrollArea` (solid style) below it owns the offset, Shift + wheel changes it too. The natural
+  width `table_width` is measured every frame from the header cells (last column min
+  `LAST_COLUMN_MIN` = 150, it fills the rest when everything fits).
 - Column filters (`src/colfilter.rs`, toolbar toggle `cfg.show_column_filters`): filter row in the
   table header built from `Schema::columns` (adapts to the log type); `App::col_filter_text`
   (by `ColumnKind`) → `col_filters` compiled; checked in `refilter_from` via
@@ -180,6 +186,7 @@ Features (all implemented, see README for user-facing details):
     removes the oldest records (owner agreed to dropping old records from memory and view).
 19. Release v0.3.0 (log definitions, memory saving, column filters, time range, rotated logs,
     memory limit); the release now also contains a plain ZIP next to the self-extracting .exe.
+23. Horizontal scroll bar under the table for columns that do not fit (Shift + wheel too).
 20. Test logs generator (`scripts/gen_testlogs.py`, `testlogs/` not in git) + `testlogs_overview`;
     it found that a `.lo_` opened directly was merged with itself – fixed (rotated parts opened
     directly are never merged).

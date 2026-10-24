@@ -280,6 +280,7 @@ help.end = Go to end + follow end
 help.copy = Copy message of the selected row
 help.zoom = Zoom the whole window
 help.zoom_wheel = Over the log text: change the log font size; elsewhere: zoom the whole window
+help.hscroll = Scroll the table horizontally (columns that do not fit)
 help.open_hint = You can also open a file by dragging it onto the window or as an argument: rustrace.exe C:\\path\\file.log
 
 # --- Dialogs and errors ---

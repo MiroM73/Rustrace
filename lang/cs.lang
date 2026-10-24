@@ -266,6 +266,7 @@ help.end = Na konec + sledovat konec
 help.copy = Kopírovat zprávu vybraného řádku
 help.zoom = Přiblížení celého okna
 help.zoom_wheel = Nad textem logu: velikost písma logu; jinde: přiblížení celého okna
+help.hscroll = Posun tabulky vodorovně (sloupce, které se nevejdou)
 help.open_hint = Soubor můžete otevřít i přetažením do okna nebo jako argument: rustrace.exe C:\\cesta\\soubor.log
 
 # --- Dialogy a chyby ---

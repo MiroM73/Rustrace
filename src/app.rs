@@ -171,11 +171,16 @@ pub struct App {
     file_labels: Vec<String>,
     /// Number of oldest entries removed because of the memory limit (since the last full read).
     dropped: usize,
+    /// Horizontal scroll offset of the table and its natural width (measured every frame).
+    table_scroll_x: f32,
+    table_width: f32,
 }
 
 /// Limits of Ctrl + mouse wheel zoom.
 const FONT_SIZE_RANGE: std::ops::RangeInclusive<f32> = 6.0..=48.0;
 const UI_ZOOM_RANGE: std::ops::RangeInclusive<f32> = 0.5..=3.0;
+/// Minimum width of the last table column (with horizontal scrolling it is never narrower).
+const LAST_COLUMN_MIN: f32 = 150.0;
 
 /// What will be exported with the current settings.
 struct ExportPlan {
@@ -274,6 +279,8 @@ impl App {
             files: Vec::new(),
             file_labels: Vec::new(),
             dropped: 0,
+            table_scroll_x: 0.0,
+            table_width: 0.0,
         };
         app.load_defs();
         app.apply_theme(&cc.egui_ctx);
@@ -1988,6 +1995,30 @@ impl App {
             ui.spacing().item_spacing.y * 0.5 + 0.5,
         );
 
+        // Horizontal scrolling (the table itself only scrolls vertically): the table is laid out
+        // shifted left by the offset and clipped to the visible area, so its right edge with the
+        // vertical scroll bar always stays in view. A horizontal scroll bar below it appears when
+        // the columns do not fit (last frame's width); Shift + mouse wheel scrolls as well.
+        let parent = ui;
+        let full = parent.available_rect_before_wrap();
+        let max_offset = (self.table_width - full.width()).max(0.0);
+        let hbar_h = if max_offset > 0.0 {
+            parent.spacing().scroll.bar_width + 4.0
+        } else {
+            0.0
+        };
+        let view = egui::Rect::from_min_max(full.min, egui::pos2(full.max.x, full.max.y - hbar_h));
+        if parent.rect_contains_pointer(view) {
+            self.table_scroll_x -= parent.input(|i| i.smooth_scroll_delta.x);
+        }
+        self.table_scroll_x = self.table_scroll_x.clamp(0.0, max_offset);
+        let mut child = parent.new_child(egui::UiBuilder::new().max_rect(egui::Rect::from_min_max(
+            egui::pos2(view.min.x - self.table_scroll_x, view.min.y),
+            view.max,
+        )));
+        child.set_clip_rect(view.intersect(parent.clip_rect()));
+        let ui = &mut child;
+
         // The columns come from the log format; every layout keeps its own column widths.
         let columns = self.columns();
         let mut tb = TableBuilder::new(ui)
@@ -2003,7 +2034,7 @@ impl App {
         let msg_width = if columns.len() > 5 { 420.0 } else { 720.0 };
         for (i, c) in columns.iter().enumerate() {
             let col = if i + 1 == columns.len() {
-                Column::remainder().at_least(60.0)
+                Column::remainder().at_least(LAST_COLUMN_MIN)
             } else {
                 match c.kind {
                     ColumnKind::Role(Role::Message) => Column::initial(msg_width).at_least(120.0),
@@ -2033,10 +2064,13 @@ impl App {
         let mut clear_filters = false;
         let any_filter = !self.col_filters.is_empty();
         let header_h = if show_filters { 48.0 } else { 22.0 };
+        // Left edges of the first and the last header cell → natural width of the table.
+        let last_col = headers.len() - 1;
+        let mut edges = (0.0f32, 0.0f32);
 
         tb.header(header_h, |mut h| {
             for (i, title) in headers.into_iter().enumerate() {
-                h.col(|ui| {
+                let (cell, _) = h.col(|ui| {
                     ui.vertical(|ui| {
                         ui.strong(title);
                         if !show_filters {
@@ -2066,6 +2100,12 @@ impl App {
                         }
                     });
                 });
+                if i == 0 {
+                    edges.0 = cell.left();
+                }
+                if i == last_col {
+                    edges.1 = cell.left();
+                }
             }
         })
         .body(|body| {
@@ -2185,6 +2225,25 @@ impl App {
                 });
             });
         });
+
+        // Natural width: all columns up to the last one plus its minimum width (the last column
+        // fills the rest when everything fits).
+        self.table_width = edges.1 - edges.0 + LAST_COLUMN_MIN;
+        parent.advance_cursor_after_rect(view);
+        if hbar_h > 0.0 {
+            let bar = egui::Rect::from_min_max(egui::pos2(full.min.x, view.max.y), full.max);
+            let mut bar_ui = parent.new_child(egui::UiBuilder::new().max_rect(bar));
+            bar_ui.spacing_mut().scroll = egui::style::ScrollStyle::solid();
+            let out = egui::ScrollArea::horizontal()
+                .id_salt("log_table_hscroll")
+                .auto_shrink([false, true])
+                .scroll_bar_visibility(egui::scroll_area::ScrollBarVisibility::AlwaysVisible)
+                .horizontal_scroll_offset(self.table_scroll_x)
+                .show(&mut bar_ui, |ui| {
+                    ui.allocate_space(egui::vec2(self.table_width, 1.0));
+                });
+            self.table_scroll_x = out.state.clamped_offset().x;
+        }
 
         if let Some(i) = clicked {
             self.selected = Some(i);
@@ -3149,6 +3208,9 @@ impl App {
                     }
                     ui.monospace(kb(&format!("Ctrl + {}", t!("key.wheel"))));
                     ui.label(t!("help.zoom_wheel"));
+                    ui.end_row();
+                    ui.monospace(kb(&format!("Shift + {}", t!("key.wheel"))));
+                    ui.label(t!("help.hscroll"));
                     ui.end_row();
                 });
                 ui.separator();
