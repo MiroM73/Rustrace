@@ -4,6 +4,7 @@
 use crate::export::ExportFormat;
 use crate::t;
 use serde::{Deserialize, Serialize};
+use std::collections::BTreeMap;
 use std::path::PathBuf;
 
 #[derive(Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Debug)]
@@ -215,6 +216,12 @@ pub struct Config {
     /// oldest entries are removed (down to three quarters of the limit).
     pub max_log_enabled: bool,
     pub max_log_mb: u32,
+    /// Which log definitions are used: "all", "predefined" (built-in + next to the program) or
+    /// "own" (the user's folder).
+    pub logdef_sources: String,
+    /// The predefined log definitions the user has seen (file name → text): after an update of
+    /// RusTrace the new / changed ones are reported against these.
+    pub known_logdefs: BTreeMap<String, String>,
 }
 
 impl Default for Config {
@@ -267,6 +274,8 @@ impl Default for Config {
             merge_rotated: true,
             max_log_enabled: true,
             max_log_mb: 1000,
+            logdef_sources: "all".into(),
+            known_logdefs: BTreeMap::new(),
         }
     }
 }

@@ -27,10 +27,17 @@ Features (all implemented, see README for user-facing details):
   Roles fill the standard columns (message/component/datetime/thread), `role.severity` + regexes give
   the severity, other groups are extra columns (`LogEntry::extra`, `Schema::extra_names`). The table
   columns come from `Schema` (`LogSource::schema()`); CMTrace = `Schema::default()`. Format choice:
-  Priority when several definitions match a file name: `LogDef::priority` (0 built-in, then the
-  folders of `load_from` in order: exe dir 1, user dir 2), `DefSet::defs` sorted by priority desc,
-  then id; `logdef::matching_by_name`; the UI shows the active definition (`LogSource::active_def`,
-  name – file in the status bar, ⚠ + list in the menu when several match).
+  Groups: predefined = built-in, replaced by a same-named file in `logdef\` next to the exe
+  (`PRIO_BUILTIN` 0 / `PRIO_PROGRAM` 1); own = user folder (`PRIO_USER` 2) – own files never
+  replace predefined ones, both are offered (`LogDef::same_as` = id + priority identifies a
+  definition, e.g. for the manual choice after reloading). `cfg.logdef_sources` = all /
+  predefined / own (`SourceFilter`). `DefSet::defs` sorted by priority desc, then id;
+  `logdef::matching_by_name`; the UI shows the active definition (`LogSource::active_def`, name –
+  file in the status bar, ⚠ + list in the menu when several match).
+  Update notice: `cfg.known_logdefs` (file → text of the predefined definitions seen; filled
+  silently on the first start) vs `DefSet::predefined` → `logdef::definition_updates` (new /
+  changed key by key with the own copy's value / removed) → window at start-up; "Got it" stores
+  the current texts.
   View → Log format (Auto = file name → content `detect` → built-in; CMTrace content never uses
   `detect`), reset to Auto for every newly opened file. `unmatched = append` keeps the last entry
   provisional until the next one starts (`ParserState::pending_entry`).
@@ -193,6 +200,8 @@ Features (all implemented, see README for user-facing details):
 23. Horizontal scroll bar under the table for columns that do not fit (Shift + wheel too).
 24. Log definitions: clear priority (user folder > next to exe > built-in) instead of file-name
     order, active definition with its file shown, warning when several match (owner's report).
+25. Own definitions no longer replace predefined ones with the same file name (both offered),
+    setting which groups are used, notice of new / changed predefined definitions after updates.
 20. Test logs generator (`scripts/gen_testlogs.py`, `testlogs/` not in git) + `testlogs_overview`;
     it found that a `.lo_` opened directly was merged with itself – fixed (rotated parts opened
     directly are never merged).

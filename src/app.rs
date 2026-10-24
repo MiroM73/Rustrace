@@ -115,6 +115,12 @@ pub struct App {
     show_rules: bool,
     show_colors: bool,
     show_help: bool,
+    /// New / changed predefined log definitions since the version the user has seen.
+    def_updates: Vec<logdef::DefUpdate>,
+    show_def_updates: bool,
+    /// Texts of the predefined and own definitions (for the notice above).
+    predefined_defs: std::collections::BTreeMap<String, String>,
+    own_defs: std::collections::BTreeMap<String, (PathBuf, String)>,
     focus_search: bool,
     title: String,
 
@@ -248,6 +254,10 @@ impl App {
             show_rules: false,
             show_colors: false,
             show_help: false,
+            def_updates: Vec::new(),
+            show_def_updates: false,
+            predefined_defs: Default::default(),
+            own_defs: Default::default(),
             focus_search: false,
             title: String::new(),
             code_cache: None,
@@ -286,6 +296,7 @@ impl App {
             table_width: 0.0,
         };
         app.load_defs();
+        app.check_def_updates();
         app.apply_theme(&cc.egui_ctx);
         let zoom = app.cfg.ui_zoom.clamp(*UI_ZOOM_RANGE.start(), *UI_ZOOM_RANGE.end());
         cc.egui_ctx.set_zoom_factor(zoom);
@@ -408,19 +419,139 @@ impl App {
 
     /// (Re)loads the log definitions; a chosen definition is replaced by its new version.
     fn load_defs(&mut self) {
-        let set = logdef::load_all();
+        let set = logdef::load_all(logdef::SourceFilter::from_key(&self.cfg.logdef_sources));
         if let FormatChoice::Def(d) = &self.format_choice {
             self.format_choice = set
                 .defs
                 .iter()
-                .find(|n| n.id.eq_ignore_ascii_case(&d.id))
+                .find(|n| n.same_as(d))
                 .cloned()
                 .map_or(FormatChoice::Auto, FormatChoice::Def);
         }
         self.defs = Arc::new(set.defs);
         self.def_errors = set.errors;
+        self.predefined_defs = set.predefined;
+        self.own_defs = set.own;
         if !self.def_errors.is_empty() {
             self.status_error = Some(t!("error.logdef", count = self.def_errors.len()));
+        }
+    }
+
+    /// After an update of RusTrace: new / changed predefined log definitions compared with the
+    /// versions the user has seen. The first time the current state is only remembered.
+    fn check_def_updates(&mut self) {
+        if self.cfg.known_logdefs.is_empty() {
+            self.cfg.known_logdefs = self.predefined_defs.clone();
+            self.cfg_dirty = true;
+            return;
+        }
+        self.def_updates =
+            logdef::definition_updates(&self.cfg.known_logdefs, &self.predefined_defs, &self.own_defs);
+        self.show_def_updates = !self.def_updates.is_empty();
+    }
+
+    /// The user has read the notice: the current predefined definitions become the known ones.
+    fn acknowledge_def_updates(&mut self) {
+        self.cfg.known_logdefs = self.predefined_defs.clone();
+        self.cfg_dirty = true;
+        self.def_updates.clear();
+        self.show_def_updates = false;
+    }
+
+    /// Window with the new / changed / removed predefined log definitions.
+    fn def_updates_window(&mut self, ctx: &egui::Context) {
+        if !self.show_def_updates {
+            return;
+        }
+        let mut open = true;
+        let (mut ack, mut close, mut open_folder) = (false, false, false);
+        egui::Window::new(format!("🆕 {}", t!("defupd.title")))
+            .id(egui::Id::unique("defupd_window"))
+            .open(&mut open)
+            .default_width(860.0)
+            .resizable(true)
+            .show(ctx, |ui| {
+                ui.label(t!("defupd.intro"));
+                egui::ScrollArea::vertical().max_height(520.0).show(ui, |ui| {
+                    for u in &self.def_updates {
+                        ui.separator();
+                        let head = match u.kind {
+                            logdef::UpdateKind::New => t!("defupd.new", name = u.name, file = u.id),
+                            logdef::UpdateKind::Changed => t!("defupd.changed", name = u.name, file = u.id),
+                            logdef::UpdateKind::Removed => t!("defupd.removed", name = u.name, file = u.id),
+                        };
+                        ui.strong(head);
+                        if let Some(p) = &u.own_path {
+                            ui.colored_label(ORANGE, t!("defupd.own_copy", path = p.display()));
+                        }
+                        if u.changes.is_empty() {
+                            continue;
+                        }
+                        let has_own = u.own_path.is_some();
+                        let value = |v: &Option<String>| v.clone().unwrap_or_else(|| "—".to_owned());
+                        // Values (patterns can be long) wrap within a fixed width.
+                        let cell = |ui: &mut egui::Ui, text: String, width: f32| {
+                            ui.allocate_ui(egui::vec2(width, 0.0), |ui| {
+                                ui.add(egui::Label::new(RichText::new(text).monospace()).wrap());
+                            });
+                        };
+                        egui::Grid::new(("defupd_grid", &u.id))
+                            .striped(true)
+                            .spacing([14.0, 4.0])
+                            .show(ui, |ui| {
+                                ui.strong(t!("defupd.col.key"));
+                                ui.strong(t!("defupd.col.before"));
+                                ui.strong(t!("defupd.col.now"));
+                                if has_own {
+                                    ui.strong(t!("defupd.col.own"));
+                                }
+                                ui.end_row();
+                                for c in &u.changes {
+                                    ui.monospace(&c.key);
+                                    cell(ui, value(&c.old), 250.0);
+                                    cell(ui, value(&c.new), 250.0);
+                                    if let Some(own) = &c.own {
+                                        ui.allocate_ui(egui::vec2(220.0, 0.0), |ui| {
+                                            if *own == c.new {
+                                                ui.label(format!("✔ {}", t!("defupd.own.done")));
+                                            } else if *own == c.old {
+                                                ui.colored_label(ORANGE, format!("⚠ {}", t!("defupd.own.update")));
+                                            } else {
+                                                ui.add(
+                                                    egui::Label::new(t!("defupd.own.custom", value = value(own)))
+                                                        .wrap(),
+                                                );
+                                            }
+                                        });
+                                    }
+                                    ui.end_row();
+                                }
+                            });
+                    }
+                });
+                ui.separator();
+                ui.horizontal(|ui| {
+                    if ui.button(format!("✔ {}", t!("defupd.ack"))).on_hover_text(t!("defupd.ack.tip")).clicked() {
+                        ack = true;
+                    }
+                    if ui.button(t!("defupd.later")).on_hover_text(t!("defupd.later.tip")).clicked() {
+                        close = true;
+                    }
+                    if ui.button(format!("📂 {}", t!("format.open_folder"))).clicked() {
+                        open_folder = true;
+                    }
+                });
+            });
+        if open_folder && let Some(dir) = logdef::user_def_dir() {
+            let res = std::fs::create_dir_all(&dir).and_then(|_| open::that_detached(&dir));
+            if let Err(e) = res {
+                self.status_error = Some(t!("error.open_folder", error = e));
+            }
+        }
+        if ack {
+            self.acknowledge_def_updates();
+        } else if close || !open {
+            self.show_def_updates = false;
         }
     }
 
@@ -1260,12 +1391,12 @@ impl App {
 
     /// Where a log definition comes from (user folder, folder next to the program, built-in).
     fn def_source(d: &LogDef) -> String {
-        match &d.path {
-            None => t!("format.source.builtin"),
-            Some(p) if logdef::user_def_dir().is_some_and(|u| p.starts_with(u)) => {
-                t!("format.source.user")
-            }
-            Some(_) => t!("format.source.exe"),
+        if d.is_own() {
+            t!("format.source.user")
+        } else if d.path.is_some() {
+            t!("format.source.exe")
+        } else {
+            t!("format.source.builtin")
         }
     }
 
@@ -1325,7 +1456,7 @@ impl App {
         }
         ui.separator();
         for d in self.defs.iter() {
-            let selected = matches!(&self.format_choice, FormatChoice::Def(c) if c.id == d.id);
+            let selected = matches!(&self.format_choice, FormatChoice::Def(c) if c.same_as(d));
             let label = format!("{}  ({}, {})", d.name, d.id, Self::def_source(d));
             let mut r = ui.radio(selected, label);
             if let Some(p) = &d.path {
@@ -1346,6 +1477,40 @@ impl App {
                 ui.label(format!("{mark} {} – {} ({})", d.name, d.id, Self::def_source(d)))
                     .on_hover_text(d.path.as_ref().map_or_else(Self::builtin_label, |p| p.display().to_string()));
             }
+        }
+        ui.separator();
+        // Which definitions are used: predefined, own or both.
+        ui.separator();
+        ui.label(t!("format.sources"));
+        let mut sources_changed = false;
+        for (filter, key) in [
+            (logdef::SourceFilter::All, "format.sources.all"),
+            (logdef::SourceFilter::Predefined, "format.sources.predefined"),
+            (logdef::SourceFilter::Own, "format.sources.own"),
+        ] {
+            let current = logdef::SourceFilter::from_key(&self.cfg.logdef_sources) == filter;
+            if ui.radio(current, t!(key)).clicked() && !current {
+                self.cfg.logdef_sources = filter.key().to_owned();
+                sources_changed = true;
+            }
+        }
+        if sources_changed {
+            self.cfg_dirty = true;
+            self.load_defs();
+            if self.cur_path.is_some() {
+                self.reload_full();
+            }
+            ui.close();
+        }
+        if ui
+            .add_enabled(
+                !self.def_updates.is_empty(),
+                egui::Button::new(format!("🆕 {}", t!("defupd.menu"))),
+            )
+            .clicked()
+        {
+            self.show_def_updates = true;
+            ui.close();
         }
         ui.separator();
         if ui.button(format!("🔄 {}", t!("format.reload"))).clicked() {
@@ -3311,6 +3476,7 @@ impl eframe::App for App {
         self.help_window(&ctx);
         self.lookup_window(&ctx);
         self.export_window(&ctx);
+        self.def_updates_window(&ctx);
         self.check_export();
 
         // Save settings (debounced, so we do not write on every mouse move).

@@ -23,8 +23,9 @@
 //!
 //! Columns that are not used by `role.message/component/thread/datetime` are kept as extra
 //! columns (shown in the table, searchable). Definitions are built in (`logdef/*.def` in the
-//! source tree) and loaded **without recompiling** from `logdef\` next to the executable and
-//! `<config dir>/RusTrace/logdef/`; a file with the same name overrides the built-in one.
+//! source tree) and loaded **without recompiling** from `logdef\` next to the executable (a file
+//! with the same name replaces the built-in one) and from `<config dir>/RusTrace/logdef/` (the
+//! user's own definitions – they replace nothing, see `load_from`).
 
 use crate::parser::{keyword_sev, LogEntry, Severity};
 use regex::{Regex, RegexBuilder};
@@ -605,6 +606,175 @@ impl DefState {
 pub struct DefSet {
     pub defs: Vec<Arc<LogDef>>,
     pub errors: Vec<String>,
+    /// Texts of the predefined definitions (built-in, or their copy in `logdef\` next to the
+    /// program), lower-case file name → text – for the "new / changed definitions" notice.
+    pub predefined: BTreeMap<String, String>,
+    /// The user's own definitions: lower-case file name → (path, text).
+    pub own: BTreeMap<String, (PathBuf, String)>,
+}
+
+/// `LogDef::priority` of the built-in definitions, the folder next to the program and the
+/// user's folder (higher wins when several definitions match the same file name).
+pub const PRIO_BUILTIN: u8 = 0;
+pub const PRIO_PROGRAM: u8 = 1;
+pub const PRIO_USER: u8 = 2;
+
+/// Which definitions are used: predefined (built-in + `logdef\` next to the program), the
+/// user's own ones, or both.
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+pub enum SourceFilter {
+    All,
+    Predefined,
+    Own,
+}
+
+impl SourceFilter {
+    pub fn from_key(s: &str) -> Self {
+        match s {
+            "predefined" => SourceFilter::Predefined,
+            "own" => SourceFilter::Own,
+            _ => SourceFilter::All,
+        }
+    }
+
+    pub fn key(self) -> &'static str {
+        match self {
+            SourceFilter::All => "all",
+            SourceFilter::Predefined => "predefined",
+            SourceFilter::Own => "own",
+        }
+    }
+}
+
+impl LogDef {
+    /// The same definition (file name and source) – e.g. after the definitions were reloaded.
+    pub fn same_as(&self, other: &LogDef) -> bool {
+        self.id.eq_ignore_ascii_case(&other.id) && self.priority == other.priority
+    }
+
+    /// A definition from the user's folder.
+    pub fn is_own(&self) -> bool {
+        self.priority == PRIO_USER
+    }
+}
+
+/// `.def` files of a folder: (file name, text, path); unreadable files go to `errors`.
+fn read_def_files(dir: &Path, errors: &mut Vec<String>) -> Vec<(String, String, PathBuf)> {
+    let Ok(rd) = std::fs::read_dir(dir) else { return Vec::new() };
+    let mut out = Vec::new();
+    for e in rd.flatten() {
+        let p = e.path();
+        if p.extension().and_then(|x| x.to_str()).is_none_or(|x| !x.eq_ignore_ascii_case("def")) {
+            continue;
+        }
+        let Some(id) = p.file_name().and_then(|s| s.to_str()).map(str::to_owned) else { continue };
+        match std::fs::read_to_string(&p) {
+            Ok(t) => out.push((id, t, p)),
+            Err(err) => errors.push(format!("{}: {err}", p.display())),
+        }
+    }
+    out
+}
+
+// ----------------------------------------------------------------------
+// New / changed predefined definitions
+// ----------------------------------------------------------------------
+
+/// `key = value` pairs of a definition text (keys lower-case, comments ignored).
+pub fn key_values(text: &str) -> BTreeMap<String, String> {
+    text.lines()
+        .map(|l| l.trim_start_matches('\u{feff}').trim())
+        .filter(|l| !l.is_empty() && !l.starts_with('#'))
+        .filter_map(|l| l.split_once('='))
+        .map(|(k, v)| (k.trim().to_ascii_lowercase(), v.trim().to_owned()))
+        .collect()
+}
+
+/// One key of a predefined definition that changed between two versions.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct KeyChange {
+    pub key: String,
+    /// Value in the version seen before (`None` = the key is new).
+    pub old: Option<String>,
+    /// Value now (`None` = the key was removed).
+    pub new: Option<String>,
+    /// Value in the user's own copy with the same file name (`None` there = no such key);
+    /// `None` here = the user has no own copy.
+    pub own: Option<Option<String>>,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum UpdateKind {
+    New,
+    Changed,
+    Removed,
+}
+
+/// A predefined definition that is new, changed or removed since the version the user saw.
+#[derive(Clone, Debug)]
+pub struct DefUpdate {
+    pub id: String,
+    pub name: String,
+    pub kind: UpdateKind,
+    pub changes: Vec<KeyChange>,
+    /// The user's own copy with the same file name.
+    pub own_path: Option<PathBuf>,
+}
+
+/// Compares the predefined definitions with the versions the user has seen (`known`, file name
+/// → text) and describes what is new, changed (key by key, with the value in the user's own
+/// copy) or removed.
+pub fn definition_updates(
+    known: &BTreeMap<String, String>,
+    predefined: &BTreeMap<String, String>,
+    own: &BTreeMap<String, (PathBuf, String)>,
+) -> Vec<DefUpdate> {
+    let name_of = |id: &str, text: &str| key_values(text).remove("name").unwrap_or_else(|| id.to_owned());
+    let mut out = Vec::new();
+    for (id, text) in predefined {
+        let own_copy = own.get(id);
+        let own_kv = own_copy.map(|(_, t)| key_values(t));
+        let kind = match known.get(id) {
+            None => UpdateKind::New,
+            Some(old) if key_values(old) == key_values(text) => continue,
+            Some(_) => UpdateKind::Changed,
+        };
+        let changes = match known.get(id) {
+            Some(old) => {
+                let (old, new) = (key_values(old), key_values(text));
+                let keys: std::collections::BTreeSet<&String> = old.keys().chain(new.keys()).collect();
+                keys.into_iter()
+                    .filter(|k| old.get(*k) != new.get(*k))
+                    .map(|k| KeyChange {
+                        key: k.clone(),
+                        old: old.get(k).cloned(),
+                        new: new.get(k).cloned(),
+                        own: own_kv.as_ref().map(|o| o.get(k).cloned()),
+                    })
+                    .collect()
+            }
+            None => Vec::new(),
+        };
+        out.push(DefUpdate {
+            id: id.clone(),
+            name: name_of(id, text),
+            kind,
+            changes,
+            own_path: own_copy.map(|(p, _)| p.clone()),
+        });
+    }
+    for (id, text) in known {
+        if !predefined.contains_key(id) {
+            out.push(DefUpdate {
+                id: id.clone(),
+                name: name_of(id, text),
+                kind: UpdateKind::Removed,
+                changes: Vec::new(),
+                own_path: own.get(id).map(|(p, _)| p.clone()),
+            });
+        }
+    }
+    out
 }
 
 /// Folders searched for definition files, in order of increasing priority.
@@ -627,33 +797,51 @@ pub fn user_def_dir() -> Option<PathBuf> {
     dirs::config_dir().map(|d| d.join("RusTrace").join("logdef"))
 }
 
-/// Loads the built-in definitions and the `.def` files from `dirs` (later folders override
-/// earlier ones and the built-in files with the same name). The result is ordered by priority
-/// (the last folder first, built-in last), then by file name – so when several definitions
-/// match a file, the user's own one wins and the order does not depend on file names alone.
-pub fn load_from(dirs: &[PathBuf]) -> DefSet {
-    let mut texts: BTreeMap<String, (String, String, Option<PathBuf>, u8)> = BUILTIN
-        .iter()
-        .map(|(id, t)| (id.to_lowercase(), ((*id).to_owned(), (*t).to_owned(), None, 0)))
-        .collect();
+/// Loads the definitions. `dirs` = [folder next to the program, user's folder] (see `def_dirs`).
+///
+/// * predefined = the built-in definitions; a file with the same name in the folder next to the
+///   program replaces the built-in one (that folder holds the copies shipped with the program),
+/// * own = the files in the user's folder – they replace nothing, so a predefined and an own
+///   definition with the same file name are both available,
+/// * `filter` chooses which of the two groups is used.
+///
+/// The result is ordered by priority (own, next to the program, built-in), then by file name, so
+/// when several definitions match a file the user's own one wins.
+pub fn load_from(dirs: &[PathBuf], filter: SourceFilter) -> DefSet {
     let mut set = DefSet::default();
-    for (prio, dir) in (1u8..).zip(dirs) {
-        let Ok(rd) = std::fs::read_dir(dir) else { continue };
-        for e in rd.flatten() {
-            let p = e.path();
-            if p.extension().and_then(|x| x.to_str()).is_none_or(|x| !x.eq_ignore_ascii_case("def")) {
-                continue;
-            }
-            let Some(id) = p.file_name().and_then(|s| s.to_str()).map(str::to_owned) else { continue };
-            match std::fs::read_to_string(&p) {
-                Ok(t) => {
-                    texts.insert(id.to_lowercase(), (id, t, Some(p), prio));
-                }
-                Err(err) => set.errors.push(format!("{}: {err}", p.display())),
-            }
+    let mut predefined: BTreeMap<String, (String, String, Option<PathBuf>, u8)> = BUILTIN
+        .iter()
+        .map(|(id, t)| (id.to_lowercase(), ((*id).to_owned(), (*t).to_owned(), None, PRIO_BUILTIN)))
+        .collect();
+    let mut errors = Vec::new();
+    if let Some(dir) = dirs.first() {
+        for (id, text, path) in read_def_files(dir, &mut errors) {
+            predefined.insert(id.to_lowercase(), (id, text, Some(path), PRIO_PROGRAM));
         }
     }
-    for (id, text, path, priority) in texts.into_values() {
+    let mut own: BTreeMap<String, (String, String, Option<PathBuf>, u8)> = BTreeMap::new();
+    let mut own_errors = Vec::new();
+    if let Some(dir) = dirs.get(1) {
+        for (id, text, path) in read_def_files(dir, &mut own_errors) {
+            own.insert(id.to_lowercase(), (id, text, Some(path), PRIO_USER));
+        }
+    }
+    set.predefined = predefined.iter().map(|(k, (_, t, _, _))| (k.clone(), t.clone())).collect();
+    set.own = own
+        .iter()
+        .filter_map(|(k, (_, t, p, _))| p.clone().map(|p| (k.clone(), (p, t.clone()))))
+        .collect();
+
+    let mut groups = Vec::new();
+    if filter != SourceFilter::Own {
+        set.errors.append(&mut errors);
+        groups.push(predefined);
+    }
+    if filter != SourceFilter::Predefined {
+        set.errors.append(&mut own_errors);
+        groups.push(own);
+    }
+    for (id, text, path, priority) in groups.into_iter().flat_map(BTreeMap::into_values) {
         let shown = path.as_ref().map_or_else(|| id.clone(), |p| p.display().to_string());
         match LogDef::parse(&id, &text, path) {
             Ok(d) => set.defs.push(Arc::new(LogDef { priority, ..d })),
@@ -668,8 +856,8 @@ pub fn load_from(dirs: &[PathBuf]) -> DefSet {
     set
 }
 
-pub fn load_all() -> DefSet {
-    load_from(&def_dirs())
+pub fn load_all(filter: SourceFilter) -> DefSet {
+    load_from(&def_dirs(), filter)
 }
 
 /// The definition for a file by its name (`files` patterns); the first of `matching_by_name`.
@@ -723,7 +911,7 @@ mod tests {
 
     #[test]
     fn builtin_definitions_parse() {
-        let set = load_from(&[]);
+        let set = load_from(&[], SourceFilter::All);
         assert!(set.errors.is_empty(), "{:?}", set.errors);
         let ids: Vec<&str> = set.defs.iter().map(|d| d.id.as_str()).collect();
         assert_eq!(ids, ["cbs.log.def", "dism.log.def", "iisweb.log.def"]);
@@ -876,21 +1064,83 @@ mod tests {
         std::fs::write(exe_dir.join("iisweb.log.def"), def("next to exe")).unwrap(); // overrides built-in
         std::fs::write(exe_dir.join("aaa.def"), def("exe aaa")).unwrap();
         std::fs::write(user_dir.join("zzz.def"), def("user zzz")).unwrap();
-        let set = load_from(&[exe_dir, user_dir]);
+        // An own copy with the same file name as a predefined one does not replace it.
+        std::fs::write(user_dir.join("IISWEB.log.def"), def("own iisweb")).unwrap();
+        let dirs = [exe_dir, user_dir];
+        let set = load_from(&dirs, SourceFilter::All);
         assert!(set.errors.is_empty(), "{:?}", set.errors);
         let matching = matching_by_name(&set.defs, Path::new("u_ex261023.log"));
         let names: Vec<&str> = matching
             .iter()
             .map(|d| d.name.as_str())
             .collect();
-        assert_eq!(names, ["user zzz", "exe aaa", "next to exe"]);
-        assert_eq!(by_file_name(&set.defs, Path::new("x/u_ex1.log")).unwrap().name, "user zzz");
+        assert_eq!(names, ["own iisweb", "user zzz", "exe aaa", "next to exe"]);
+        assert_eq!(by_file_name(&set.defs, Path::new("x/u_ex1.log")).unwrap().name, "own iisweb");
         let prio: Vec<(&str, u8)> = set.defs.iter().map(|d| (d.id.as_str(), d.priority)).collect();
         assert_eq!(
             prio,
-            [("zzz.def", 2), ("aaa.def", 1), ("iisweb.log.def", 1), ("cbs.log.def", 0), ("dism.log.def", 0)]
+            [
+                ("IISWEB.log.def", 2),
+                ("zzz.def", 2),
+                ("aaa.def", 1),
+                ("iisweb.log.def", 1),
+                ("cbs.log.def", 0),
+                ("dism.log.def", 0)
+            ]
         );
+        assert!(set.defs[0].is_own() && !set.defs[0].same_as(&set.defs[3]));
+        // Only the predefined or only the own definitions.
+        let ids = |f| -> Vec<String> { load_from(&dirs, f).defs.iter().map(|d| d.name.clone()).collect() };
+        assert_eq!(ids(SourceFilter::Own), ["own iisweb", "user zzz"]);
+        assert_eq!(ids(SourceFilter::Predefined), ["exe aaa", "next to exe", "Windows CBS log", "DISM log"]);
+        // The texts for the notice are there whatever the filter is.
+        let set = load_from(&dirs, SourceFilter::Own);
+        assert_eq!(set.predefined.keys().collect::<Vec<_>>(), ["aaa.def", "cbs.log.def", "dism.log.def", "iisweb.log.def"]);
+        assert_eq!(set.own.keys().collect::<Vec<_>>(), ["iisweb.log.def", "zzz.def"]);
         std::fs::remove_dir_all(&base).ok();
+    }
+
+    /// The notice after an update: new, changed (key by key, with the own copy) and removed
+    /// predefined definitions; unchanged ones and comment-only changes are not reported.
+    #[test]
+    fn updates_of_predefined_definitions() {
+        let map = |items: &[(&str, &str)]| -> BTreeMap<String, String> {
+            items.iter().map(|(k, v)| ((*k).to_owned(), (*v).to_owned())).collect()
+        };
+        let known = map(&[
+            ("iis.def", "name = IIS\nfiles = u_ex*.log\nrole.message = cs-method cs-uri-stem\ntitle.a = A"),
+            ("same.def", "name = Same\nfiles = s.log"),
+            ("old.def", "name = Old one\nfiles = o.log"),
+        ]);
+        let predefined = map(&[
+            ("iis.def", "# new comment\nname = IIS\nfiles = u_ex*.log; u_in*.log\nrole.message = cs-method cs-uri-stem\ntitle.b = B"),
+            ("same.def", "# only a comment differs\nname = Same\nfiles = s.log"),
+            ("new.def", "name = Brand new\nfiles = n.log"),
+        ]);
+        let own: BTreeMap<String, (PathBuf, String)> = [(
+            "iis.def".to_owned(),
+            (PathBuf::from("own/iis.def"), "name = IIS\nfiles = u_ex*.log\nrole.message = cs-uri-stem\ntitle.b = B".to_owned()),
+        )]
+        .into();
+        let u = definition_updates(&known, &predefined, &own);
+        let kinds: Vec<(&str, UpdateKind)> = u.iter().map(|d| (d.id.as_str(), d.kind)).collect();
+        assert_eq!(
+            kinds,
+            [("iis.def", UpdateKind::Changed), ("new.def", UpdateKind::New), ("old.def", UpdateKind::Removed)]
+        );
+        assert_eq!(u[1].name, "Brand new");
+        assert_eq!(u[2].name, "Old one");
+        assert_eq!(u[0].own_path.as_deref(), Some(Path::new("own/iis.def")));
+        let s = |v: &str| Some(v.to_owned());
+        assert_eq!(
+            u[0].changes,
+            [
+                KeyChange { key: "files".into(), old: s("u_ex*.log"), new: s("u_ex*.log; u_in*.log"), own: Some(s("u_ex*.log")) },
+                KeyChange { key: "title.a".into(), old: s("A"), new: None, own: Some(None) },
+                KeyChange { key: "title.b".into(), old: None, new: s("B"), own: Some(s("B")) },
+            ]
+        );
+        assert!(definition_updates(&predefined, &predefined, &BTreeMap::new()).is_empty());
     }
 
     #[test]

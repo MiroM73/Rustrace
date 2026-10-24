@@ -249,20 +249,33 @@ Built in: `iisweb.log.def` (IIS web logs `u_ex*.log`, W3C format), `dism.log.def
 - **CMTrace / plain text (built-in)** or any definition can be chosen manually; the file is read again.
 - The status bar shows the format in use (📐).
 
-**Files** are loaded – without recompiling – from `logdef\` next to `rustrace.exe` and from
-`%APPDATA%\RusTrace\logdef\` (View → Log format → Open log definitions folder; Linux
-`~/.config/RusTrace/logdef/`). A file with the same name as a built-in definition replaces it.
-After editing, use View → Log format → **Reload log definitions**; errors (invalid regex, unknown key)
-are listed in that menu.
+**Files** are loaded – without recompiling – and come in two groups:
 
-Every `.def` file in these folders is loaded – a copy with another name (e.g. `my-iis.def`) is an
-**additional** definition, it does not replace the built-in one. When the names of several
-definitions match the opened file, the one with the highest priority is used: **your folder**
-(`%APPDATA%\RusTrace\logdef`) → `logdef\` next to the program → built-in; within one folder by file
-name. The status bar shows the definition in use with its file name (the tooltip shows its path)
-and ⚠ when several match; View → Log format lists them with the one in use marked ✔ and shows
-where every definition comes from. To switch a definition off, delete it or change its extension
-(e.g. `my-iis.def.off`), or choose another one in the menu.
+- **predefined**: the built-in definitions; the copies in `logdef\` next to `rustrace.exe` (shipped
+  with the program) replace the built-in ones with the same file name,
+- **your own**: every `.def` file in `%APPDATA%\RusTrace\logdef\` (View → Log format → Open log
+  definitions folder; Linux `~/.config/RusTrace/logdef/`). Your own definitions **never replace** a
+  predefined one – a copy of `iisweb.log.def` in your folder and the predefined `iisweb.log.def` are
+  both available, and you can switch between them in View → Log format.
+
+View → Log format → **Use log definitions**: *predefined and my own* (default), *only predefined*
+or *only my own*. After editing a file use **Reload log definitions**; errors (invalid regex, unknown
+key) are listed in that menu.
+
+When the names of several definitions match the opened file, the one with the highest priority is
+used: **your folder** → `logdef\` next to the program → built-in; within one folder by file name.
+The status bar shows the definition in use with its file name (the tooltip shows its path) and ⚠
+when several match; View → Log format lists them with the one in use marked ✔ and shows where every
+definition comes from (your folder / next to the program / built-in). To switch a definition off,
+delete it or change its extension (e.g. `my-iis.def.off`), or choose another one in the menu.
+
+**New and changed predefined definitions**: RusTrace remembers the predefined definitions you have
+seen. When a new version brings new, changed or removed ones, a window lists them at start-up – for a
+changed definition every changed key with its value before and now, and if you have your own copy
+with the same file name, for every key whether your copy already has the new value, still has the old
+one (take over the new one) or has a value of its own (check it). "Got it" stores the current state,
+"Later" shows the notice again at the next start (also View → Log format → New and changed predefined
+definitions…). The first start only remembers the current state.
 
 **Format** – `key = value` per line, `#` starts a comment line. Example (`cbs.log.def`):
 

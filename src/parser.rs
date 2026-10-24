@@ -923,7 +923,7 @@ mod tests {
     fn log_definitions_in_files() {
         let dir = std::env::temp_dir().join(format!("rustrace_def_{}", std::process::id()));
         std::fs::create_dir_all(&dir).unwrap();
-        let defs = Arc::new(logdef::load_from(&[]).defs);
+        let defs = Arc::new(logdef::load_from(&[], logdef::SourceFilter::All).defs);
         let open = |name: &str, text: &str| {
             let p = dir.join(name);
             std::fs::write(&p, text).unwrap();
@@ -1130,7 +1130,7 @@ mod tests {
     #[ignore]
     fn testlogs_overview() {
         let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("testlogs");
-        let defs = Arc::new(logdef::load_from(&[]).defs);
+        let defs = Arc::new(logdef::load_from(&[], logdef::SourceFilter::All).defs);
         let mut paths = Vec::new();
         let mut dirs = vec![root.clone()];
         while let Some(d) = dirs.pop() {
