@@ -92,6 +92,7 @@ Features (all implemented, see README for user-facing details):
    (https://github.com/MiroM73/Rustrace/releases/tag/v0.1.0, published 2026-10-23).
 9. Unlicense added, AI-authorship notice moved to the top of the README, CLAUDE.md committed.
 10. (2026-10-24) Ctrl + mouse wheel zoom: log text vs. whole UI depending on the pointer position.
+11. Release v0.2.0 (zoom; LICENSE now shipped in the archive).
 
 ## Ideas not done yet (offered to the owner)
 - Several logs at once in tabs / merged by time (like CMTrace "Merge").
