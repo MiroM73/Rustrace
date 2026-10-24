@@ -196,6 +196,8 @@ pub struct Config {
     /// Export only the last N blocks.
     pub export_last_enabled: bool,
     pub export_last_blocks: usize,
+    /// Export only the rows visible in the table (current search filter and severity toggles).
+    pub export_visible_only: bool,
 }
 
 impl Default for Config {
@@ -240,6 +242,7 @@ impl Default for Config {
             export_since: String::new(),
             export_last_enabled: false,
             export_last_blocks: 10,
+            export_visible_only: false,
         }
     }
 }
