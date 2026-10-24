@@ -217,7 +217,31 @@ Features (all implemented, see README for user-facing details):
   tabs with several logs are not wanted. The rotated-parts merge (concatenation) already exists.
 
 ## Ideas not done yet (offered by the owner)
-- (none open – the memory saving and the log definitions are done, see History 13 and 14)
+- For IIS logs, explain the status codes like the error code lookup does: HTTP `sc-status`
+  (e.g. 404 Not Found, 500 Internal Server Error), together with `sc-substatus` (IIS-specific,
+  e.g. 404.3 "MIME map policy prevents this request", 401.2) and `sc-win32-status` (a Win32 error,
+  e.g. 64 "The specified network name is no longer available" – the existing Win32 lookup can be
+  reused). Show the explanation in the details pane of the selected row and as a tooltip of the
+  status cells; descriptions in the language files (like `code.0x…`) so they are translatable and
+  can be extended without recompiling. Ideally driven by the log definition (e.g. keys naming
+  which columns hold HTTP status / substatus / Win32 status), so it is not hard-wired to IIS.
+- Show the **raw line(s)** of the selected entry in the details pane (as stored in the log file,
+  not only the parsed message), so the user sees the raw data. Today only the message text is
+  kept in memory (no CMTrace markup, other fields parsed out); for the raw line the store only
+  has the line number and file id, not the position in the file. Analysis of the options:
+  - **A. Byte offset of every entry in the file (recommended)**: `Rec` grows from 32 to 40 bytes
+    (+8 B per entry, ~+15 MB for the 400 MB / 1.8 M-line test log); on selection change read only
+    the bytes from this entry's offset to the next entry's offset (< 1 ms, OS cache), decode with
+    the file's encoding, cache like `code_cache` → no cost for drawing / scrolling. Parsing: for
+    UTF-8 the decoded text length equals the byte length, so practically no slowdown; for ANSI /
+    UTF-16 the original byte length of every line must be counted → a few % slower parsing
+    (estimate). Works with merged rotated parts (file id → current path); a part overwritten by a
+    later rotation → "raw line not available"; multi-line entries are read complete. UI: a toggle
+    **Message | Raw line** in the details pane (or both).
+  - B. Find the line in the file by its number: no extra memory, but scanning from the start
+    takes hundreds of ms up to ~1 s per click near the end of a 400 MB file → unsuitable.
+  - C. Keep the whole raw lines in memory instead of the messages: instant, but the text in
+    memory roughly doubles (CMTrace markup is about half of a line) → wastes memory.
 
 ## Possible further memory work (not done)
 - The "original lines" export reads the whole log file into memory (`read_line_ranges`), a
