@@ -100,5 +100,7 @@ Features (all implemented, see README for user-facing details):
 - Several logs at once in tabs / merged by time (like CMTrace "Merge").
 - Filter by component or time range in the main view.
 - Export option "only currently visible (filtered) rows".
+
+## Ideas not done yet (offered by the owner)
 - Instead of loading the entire file into the computer's memory, try to conserve memory as much as possible—for example, by using the page file—but ensure it doesn't negatively impact performance!
-- Add the option to specify a custom regular expression—or another method—to describe the layout of individual values ​​within a log (e.g., row number | date/time | status | message | ...). This would allow for the creation of definitions for logs such as IIS logs, `dism.log`, or `cbs.log`. These definitions could be stored as text files in a subdirectory (e.g., named `logdef`), using filenames such as `iisweb.log.def`, `dism.log.def`, and `cbs.log.def`.
+- Add the option to specify a custom regular expression—or another method—to describe the layout of individual values within a log (e.g., row number | date/time | status | message | ...). This would allow for the creation of definitions for logs such as IIS logs, `dism.log`, or `cbs.log`. These definitions could be stored as text files in a subdirectory (e.g., named `logdef`), using filenames such as `iisweb.log.def`, `dism.log.def`, and `cbs.log.def`.
