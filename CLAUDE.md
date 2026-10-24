@@ -183,6 +183,7 @@ Features (all implemented, see README for user-facing details):
 20. Test logs generator (`scripts/gen_testlogs.py`, `testlogs/` not in git) + `testlogs_overview`;
     it found that a `.lo_` opened directly was merged with itself – fixed (rotated parts opened
     directly are never merged).
+21. Release v0.3.1 (bug fix: a rotated part opened directly was read twice).
 
 ## Ideas not done yet (offered to the owner)
 - Merge **different** logs into one view sorted by time (like CMTrace File → Open → "Merge
