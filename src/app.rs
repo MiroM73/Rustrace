@@ -1923,18 +1923,17 @@ impl App {
             done = format_size(done),
             total = format_size(total)
         );
-        let cancel;
-        if big {
+        let cancel = if big {
             ui.heading(t!("progress.title"));
             ui.add_space(8.0);
             ui.add(egui::ProgressBar::new(frac).text(text).animate(true));
             ui.add_space(8.0);
-            cancel = ui.button(t!("progress.cancel")).clicked();
+            ui.button(t!("progress.cancel")).clicked()
         } else {
             ui.spinner();
             ui.add(egui::ProgressBar::new(frac).text(text).desired_width(260.0));
-            cancel = ui.small_button(t!("progress.cancel")).clicked();
-        }
+            ui.small_button(t!("progress.cancel")).clicked()
+        };
         if cancel {
             self.cancel_loading();
             self.cfg.auto_refresh = false;
