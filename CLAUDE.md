@@ -78,6 +78,8 @@ Features (all implemented, see README for user-facing details):
 - Do not leave test runs touching `%APPDATA%\RusTrace\config.json`: back it up and restore it
   (or delete it if it did not exist before).
 - CRT is linked statically via `.cargo/config.toml` (no VC++ redistributable needed).
+- Line endings: `.gitattributes` forces LF for all text files (`* text=auto eol=lf`); write new
+  files with LF. The release `.sha256` is written with LF so `sha256sum -c` works.
 
 ## History (2026-10-23)
 1. Initial viewer: parser, highlight rules, regex search, auto refresh (ms/s/min, pause).

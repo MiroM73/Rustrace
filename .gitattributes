@@ -1,0 +1,3 @@
+# Text files are stored and checked out with LF line endings on every platform,
+# independent of the local core.autocrlf setting. Git detects binary files itself.
+* text=auto eol=lf

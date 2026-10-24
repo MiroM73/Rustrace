@@ -79,7 +79,9 @@ Remove-Item $archive -Force
 Remove-Item $stage -Recurse -Force
 
 $hash = (Get-FileHash $output -Algorithm SHA256).Hash.ToLower()
-"$hash  $(Split-Path $output -Leaf)" | Set-Content -Encoding ascii "$output.sha256"
+# LF line ending, so "sha256sum -c" on Linux / macOS reads the file too.
+[System.IO.File]::WriteAllText("$output.sha256", "$hash  $(Split-Path $output -Leaf)`n",
+    [System.Text.Encoding]::ASCII)
 
 Write-Host "Created $output"
 Write-Host "SHA256  $hash"
