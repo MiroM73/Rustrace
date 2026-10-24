@@ -353,8 +353,10 @@ impl LogDef {
     }
 
     /// Maps field names (regex groups or w3c header) to roles and extra columns and sets
-    /// the table columns of `schema`.
-    fn mapping(&self, names: &[String], schema: &mut Schema) -> Mapping {
+    /// the table columns of `schema` – with `merge` the columns that are already there stay and
+    /// only new ones are added (a later w3c `#Fields:` header with other fields: the table must
+    /// show the columns of every part of the file).
+    fn mapping(&self, names: &[String], schema: &mut Schema, merge: bool) -> Mapping {
         let roles = Role::ALL.map(|r| self.role_fields(r, names));
         let role_of = |i: usize| Role::ALL.into_iter().find(|r| roles[*r as usize].contains(&i));
         let severity = names
@@ -368,7 +370,7 @@ impl LogDef {
         }
 
         let title = |name: &str| self.titles.get(&name.to_lowercase()).cloned();
-        let mut columns: Vec<Column> = Vec::new();
+        let mut columns: Vec<Column> = if merge { schema.columns.clone() } else { Vec::new() };
         let mut push = |kind: ColumnKind, t: Option<String>| {
             if !columns.iter().any(|c| c.kind == kind) {
                 columns.push(Column { kind, title: t });
@@ -469,6 +471,10 @@ pub enum DefLine {
 pub struct DefState {
     def: Arc<LogDef>,
     map: Mapping,
+    /// A w3c `#Fields:` header was found (later headers add columns instead of replacing them).
+    header_seen: bool,
+    /// An entry was parsed (the extra column indexes are in use).
+    entries_parsed: bool,
 }
 
 impl DefState {
@@ -483,8 +489,13 @@ impl DefState {
             Kind::Regex(re) => re.capture_names().map(|n| n.unwrap_or("").to_owned()).collect(),
             Kind::W3c => def.default_fields.clone(),
         };
-        let map = def.mapping(&names, schema);
-        Self { def, map }
+        let map = def.mapping(&names, schema, false);
+        Self {
+            def,
+            map,
+            header_seen: false,
+            entries_parsed: false,
+        }
     }
 
     /// Lines that do not match are appended to the previous entry.
@@ -504,7 +515,13 @@ impl DefState {
         if let Kind::W3c = def.kind {
             if let Some(rest) = line.strip_prefix("#Fields:") {
                 let names: Vec<String> = rest.split_whitespace().map(str::to_owned).collect();
-                self.map = def.mapping(&names, schema);
+                // The first header replaces the default fields of the definition (and their
+                // extra columns, while no entry uses them); later headers only add columns.
+                if !self.header_seen && !self.entries_parsed {
+                    schema.extra_names.clear();
+                }
+                self.map = def.mapping(&names, schema, self.header_seen);
+                self.header_seen = true;
                 return DefLine::Skip;
             }
             if line.starts_with('#') {
@@ -516,6 +533,7 @@ impl DefState {
         }
         match &def.kind {
             Kind::W3c => {
+                self.entries_parsed = true;
                 let vals: Vec<&str> = line.split(' ').collect();
                 DefLine::Entry(self.build(line_no, line, kw, |i| {
                     vals.get(i).map(|v| if *v == "-" { "" } else { *v })
@@ -792,6 +810,37 @@ mod tests {
         let titles: Vec<&str> = s.columns.iter().filter_map(|c| c.title.as_deref()).collect();
         assert_eq!(titles, ["Server IP", "Request", "Status", "Time (ms)"]);
         assert_eq!(s.columns[0].kind, ColumnKind::Role(Role::DateTime));
+    }
+
+    /// A second `#Fields:` header with fewer fields adds no columns but removes none either:
+    /// the table shows the columns of every part of the file.
+    #[test]
+    fn iis_w3c_fields_change_within_file() {
+        let (e, s) = parse_lines(
+            builtin("iisweb.log.def"),
+            &[
+                "#Fields: date time s-ip cs-method cs-uri-stem c-ip sc-status",
+                "2026-10-23 08:00:01 10.0.0.5 GET /a 10.0.0.9 200",
+                "#Fields: date time cs-method cs-uri-stem sc-status time-taken",
+                "2026-10-23 09:00:01 POST /b 500 15",
+            ],
+        );
+        let titles: Vec<String> = s
+            .columns
+            .iter()
+            .map(|c| c.title.clone().unwrap_or_else(|| format!("{:?}", c.kind)))
+            .collect();
+        assert_eq!(
+            titles,
+            ["Role(DateTime)", "Server IP", "Request", "Client IP", "Status", "Time (ms)"]
+        );
+        // Only the fields of the actual headers are extra columns (not the definition's defaults).
+        assert_eq!(s.extra_names, ["s-ip", "c-ip", "sc-status", "time-taken"]);
+        assert_eq!((extra(&e[0], &s, "s-ip"), extra(&e[0], &s, "c-ip")), ("10.0.0.5", "10.0.0.9"));
+        assert_eq!(extra(&e[0], &s, "time-taken"), "");
+        assert_eq!((e[1].message.as_str(), extra(&e[1], &s, "s-ip")), ("POST /b", ""));
+        assert_eq!((extra(&e[1], &s, "sc-status"), extra(&e[1], &s, "time-taken")), ("500", "15"));
+        assert_eq!(e[1].severity, Severity::Error);
     }
 
     #[test]

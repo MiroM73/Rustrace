@@ -275,7 +275,7 @@ title.severity = Level
 | `name` | name shown in the UI |
 | `files` | file name patterns (`*`, `?`, case-insensitive) separated by `;` – default: the file name without `.def` |
 | `detect` | regex; used for files whose name matches no definition – applies when one of the first 30 lines matches |
-| `format` | `regex` (default) or `w3c` – W3C extended log format (IIS): column names from the `#Fields:` header (may change within the file), space-separated values, `-` = empty |
+| `format` | `regex` (default) or `w3c` – W3C extended log format (IIS): column names from the `#Fields:` header (when a later header has other fields, the table shows the columns of all headers), space-separated values, `-` = empty |
 | `pattern` | regex for one line (format `regex`); every **named group** `(?P<name>…)` is a column |
 | `fields` | `w3c`: column names used until a `#Fields:` header is found |
 | `skip` | regex; matching lines are ignored |

@@ -184,6 +184,8 @@ Features (all implemented, see README for user-facing details):
     it found that a `.lo_` opened directly was merged with itself – fixed (rotated parts opened
     directly are never merged).
 21. Release v0.3.1 (bug fix: a rotated part opened directly was read twice).
+22. Fix: a later w3c `#Fields:` header replaced the table columns, so rows of the first part lost
+    their columns; now the first header replaces the default fields, later ones only add columns.
 
 ## Ideas not done yet (offered to the owner)
 - Merge **different** logs into one view sorted by time (like CMTrace File → Open → "Merge
