@@ -1,0 +1,26 @@
+# RusTrace log definition – DISM log (C:\Windows\Logs\DISM\dism.log)
+#
+# Example lines:
+#   2026-10-23 10:20:01, Info                  DISM   PID=4312 TID=1188 Scratch directory set to 'C:\Temp\'. - CDISMManager::put_ScratchDir
+#   2026-10-23 10:20:02, Error                 DISM   DISM Package Manager: PID=4312 TID=1188 Failed finalizing changes. - CDISMPackageManager::Internal_Finalize(hr:0x800f081f)
+#
+# The provider ("DISM Package Manager"), process and thread ids and the function name at the
+# end of the line get their own columns. They are optional (the provider only together with
+# PID/TID), so other lines still match.
+
+name = DISM log
+files = dism.log; dism*.log
+detect = ^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}, \w+\s+DISM\s
+
+pattern = ^(?P<datetime>\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}),\s+(?P<severity>\w+)\s+(?P<component>\S+)(?:\s+(?:(?:(?P<provider>[^:=]+?):\s+)?PID=(?P<pid>\d+)\s+TID=(?P<thread>\d+)\s+)?(?P<message>.*?)(?:\s+-\s+(?P<function>[\w:~<>]+(?:\(.*\))?))?)?$
+datetime.format = %Y-%m-%d %H:%M:%S
+unmatched = append
+
+severity.error = ^(error|fatal|critical)$
+severity.warning = ^warn(ing)?$
+
+columns = datetime severity component provider message function pid thread
+title.severity = Level
+title.provider = Provider
+title.function = Function
+title.pid = PID

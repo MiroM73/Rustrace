@@ -1,0 +1,40 @@
+# RusTrace log definition – IIS web server log in the W3C extended format
+# (C:\inetpub\logs\LogFiles\W3SVC<n>\u_ex<date>.log)
+#
+# Example:
+#   #Software: Microsoft Internet Information Services 10.0
+#   #Fields: date time s-ip cs-method cs-uri-stem cs-uri-query s-port cs-username c-ip cs(User-Agent) cs(Referer) sc-status sc-substatus sc-win32-status time-taken
+#   2026-10-23 08:00:01 10.0.0.5 GET /default.aspx id=5 443 - 10.0.0.9 Mozilla/5.0 - 500 0 64 15
+#
+# format = w3c reads the column names from the "#Fields:" header (they can change within
+# the file); "-" is an empty value. IIS writes the time in UTC – it is shown in local time.
+
+name = IIS web log (W3C)
+format = w3c
+files = u_ex*.log; u_in*.log; u_nc*.log; iisweb*.log
+detect = ^#(Software: Microsoft Internet Information Services|Fields: date time )
+
+# Used until a "#Fields:" header is found (IIS default field set).
+fields = date time s-ip cs-method cs-uri-stem cs-uri-query s-port cs-username c-ip cs(User-Agent) cs(Referer) sc-status sc-substatus sc-win32-status time-taken
+
+role.datetime = date time
+role.message = cs-method cs-uri-stem cs-uri-query
+role.severity = sc-status
+datetime.format = %Y-%m-%d %H:%M:%S
+timezone = utc
+
+# HTTP 5xx = error, 4xx = warning.
+severity.error = ^5\d\d$
+severity.warning = ^4\d\d$
+
+title.message = Request
+title.sc-status = Status
+title.sc-substatus = Substatus
+title.sc-win32-status = Win32 status
+title.time-taken = Time (ms)
+title.c-ip = Client IP
+title.s-ip = Server IP
+title.s-port = Port
+title.cs-username = User
+title.cs(user-agent) = User agent
+title.cs(referer) = Referer

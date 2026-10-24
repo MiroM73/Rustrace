@@ -21,6 +21,15 @@ Features (all implemented, see README for user-facing details):
 - Formats: CMTrace `<![LOG[..]LOG]!><time="" date="" component="" type="" thread="">` incl. multi-line,
   old SMS format `msg $$<comp><date time><thread=..>`, plain text. Severity from `type` (1/2/3) or
   optional keywords error/fail/warn.
+- **Log definitions** (`logdef\*.def`, `src/logdef.rs`): regex with named groups or W3C (`#Fields:`)
+  describe other layouts; built-in `iisweb.log.def`, `dism.log.def`, `cbs.log.def`, external files
+  from `logdef\` next to the exe or `%APPDATA%\RusTrace\logdef` (same name overrides built-in).
+  Roles fill the standard columns (message/component/datetime/thread), `role.severity` + regexes give
+  the severity, other groups are extra columns (`LogEntry::extra`, `Schema::extra_names`). The table
+  columns come from `Schema` (`LogSource::schema()`); CMTrace = `Schema::default()`. Format choice:
+  View → Log format (Auto = file name → content `detect` → built-in; CMTrace content never uses
+  `detect`), reset to Auto for every newly opened file. `unmatched = append` keeps the last entry
+  provisional until the next one starts (`ParserState::pending_entry`).
 - Encodings: UTF-8 (BOM or not), UTF-16 LE/BE (BOM), ANSI Windows-1250 fallback.
 - Incremental reading in a **background thread** in 8 MB chunks with progress + cancel; truncation /
   rotation detection; provisional last line. 400 MB / 2.2 M lines ≈ 3 s in release.
@@ -52,11 +61,14 @@ Features (all implemented, see README for user-facing details):
 - `src/parser.rs` – `LogSource::poll()` chunked incremental reading, encodings, format parsing,
   `read_line_ranges()` for original-line export. Dates stored as ISO `YYYY-MM-DD HH:MM:SS.mmm`,
   formatted for display by the UI (`format.date` in the language file).
+- `src/logdef.rs` – log definitions: `.def` parsing, loading/overrides, choice by name/content,
+  `DefState::parse()` line → `LogEntry`, `Schema` / `Column` / `Role`.
 - `src/export.rs` – pure export logic (range merging, time filter, date input parsing, last-N, output).
 - `src/errcodes.rs` – error code detection/parsing/lookup.
 - `src/i18n.rs` – language files, `t!()` macro, fallback, external language folders.
 - `src/config.rs` – `Config`, `HighlightRule`, per-theme palettes, serde defaults/migration.
 - `lang/*.lang` – built-in translations, embedded with `include_str!`.
+- `logdef/*.def` – built-in log definitions, embedded with `include_str!` and shipped in `logdef\`.
 
 ## Conventions
 - **Every user-visible string goes through `t!("key")`** (placeholders `t!("key", name = value)`).
@@ -70,11 +82,12 @@ Features (all implemented, see README for user-facing details):
 
 ## Commands
 - `cargo build --release` → `target\release\rustrace.exe`
-- `cargo test` (19 tests: parsers, chunked/ANSI/UTF-16 reading, export incl. end-to-end and
-  visible rows as highlighted rows, error codes, i18n completeness, config migration)
+- `cargo test` (25 tests: parsers, chunked/ANSI/UTF-16 reading, log definitions (CBS, DISM, IIS,
+  choice by name/content, appending across refreshes), export incl. end-to-end and visible rows as
+  highlighted rows, error codes, i18n completeness, config migration)
 - `cargo clippy`
 - `scripts\package.ps1` → `dist\RusTrace-v<version>-windows-x64.exe` (7-Zip SFX, extracts to
-  `RusTrace\` with `rustrace.exe` + `lang\` + `LICENSE`) and `.sha256`. Needs 7-Zip.
+  `RusTrace\` with `rustrace.exe` + `lang\` + `logdef\` + `LICENSE`) and `.sha256`. Needs 7-Zip.
 - Releases: push tag `v<version>` (matching `Cargo.toml`) → GitHub Actions `release.yml` tests,
   builds, packages and creates a **draft** release; then publish it. Manual workflow run = artifact only.
 - Rust (rustup, stable MSVC) is installed on the owner's PC since 2026-10-24 (VS 2019 C++ tools);
@@ -100,6 +113,8 @@ Features (all implemented, see README for user-facing details):
 10. (2026-10-24) Ctrl + mouse wheel zoom: log text vs. whole UI depending on the pointer position.
 11. Release v0.2.0 (zoom; LICENSE now shipped in the archive).
 12. Export option "rows visible in the table" as the highlighted rows (context from the whole file).
+13. Log definitions (owner's idea): `logdef\*.def` files, built-in IIS (W3C) / DISM / CBS,
+    View → Log format, dynamic table columns, extra columns in search/rules/details/readable export.
 
 ## Ideas not done yet (offered to the owner)
 - Several logs at once in tabs / merged by time (like CMTrace "Merge").
@@ -107,4 +122,8 @@ Features (all implemented, see README for user-facing details):
 
 ## Ideas not done yet (offered by the owner)
 - Instead of loading the entire file into the computer's memory, try to conserve memory as much as possible—for example, by using the page file—but ensure it doesn't negatively impact performance!
-- Add the option to specify a custom regular expression—or another method—to describe the layout of individual values within a log (e.g., row number | date/time | status | message | ...). This would allow for the creation of definitions for logs such as IIS logs, `dism.log`, or `cbs.log`. These definitions could be stored as text files in a subdirectory (e.g., named `logdef`), using filenames such as `iisweb.log.def`, `dism.log.def`, and `cbs.log.def`.
+  Plan proposed to the owner (2026-10-24): measure first; step 1 = compact storage (one text arena
+  instead of 4 `String`s per entry, interned components / repeated values, date as `i64`, generic
+  per-schema columns so log definitions fit); step 2 = the arena in a memory-mapped temp file
+  (`FILE_ATTRIBUTE_TEMPORARY` + `DELETE_ON_CLOSE`), optional above a size threshold. Do **not**
+  map the original log (on Windows it blocks the writer from truncating / rotating it).

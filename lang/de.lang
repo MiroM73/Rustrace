@@ -29,6 +29,15 @@ menu.view.theme.light = Hell
 menu.view.theme.dark = Dunkel
 menu.view.font_size = Schriftgröße:
 menu.view.language = Sprache
+menu.view.format = Log-Format
+format.auto = Automatisch
+format.auto_detected = Automatisch – verwendet: {name}
+format.auto.tip = Eine Log-Definition, deren Dateinamen passen, sonst eine anhand der ersten Zeilen der Datei erkannte, sonst das eingebaute Format.
+format.builtin = CMTrace / Klartext (eingebaut)
+format.reload = Log-Definitionen neu laden
+format.reloaded = Log-Definitionen neu geladen: {count}
+format.open_folder = Ordner mit Log-Definitionen öffnen
+format.errors = Diese Log-Definitionen konnten nicht geladen werden:
 menu.highlight = Hervorhebung
 menu.highlight.rules = Hervorhebungsregeln…
 menu.highlight.colors = Farben für Fehler, Warnungen und Suche…
@@ -92,6 +101,7 @@ status.refresh_every = alle {value} {unit}
 status.paused = Aktualisierung pausiert
 status.last_change = Letzte Änderung: {time}
 status.no_file = Keine Datei
+status.format.tip = Log-Format – ändern unter Ansicht → Log-Format
 
 # --- Tabelle ---
 table.empty = Öffnen Sie eine Logdatei (Strg+O) oder ziehen Sie sie hierher.
@@ -130,7 +140,7 @@ rules.col.preview = Vorschau
 rules.pattern.hint = z. B. error|fail
 rules.scope.row = Ganze Zeile
 rules.scope.text = Nur Text
-rules.component.tip = Auch in der Spalte Komponente suchen (nur ganze Zeile)
+rules.component.tip = Auch in der Spalte Komponente und in den weiteren Spalten einer Log-Definition suchen (nur ganze Zeile)
 rules.preview_text = Beispieltext
 rules.delete = Löschen
 rules.add = Regel hinzufügen
@@ -240,6 +250,7 @@ error.import = Import fehlgeschlagen: {error}
 error.export = Export fehlgeschlagen: {error}
 error.save_settings = Einstellungen können nicht gespeichert werden: {error}
 error.open_folder = Der Ordner kann nicht geöffnet werden: {error}
+error.logdef = {count} Log-Definitionsdatei(en) konnten nicht geladen werden – siehe Ansicht → Log-Format
 error.create_lang = Die Sprachdatei kann nicht erstellt werden: {error}
 
 # --- Fehlercodes ---

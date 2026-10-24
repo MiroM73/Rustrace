@@ -234,12 +234,14 @@ pub struct ReadableRow<'a> {
     pub entry: &'a LogEntry,
 }
 
-/// Builds the readable tab-separated table. `header` is the localized column header line.
+/// Builds the readable tab-separated table. `header` is the localized column header line;
+/// `extra_cols` extra columns of a log definition are appended after the message.
 pub fn build_readable(
     header: &str,
     blocks: &[Vec<ReadableRow<'_>>],
     line_ranges: &[(usize, usize)],
     with_separators: bool,
+    extra_cols: usize,
 ) -> String {
     let mut out = String::new();
     out.push_str(header);
@@ -255,7 +257,7 @@ pub fn build_readable(
         for r in rows {
             let msg = r.entry.message.replace("\r\n", "\n").replace('\n', " ↵ ");
             out.push_str(&format!(
-                "{}\t{}\t{}\t{}\t{}\t{}\t{}\r\n",
+                "{}\t{}\t{}\t{}\t{}\t{}\t{}",
                 if r.highlighted { "»" } else { "" },
                 r.line,
                 r.datetime,
@@ -264,6 +266,11 @@ pub fn build_readable(
                 r.entry.thread,
                 msg
             ));
+            for i in 0..extra_cols {
+                out.push('\t');
+                out.push_str(r.entry.extra(i));
+            }
+            out.push_str("\r\n");
         }
     }
     out
@@ -282,6 +289,7 @@ mod tests {
             datetime: String::new(),
             thread: String::new(),
             severity: Severity::Info,
+            extra: Vec::new(),
         }
     }
 
@@ -324,8 +332,21 @@ mod tests {
             severity: "Error".into(),
             entry: &e,
         }]];
-        let txt = build_readable("H", &rows, &[(7, 8)], false);
+        let txt = build_readable("H", &rows, &[(7, 8)], false, 0);
         assert_eq!(txt, "H\r\n»\t7\tt\tError\t\t\ttwo ↵ lines\r\n");
+
+        // Extra columns of a log definition follow the message (missing values are empty).
+        let mut e2 = entry(9, "GET /");
+        e2.extra = vec!["500".into()];
+        let rows = vec![vec![ReadableRow {
+            highlighted: false,
+            line: 9,
+            datetime: "t".into(),
+            severity: "Error".into(),
+            entry: &e2,
+        }]];
+        let txt = build_readable("H", &rows, &[(9, 9)], false, 2);
+        assert_eq!(txt, "H\r\n\t9\tt\tError\t\t\tGET /\t500\t\r\n");
     }
 
     /// Whole pipeline on a real file: parse, find errors, merge ±1 context, read original lines.
@@ -413,6 +434,7 @@ mod tests {
             datetime: time.to_owned(),
             thread: String::new(),
             severity: Severity::Info,
+            extra: Vec::new(),
         }
     }
 

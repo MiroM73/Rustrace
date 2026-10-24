@@ -43,6 +43,15 @@ menu.view.theme.light = Light
 menu.view.theme.dark = Dark
 menu.view.font_size = Font size:
 menu.view.language = Language
+menu.view.format = Log format
+format.auto = Automatic
+format.auto_detected = Automatic – in use: {name}
+format.auto.tip = A log definition whose file names match, otherwise one recognized by the first lines of the file, otherwise the built-in format.
+format.builtin = CMTrace / plain text (built-in)
+format.reload = Reload log definitions
+format.reloaded = Log definitions reloaded: {count}
+format.open_folder = Open log definitions folder
+format.errors = These log definitions could not be loaded:
 menu.highlight = Highlighting
 menu.highlight.rules = Highlight rules…
 menu.highlight.colors = Error, warning and search colors…
@@ -106,6 +115,7 @@ status.refresh_every = every {value} {unit}
 status.paused = Refresh paused
 status.last_change = Last change: {time}
 status.no_file = No file
+status.format.tip = Log format – change it under View → Log format
 
 # --- Table ---
 table.empty = Open a log file (Ctrl+O) or drag it here.
@@ -144,7 +154,7 @@ rules.col.preview = Preview
 rules.pattern.hint = e.g. error|fail
 rules.scope.row = Whole row
 rules.scope.text = Text only
-rules.component.tip = Also match the Component column (whole row only)
+rules.component.tip = Also match the Component column and the other columns of a log definition (whole row only)
 rules.preview_text = Sample text
 rules.delete = Delete
 rules.add = Add rule
@@ -254,6 +264,7 @@ error.import = Import failed: {error}
 error.export = Export failed: {error}
 error.save_settings = Settings cannot be saved: {error}
 error.open_folder = The folder cannot be opened: {error}
+error.logdef = {count} log definition file(s) could not be loaded – see View → Log format
 error.create_lang = The language file cannot be created: {error}
 
 # --- Error codes ---

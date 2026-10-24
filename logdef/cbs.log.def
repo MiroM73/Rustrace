@@ -1,0 +1,23 @@
+# RusTrace log definition – Windows Component-Based Servicing log
+# (C:\Windows\Logs\CBS\CBS.log and the archived CbsPersist_*.log files)
+#
+# Example lines:
+#   2026-10-23 10:12:33, Info                  CBS    Starting TrustedInstaller initialization.
+#   2026-10-23 10:12:34, Error                 CSI    00000012 (F) STATUS_SXS_COMPONENT_STORE_CORRUPT ... [HRESULT = 0x80073712]
+#
+# Lines that do not match the pattern (e.g. dumps following an entry) are appended to the
+# previous entry, so multi-line entries stay together.
+
+name = Windows CBS log
+files = cbs.log; cbs*.log; cbspersist_*.log
+detect = ^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}, \w+\s+(CBS|CSI)\s
+
+pattern = ^(?P<datetime>\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}),\s+(?P<severity>\w+)\s+(?P<component>\S+)(?:\s+(?P<message>.*))?$
+datetime.format = %Y-%m-%d %H:%M:%S
+unmatched = append
+
+severity.error = ^(error|fatal|critical)$
+severity.warning = ^warn(ing)?$
+
+columns = datetime severity component message
+title.severity = Level

@@ -22,6 +22,7 @@ folder, and it creates:
 RusTrace\
     rustrace.exe      the program (no installation, no Visual C++ runtime needed)
     lang\*.lang       language files – edit or add translations here
+    logdef\*.def      log definitions (IIS, DISM, CBS) – edit or add your own formats here
     LICENSE           the Unlicense (public domain)
 ```
 
@@ -63,6 +64,8 @@ Visual C++ Redistributable.
 - CMTrace / ConfigMgr format `<![LOG[...]LOG]!><time=... type=...>` including multi-line messages
 - the older SMS format `message $$<component><date time><thread=...>`
 - plain text (severity from the words error / fail / warn – can be turned off)
+- **any other layout described by a log definition** – built in: **IIS web logs** (W3C),
+  **dism.log**, **CBS.log**; your own in `logdef\*.def` (see [Log definitions](#log-definitions))
 - encodings UTF-8, UTF-16 LE/BE (by BOM), ANSI (Windows-1250)
 
 **Automatic refresh**
@@ -78,7 +81,7 @@ Visual C++ Redistributable.
 **Color highlighting** (Highlighting → Highlight rules, Ctrl+H)
 - any number of rules: plain text or **regex**, optional case sensitivity
 - scope **Whole row** (text + background color of the row) or **Text only** (colors just the match in the message)
-- optionally match the Component column as well
+- optionally match the Component column as well (and the extra columns of a log definition)
 - order = priority (up/down arrows), on/off, live preview, invalid regex warning
 - import/export of rules as JSON (e.g. to share with colleagues)
 - error / warning / search match colors are configurable (Highlighting → Colors…)
@@ -143,12 +146,73 @@ Visual C++ Redistributable.
 
 **Search**
 - text or regex, Aa = match case, number of matches
+- searches the message, the component and the extra columns of a log definition
 - Enter/F3 = next, Shift+Enter/Shift+F3 = previous
 - **Filter** (Ctrl+L) – show only matching rows
 - Info / Warnings / Errors toggles
 
 Settings and rules are saved automatically to `%APPDATA%\RusTrace\config.json`
 (Linux: `~/.config/RusTrace/config.json`).
+
+## Log definitions
+
+Logs that are not in the CMTrace format can be described by a **log definition** – a small text
+file `<name>.def` that says how one line is split into columns (date/time, severity, component,
+message, …). The table then shows exactly these columns; severity coloring, search, highlight rules,
+filters, the time filter and the export work as with CMTrace logs.
+
+Built in: `iisweb.log.def` (IIS web logs `u_ex*.log`, W3C format), `dism.log.def` (`dism.log`) and
+`cbs.log.def` (`CBS.log`, `CbsPersist_*.log`).
+
+**Choosing the format** – View → Log format:
+- **Automatic** (default for every opened file): a definition whose `files` patterns match the file
+  name, otherwise one whose `detect` regex matches one of the first lines of the file (CMTrace / SMS
+  content always keeps the built-in parser), otherwise the built-in CMTrace / plain text parser.
+- **CMTrace / plain text (built-in)** or any definition can be chosen manually; the file is read again.
+- The status bar shows the format in use (📐).
+
+**Files** are loaded – without recompiling – from `logdef\` next to `rustrace.exe` and from
+`%APPDATA%\RusTrace\logdef\` (View → Log format → Open log definitions folder; Linux
+`~/.config/RusTrace/logdef/`). A file with the same name as a built-in definition replaces it.
+After editing, use View → Log format → **Reload log definitions**; errors (invalid regex, unknown key)
+are listed in that menu.
+
+**Format** – `key = value` per line, `#` starts a comment line. Example (`cbs.log.def`):
+
+```
+name = Windows CBS log
+files = cbs.log; cbs*.log; cbspersist_*.log
+detect = ^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}, \w+\s+(CBS|CSI)\s
+pattern = ^(?P<datetime>\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}),\s+(?P<severity>\w+)\s+(?P<component>\S+)(?:\s+(?P<message>.*))?$
+datetime.format = %Y-%m-%d %H:%M:%S
+unmatched = append
+severity.error = ^(error|fatal|critical)$
+severity.warning = ^warn(ing)?$
+columns = datetime severity component message
+title.severity = Level
+```
+
+| Key | Meaning |
+|---|---|
+| `name` | name shown in the UI |
+| `files` | file name patterns (`*`, `?`, case-insensitive) separated by `;` – default: the file name without `.def` |
+| `detect` | regex; used for files whose name matches no definition – applies when one of the first 30 lines matches |
+| `format` | `regex` (default) or `w3c` – W3C extended log format (IIS): column names from the `#Fields:` header (may change within the file), space-separated values, `-` = empty |
+| `pattern` | regex for one line (format `regex`); every **named group** `(?P<name>…)` is a column |
+| `fields` | `w3c`: column names used until a `#Fields:` header is found |
+| `skip` | regex; matching lines are ignored |
+| `unmatched` | lines not matching the pattern: `append` to the previous entry (multi-line entries, default for `regex`), `entry` = own row (default for `w3c`), `skip` |
+| `role.datetime`, `role.message`, `role.component`, `role.thread` | which column(s) fill the standard columns (several are joined with a space, e.g. `role.message = cs-method cs-uri-stem cs-uri-query`); default: the column with the same name (`datetime` also `date` + `time`); without a message column the whole line is the message |
+| `role.severity` | column whose value gives the severity (default `severity`); it stays visible as a column |
+| `severity.error`, `severity.warning` | regexes (case-insensitive) for that value – e.g. `^5\d\d$` for HTTP 5xx; default: error/err/e/fatal/critical/3 and warning/warn/w/2; without a severity column the error/fail/warn keywords are used |
+| `datetime.format` | [chrono format](https://docs.rs/chrono/latest/chrono/format/strftime/index.html)(s) separated by `\|`; ISO-like dates are recognized without it |
+| `timezone` | `local` (default) or `utc` – converted to local time (IIS logs are in UTC) |
+| `columns` | order of the table columns (role or column names); default: the order in the pattern / header |
+| `title.<column>` | column header, e.g. `title.sc-status = Status`, `title.message = Request` |
+
+Columns not used by a role (e.g. IIS `sc-status`, `c-ip`, DISM `function`) are **extra columns**:
+they are shown in the table and the details pane, searched by the search box and by highlight rules
+with "Also component", and appended to the readable export.
 
 ## Languages
 
@@ -209,6 +273,8 @@ The built-in languages live in `lang/*.lang` in the source tree and are embedded
 ## Source layout
 
 - `src/parser.rs` – incremental chunked file reading with progress, encoding detection, format parsing (+ tests)
+- `src/logdef.rs` – log definitions: `.def` file format, loading, choosing by file name / content,
+  parsing lines into columns (+ tests)
 - `src/errcodes.rs` – error code detection and lookup (+ tests)
 - `src/export.rs` – export around highlighted rows: range merging, date/time filter and input
   parsing, last-N blocks, output formats (+ tests)
@@ -217,6 +283,7 @@ The built-in languages live in `lang/*.lang` in the source tree and are embedded
 - `src/app.rs` – user interface
 - `src/main.rs` – window start-up
 - `lang/*.lang` – built-in translations
+- `logdef/*.def` – built-in log definitions (IIS, DISM, CBS)
 - `scripts/package.ps1` – packs the release build into the self-extracting archive
 - `.github/workflows/release.yml` – builds and publishes releases on GitHub
 

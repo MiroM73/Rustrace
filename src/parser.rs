@@ -4,7 +4,9 @@
 //! * CMTrace / SCCM (ConfigMgr) – `<![LOG[message]LOG]!><time="..." date="..." component="..." type="1" thread="..." ...>`
 //!   including multi-line messages,
 //! * the older SMS format – `message $$<component><date time><thread=1234 (0x4D2)>`,
-//! * plain text (every line = one entry).
+//! * plain text (every line = one entry),
+//! * any layout described by a log definition (`logdef.rs`) – chosen by file name, by the
+//!   first lines of the file, or by the user.
 //!
 //! Encoding: UTF-8 (with or without BOM), UTF-16 LE/BE (by BOM); if the file is not
 //! valid UTF-8, Windows-1250 (Central European ANSI) is used.
@@ -15,10 +17,12 @@
 //!
 //! Dates are stored as ISO `YYYY-MM-DD HH:MM:SS.mmm`; the UI formats them per language.
 
+use crate::logdef::{self, DefLine, DefState, LogDef, Schema};
 use std::fs::File;
 use std::io::{Read, Seek, SeekFrom};
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
+use std::sync::Arc;
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub enum Severity {
@@ -36,6 +40,15 @@ pub struct LogEntry {
     pub datetime: String,
     pub thread: String,
     pub severity: Severity,
+    /// Values of the extra columns of a log definition (`Schema::extra_names`); empty otherwise.
+    pub extra: Vec<String>,
+}
+
+impl LogEntry {
+    /// Value of an extra column (empty when the entry does not have it).
+    pub fn extra(&self, i: usize) -> &str {
+        self.extra.get(i).map_or("", String::as_str)
+    }
 }
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
@@ -62,12 +75,41 @@ pub enum PollResult {
     },
 }
 
-#[derive(Clone, Default)]
+#[derive(Clone)]
 struct ParserState {
     /// Unfinished multi-line CMTrace entry (line, text).
     pending: Option<(usize, String)>,
     /// Number of the next line.
     next_line: usize,
+    /// Columns of the log.
+    schema: Schema,
+    /// Log definition in use (`None` = built-in CMTrace / SMS / plain text parser).
+    def: Option<DefState>,
+    /// Last entry parsed with a definition – following unmatched lines may still be appended.
+    pending_entry: Option<LogEntry>,
+}
+
+impl ParserState {
+    fn new() -> Self {
+        Self {
+            pending: None,
+            next_line: 1,
+            schema: Schema::default(),
+            def: None,
+            pending_entry: None,
+        }
+    }
+}
+
+/// How the format of a file is chosen.
+#[derive(Clone, Debug, Default)]
+pub enum FormatChoice {
+    /// A definition matching the file name, else by the first lines of the file, else built-in.
+    #[default]
+    Auto,
+    /// Always the built-in CMTrace / SMS / plain text parser.
+    Builtin,
+    Def(Arc<LogDef>),
 }
 
 /// Loading progress – shared between the background thread and the UI.
@@ -94,6 +136,12 @@ pub struct LogSource {
     /// Assign severity by keywords (error/fail/warn) to entries without a type.
     pub keyword_severity: bool,
     pub file_size: u64,
+    /// How the format is chosen (used when the file is read from the start).
+    pub format: FormatChoice,
+    /// Available log definitions.
+    pub defs: Arc<Vec<Arc<LogDef>>>,
+    /// The format for the current read has been chosen.
+    format_decided: bool,
 }
 
 impl LogSource {
@@ -103,12 +151,12 @@ impl LogSource {
             offset: 0,
             encoding: Encoding::Utf8,
             leftover: Vec::new(),
-            state: ParserState {
-                pending: None,
-                next_line: 1,
-            },
+            state: ParserState::new(),
             keyword_severity,
             file_size: 0,
+            format: FormatChoice::Auto,
+            defs: Arc::new(Vec::new()),
+            format_decided: false,
         }
     }
 
@@ -116,10 +164,51 @@ impl LogSource {
         self.offset = 0;
         self.encoding = Encoding::Utf8;
         self.leftover.clear();
-        self.state = ParserState {
-            pending: None,
-            next_line: 1,
-        };
+        self.state = ParserState::new();
+        self.format_decided = false;
+    }
+
+    /// Columns of the log (the built-in ones until a definition is chosen).
+    pub fn schema(&self) -> &Schema {
+        &self.state.schema
+    }
+
+    fn use_def(&mut self, def: Arc<LogDef>) {
+        self.state.def = Some(DefState::new(def, &mut self.state.schema));
+    }
+
+    /// Chooses the format before the first line is parsed: the user's choice, a definition
+    /// by file name, or – when `text` (the first lines) is available – by content.
+    /// Without text and without a decision it is tried again with the next data.
+    fn decide_format(&mut self, text: Option<&str>) {
+        if self.format_decided {
+            return;
+        }
+        match self.format.clone() {
+            FormatChoice::Builtin => {}
+            FormatChoice::Def(d) => self.use_def(d),
+            FormatChoice::Auto => {
+                if let Some(d) = logdef::by_file_name(&self.defs, &self.path) {
+                    self.use_def(d);
+                } else if let Some(text) = text {
+                    let lines: Vec<&str> = text
+                        .lines()
+                        .filter(|l| !l.trim().is_empty())
+                        .take(30)
+                        .collect();
+                    // CMTrace / SMS content keeps the built-in parser.
+                    let cmtrace = lines
+                        .iter()
+                        .any(|l| l.trim_start().starts_with(CM_START) || l.contains("$$<"));
+                    if !cmtrace && let Some(d) = logdef::by_content(&self.defs, &lines) {
+                        self.use_def(d);
+                    }
+                } else {
+                    return;
+                }
+            }
+        }
+        self.format_decided = true;
     }
 
     pub fn encoding_name(&self) -> &'static str {
@@ -193,6 +282,7 @@ impl LogSource {
             }
             let text = decode(&complete, self.encoding);
             drop(complete);
+            self.decide_format(Some(&text));
             committed.reserve(text.len() / 120);
             for line in split_complete_lines(&text) {
                 if let Some(e) = parse_line(&mut self.state, line, self.keyword_severity) {
@@ -203,16 +293,20 @@ impl LogSource {
 
         // Provisional entries: incomplete last line + unfinished multi-line entry.
         // The parser state is not changed – the next refresh replaces them with real ones.
+        let tail = (!self.leftover.is_empty()).then(|| decode(&self.leftover, self.encoding));
+        let tail = tail
+            .as_deref()
+            .map(|t| t.trim_end_matches(['\r', '\n']))
+            .filter(|t| !t.is_empty());
+        if let Some(t) = tail {
+            self.decide_format(Some(t));
+        }
         let mut tmp = self.state.clone();
         let mut provisional = Vec::new();
-        if !self.leftover.is_empty() {
-            let tail = decode(&self.leftover, self.encoding);
-            let tail = tail.trim_end_matches(['\r', '\n']);
-            if !tail.is_empty()
-                && let Some(e) = parse_line(&mut tmp, tail, self.keyword_severity)
-            {
-                provisional.push(e);
-            }
+        if let Some(tail) = tail
+            && let Some(e) = parse_line(&mut tmp, tail, self.keyword_severity)
+        {
+            provisional.push(e);
         }
         if let Some(e) = flush_pending(&mut tmp, self.keyword_severity) {
             provisional.push(e);
@@ -324,6 +418,9 @@ const CM_START: &str = "<![LOG[";
 const CM_END: &str = "]LOG]!>";
 
 fn parse_line(st: &mut ParserState, line: &str, kw: bool) -> Option<LogEntry> {
+    if st.def.is_some() {
+        return parse_def_line(st, line, kw);
+    }
     let line_no = st.next_line;
     st.next_line += 1;
 
@@ -350,17 +447,50 @@ fn parse_line(st: &mut ParserState, line: &str, kw: bool) -> Option<LogEntry> {
         return Some(parse_sms(line_no, line, pos, kw));
     }
 
-    Some(LogEntry {
+    Some(plain_entry(line_no, line, kw))
+}
+
+/// One line of a log described by a definition. With `unmatched = append` an entry is
+/// returned only when the next entry starts (or by `flush_pending` at the end of the data).
+fn parse_def_line(st: &mut ParserState, line: &str, kw: bool) -> Option<LogEntry> {
+    let line_no = st.next_line;
+    st.next_line += 1;
+    let ds = st.def.as_mut()?;
+    let append = ds.appends_unmatched();
+    match ds.parse(line, line_no, kw, &mut st.schema) {
+        DefLine::Skip => None,
+        DefLine::Entry(e) if append => st.pending_entry.replace(e),
+        DefLine::Entry(e) => Some(e),
+        DefLine::Unmatched => {
+            if ds.skips_unmatched() {
+                return None;
+            }
+            if append && let Some(p) = st.pending_entry.as_mut() {
+                p.message.push('\n');
+                p.message.push_str(line);
+                return None;
+            }
+            Some(plain_entry(line_no, line, kw))
+        }
+    }
+}
+
+fn plain_entry(line_no: usize, line: &str, kw: bool) -> LogEntry {
+    LogEntry {
         line_no,
         message: line.to_owned(),
         component: String::new(),
         datetime: String::new(),
         thread: String::new(),
         severity: keyword_sev(line, kw),
-    })
+        extra: Vec::new(),
+    }
 }
 
 fn flush_pending(st: &mut ParserState, kw: bool) -> Option<LogEntry> {
+    if let Some(e) = st.pending_entry.take() {
+        return Some(e);
+    }
     let (no, buf) = st.pending.take()?;
     let msg = buf.strip_prefix(CM_START).unwrap_or(&buf).to_owned();
     Some(LogEntry {
@@ -370,6 +500,7 @@ fn flush_pending(st: &mut ParserState, kw: bool) -> Option<LogEntry> {
         component: String::new(),
         datetime: String::new(),
         thread: String::new(),
+        extra: Vec::new(),
     })
 }
 
@@ -414,6 +545,7 @@ fn parse_cmtrace(line_no: usize, s: &str, kw: bool) -> LogEntry {
         component,
         thread,
         severity,
+        extra: Vec::new(),
     }
 }
 
@@ -446,10 +578,11 @@ fn parse_sms(line_no: usize, line: &str, pos: usize, kw: bool) -> LogEntry {
         component,
         datetime,
         thread,
+        extra: Vec::new(),
     }
 }
 
-fn keyword_sev(s: &str, enabled: bool) -> Severity {
+pub(crate) fn keyword_sev(s: &str, enabled: bool) -> Severity {
     if !enabled {
         return Severity::Info;
     }
@@ -503,10 +636,7 @@ mod tests {
     use std::io::Write;
 
     fn parse_all(text: &str) -> Vec<LogEntry> {
-        let mut st = ParserState {
-            pending: None,
-            next_line: 1,
-        };
+        let mut st = ParserState::new();
         split_complete_lines(text)
             .filter_map(|l| parse_line(&mut st, l, true))
             .collect()
@@ -569,6 +699,75 @@ mod tests {
         }
         std::fs::write(&p, "new\n").unwrap();
         assert!(matches!(s.poll(&Progress::default()).unwrap(), PollResult::Reset { .. }));
+        std::fs::remove_dir_all(&dir).ok();
+    }
+
+    /// Log definitions: chosen by file name or by content, unmatched lines appended to the
+    /// previous entry even across refreshes, CMTrace content keeps the built-in parser.
+    #[test]
+    fn log_definitions_in_files() {
+        let dir = std::env::temp_dir().join(format!("rustrace_def_{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let defs = Arc::new(logdef::load_from(&[]).defs);
+        let open = |name: &str, text: &str| {
+            let p = dir.join(name);
+            std::fs::write(&p, text).unwrap();
+            let mut s = LogSource::new(&p, true);
+            s.defs = defs.clone();
+            s
+        };
+
+        // By file name; the last entry stays provisional until the next entry starts.
+        let mut s = open(
+            "CBS.log",
+            "2026-10-23 10:00:00, Info                  CBS    one\n\
+             2026-10-23 10:00:01, Error                 CBS    two\n   detail\n",
+        );
+        let PollResult::Reset { committed, provisional } = s.poll(&Progress::default()).unwrap() else {
+            panic!()
+        };
+        assert_eq!(s.schema().name, "Windows CBS log");
+        assert_eq!(committed.len(), 1);
+        assert_eq!(provisional[0].message, "two\n   detail");
+        assert_eq!(provisional[0].severity, Severity::Error);
+        let mut f = std::fs::OpenOptions::new().append(true).open(&s.path).unwrap();
+        f.write_all(b"   more\n2026-10-23 10:00:02, Info                  CBS    three\n").unwrap();
+        let PollResult::Appended { committed, provisional } = s.poll(&Progress::default()).unwrap()
+        else {
+            panic!()
+        };
+        assert_eq!(committed[0].message, "two\n   detail\n   more");
+        assert_eq!(committed[0].line_no, 2);
+        assert_eq!(provisional[0].message, "three");
+        assert_eq!(provisional[0].line_no, 5);
+
+        // By content (the name matches no definition).
+        let mut s = open(
+            "web-2026.txt",
+            "#Software: Microsoft Internet Information Services 10.0\n\
+             #Fields: date time cs-method cs-uri-stem sc-status\n\
+             2026-10-23 08:00:01 GET /a 503\n",
+        );
+        let PollResult::Reset { committed, .. } = s.poll(&Progress::default()).unwrap() else {
+            panic!()
+        };
+        assert_eq!(s.schema().name, "IIS web log (W3C)");
+        assert_eq!(committed[0].message, "GET /a");
+        assert_eq!(committed[0].severity, Severity::Error);
+
+        // CMTrace content with a matching definition name pattern only by content → built-in.
+        let mut s = open("other.log", "<![LOG[Hello]LOG]!><time=\"10:00:00.000+000\" date=\"10-23-2026\" component=\"C\" context=\"\" type=\"1\" thread=\"1\" file=\"\">\n");
+        s.poll(&Progress::default()).unwrap();
+        assert_eq!(s.schema().name, "");
+
+        // The user's choice wins over the file name.
+        let mut s = open("dism.log", "2026-10-23 10:00:00, Info  DISM   x\n");
+        s.format = FormatChoice::Builtin;
+        let PollResult::Reset { committed, .. } = s.poll(&Progress::default()).unwrap() else {
+            panic!()
+        };
+        assert_eq!(s.schema().name, "");
+        assert_eq!(committed[0].message, "2026-10-23 10:00:00, Info  DISM   x");
         std::fs::remove_dir_all(&dir).ok();
     }
 

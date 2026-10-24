@@ -29,6 +29,15 @@ menu.view.theme.light = Svetlá
 menu.view.theme.dark = Tmavá
 menu.view.font_size = Veľkosť písma:
 menu.view.language = Jazyk
+menu.view.format = Formát logu
+format.auto = Automaticky
+format.auto_detected = Automaticky – použitý: {name}
+format.auto.tip = Definícia logu, ktorej zodpovedá názov súboru, inak definícia rozpoznaná podľa prvých riadkov súboru, inak vstavaný formát.
+format.builtin = CMTrace / obyčajný text (vstavaný)
+format.reload = Znovu načítať definície logov
+format.reloaded = Definície logov znovu načítané: {count}
+format.open_folder = Otvoriť priečinok s definíciami logov
+format.errors = Tieto definície logov sa nepodarilo načítať:
 menu.highlight = Zvýrazňovanie
 menu.highlight.rules = Pravidlá zvýrazňovania…
 menu.highlight.colors = Farby chýb, varovaní a hľadania…
@@ -92,6 +101,7 @@ status.refresh_every = každých {value} {unit}
 status.paused = Obnova pozastavená
 status.last_change = Posledná zmena: {time}
 status.no_file = Žiadny súbor
+status.format.tip = Formát logu – zmeníš ho v Zobraziť → Formát logu
 
 # --- Tabuľka ---
 table.empty = Otvor log súbor (Ctrl+O) alebo ho sem pretiahni myšou.
@@ -130,7 +140,7 @@ rules.col.preview = Ukážka
 rules.pattern.hint = napr. error|fail
 rules.scope.row = Celý riadok
 rules.scope.text = Len text
-rules.component.tip = Hľadať zhodu aj v stĺpci Komponent (len pre celý riadok)
+rules.component.tip = Hľadať zhodu aj v stĺpci Komponent a v ďalších stĺpcoch definície logu (len pre celý riadok)
 rules.preview_text = Ukážka textu
 rules.delete = Zmazať
 rules.add = Pridať pravidlo
@@ -240,6 +250,7 @@ error.import = Import zlyhal: {error}
 error.export = Export zlyhal: {error}
 error.save_settings = Nastavenia sa nedajú uložiť: {error}
 error.open_folder = Priečinok sa nedá otvoriť: {error}
+error.logdef = Počet definícií logov, ktoré sa nepodarilo načítať: {count} – pozri Zobraziť → Formát logu
 error.create_lang = Jazykový súbor sa nedá vytvoriť: {error}
 
 # --- Chybové kódy ---

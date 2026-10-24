@@ -2,7 +2,8 @@ use crate::config::{Config, HighlightRule, HighlightScope, IntervalUnit};
 use crate::errcodes::{self, CodeInfo};
 use crate::export::{self, ExportFormat, ReadableRow};
 use crate::i18n;
-use crate::parser::{LogEntry, LogSource, PollResult, Progress, Severity};
+use crate::logdef::{self, Column as LogColumn, ColumnKind, LogDef, Role, Schema};
+use crate::parser::{FormatChoice, LogEntry, LogSource, PollResult, Progress, Severity};
 use crate::t;
 use eframe::egui::{
     self, text::LayoutJob, Align, Color32, FontId, Key, Layout, Modifiers, RichText, Sense,
@@ -145,6 +146,14 @@ pub struct App {
     latest_ts: Option<(u64, Option<String>)>,
     /// The mouse pointer is over the log text (table or message in the details pane) in this frame.
     hover_log: bool,
+
+    /// Loaded log definitions (`logdef\*.def`) and errors of files that could not be used.
+    defs: Arc<Vec<Arc<LogDef>>>,
+    def_errors: Vec<String>,
+    /// Format chosen for the current file (View → Log format); `Auto` for every newly opened file.
+    format_choice: FormatChoice,
+    /// Columns of the current log.
+    schema: Schema,
 }
 
 /// Limits of Ctrl + mouse wheel zoom.
@@ -235,7 +244,12 @@ impl App {
             export_job: None,
             latest_ts: None,
             hover_log: false,
+            defs: Arc::new(Vec::new()),
+            def_errors: Vec::new(),
+            format_choice: FormatChoice::Auto,
+            schema: Schema::default(),
         };
+        app.load_defs();
         app.apply_theme(&cc.egui_ctx);
         let zoom = app.cfg.ui_zoom.clamp(*UI_ZOOM_RANGE.start(), *UI_ZOOM_RANGE.end());
         cc.egui_ctx.set_zoom_factor(zoom);
@@ -344,7 +358,63 @@ impl App {
     }
 
     fn entry_matches(re: &Regex, e: &LogEntry) -> bool {
-        re.is_match(&e.message) || re.is_match(&e.component)
+        re.is_match(&e.message) || Self::other_columns_match(re, e)
+    }
+
+    /// Component or one of the extra columns of a log definition matches.
+    fn other_columns_match(re: &Regex, e: &LogEntry) -> bool {
+        re.is_match(&e.component) || e.extra.iter().any(|v| re.is_match(v))
+    }
+
+    /// (Re)loads the log definitions; a chosen definition is replaced by its new version.
+    fn load_defs(&mut self) {
+        let set = logdef::load_all();
+        if let FormatChoice::Def(d) = &self.format_choice {
+            self.format_choice = set
+                .defs
+                .iter()
+                .find(|n| n.id.eq_ignore_ascii_case(&d.id))
+                .cloned()
+                .map_or(FormatChoice::Auto, FormatChoice::Def);
+        }
+        self.defs = Arc::new(set.defs);
+        self.def_errors = set.errors;
+        if !self.def_errors.is_empty() {
+            self.status_error = Some(t!("error.logdef", count = self.def_errors.len()));
+        }
+    }
+
+    /// Changes the format of the current file and reads it again.
+    fn set_format(&mut self, choice: FormatChoice) {
+        self.format_choice = choice;
+        if self.cur_path.is_some() {
+            self.reload_full();
+        }
+    }
+
+    /// Header of a table column.
+    fn column_title(c: &LogColumn) -> String {
+        if let Some(t) = &c.title {
+            return t.clone();
+        }
+        match c.kind {
+            ColumnKind::Role(Role::Message) => t!("column.message"),
+            ColumnKind::Role(Role::Component) => t!("column.component"),
+            ColumnKind::Role(Role::DateTime) => t!("column.datetime"),
+            ColumnKind::Role(Role::Thread) => t!("column.thread"),
+            ColumnKind::Extra(_) => String::new(),
+        }
+    }
+
+    /// Text of a column for an entry (date/time formatted for display).
+    fn cell_text(&self, e: &LogEntry, kind: ColumnKind) -> String {
+        match kind {
+            ColumnKind::Role(Role::Message) => e.message.clone(),
+            ColumnKind::Role(Role::Component) => e.component.clone(),
+            ColumnKind::Role(Role::DateTime) => self.display_dt(&e.datetime),
+            ColumnKind::Role(Role::Thread) => e.thread.clone(),
+            ColumnKind::Extra(i) => e.extra(i).to_owned(),
+        }
     }
 
     fn sev_visible(&self, s: Severity) -> bool {
@@ -419,6 +489,8 @@ impl App {
         self.data_gen += 1;
         self.cur_path = Some(PathBuf::from(path));
         self.source = Some(LogSource::new(path, self.cfg.keyword_severity));
+        self.format_choice = FormatChoice::Auto;
+        self.schema = Schema::default();
         self.entries = Vec::new();
         self.filtered.clear();
         self.is_match.clear();
@@ -441,6 +513,8 @@ impl App {
         }
         let Some(mut src) = self.source.take() else { return };
         src.keyword_severity = self.cfg.keyword_severity;
+        src.defs = self.defs.clone();
+        src.format = self.format_choice.clone();
         let progress = Arc::new(Progress::default());
         let (tx, rx) = mpsc::channel();
         let prog = progress.clone();
@@ -476,6 +550,9 @@ impl App {
                 self.loading = None;
                 self.encoding_name = src.encoding_name();
                 self.file_size = src.file_size;
+                if self.schema != *src.schema() {
+                    self.schema = src.schema().clone();
+                }
                 self.source = Some(src);
                 self.apply_result(res);
                 self.last_refresh = Some(Instant::now());
@@ -874,6 +951,9 @@ impl App {
                     }
                 });
                 ui.separator();
+                ui.menu_button(format!("📐 {}", t!("menu.view.format")), |ui| {
+                    self.format_menu(ui);
+                });
                 ui.menu_button(format!("🌐 {}", t!("menu.view.language")), |ui| {
                     self.language_menu(ui);
                 });
@@ -910,6 +990,86 @@ impl App {
                 }
             });
         });
+    }
+
+    /// Name of the format in use.
+    fn format_name(&self) -> String {
+        if self.schema.name.is_empty() {
+            t!("format.builtin")
+        } else {
+            self.schema.name.clone()
+        }
+    }
+
+    fn format_menu(&mut self, ui: &mut egui::Ui) {
+        let mut choice: Option<FormatChoice> = None;
+        let auto_label = if self.cur_path.is_some() {
+            t!("format.auto_detected", name = self.format_name())
+        } else {
+            t!("format.auto")
+        };
+        if ui
+            .radio(matches!(self.format_choice, FormatChoice::Auto), auto_label)
+            .on_hover_text(t!("format.auto.tip"))
+            .clicked()
+        {
+            choice = Some(FormatChoice::Auto);
+        }
+        if ui
+            .radio(matches!(self.format_choice, FormatChoice::Builtin), t!("format.builtin"))
+            .clicked()
+        {
+            choice = Some(FormatChoice::Builtin);
+        }
+        ui.separator();
+        for d in self.defs.iter() {
+            let selected = matches!(&self.format_choice, FormatChoice::Def(c) if c.id == d.id);
+            let mut label = format!("{}  ({})", d.name, d.id);
+            if d.path.is_some() {
+                label.push_str(" *");
+            }
+            let mut r = ui.radio(selected, label);
+            if let Some(p) = &d.path {
+                r = r.on_hover_text(p.display().to_string());
+            }
+            if r.clicked() {
+                choice = Some(FormatChoice::Def(d.clone()));
+            }
+        }
+        ui.separator();
+        if ui.button(format!("🔄 {}", t!("format.reload"))).clicked() {
+            self.load_defs();
+            if self.def_errors.is_empty() {
+                self.info(t!("format.reloaded", count = self.defs.len()));
+            }
+            if self.cur_path.is_some() {
+                self.reload_full();
+            }
+            ui.close();
+        }
+        if ui.button(format!("📂 {}", t!("format.open_folder"))).clicked() {
+            if let Some(dir) = logdef::user_def_dir() {
+                let res = std::fs::create_dir_all(&dir).and_then(|_| open::that_detached(&dir));
+                if let Err(e) = res {
+                    self.status_error = Some(t!("error.open_folder", error = e));
+                }
+            }
+            ui.close();
+        }
+        if let Some(dir) = logdef::user_def_dir() {
+            ui.weak(dir.display().to_string());
+        }
+        if !self.def_errors.is_empty() {
+            ui.separator();
+            ui.colored_label(RED, t!("format.errors"));
+            for e in &self.def_errors {
+                ui.label(RichText::new(e).small().color(RED));
+            }
+        }
+        if let Some(c) = choice {
+            ui.close();
+            self.set_format(c);
+        }
     }
 
     fn language_menu(&mut self, ui: &mut egui::Ui) {
@@ -1200,6 +1360,9 @@ impl App {
                     ui.label(self.encoding_name);
                     ui.separator();
                 }
+                ui.label(format!("📐 {}", self.format_name()))
+                    .on_hover_text(t!("status.format.tip"));
+                ui.separator();
                 if self.file_size > 0 {
                     ui.label(format_size(self.file_size));
                     ui.separator();
@@ -1302,17 +1465,26 @@ impl App {
                 Severity::Info => (t!("severity.info"), ui.visuals().text_color()),
             };
             ui.colored_label(col, txt);
-            if !e.component.is_empty() {
+            // Every column except the message (shown below), in the order of the table.
+            for c in &self.schema.columns {
+                let value = match c.kind {
+                    ColumnKind::Role(Role::Message) => continue,
+                    kind => self.cell_text(e, kind),
+                };
+                if value.is_empty() {
+                    continue;
+                }
                 ui.separator();
-                ui.label(t!("details.component", component = e.component));
-            }
-            if !e.datetime.is_empty() {
-                ui.separator();
-                ui.label(t!("details.time", time = self.display_dt(&e.datetime)));
-            }
-            if !e.thread.is_empty() {
-                ui.separator();
-                ui.label(t!("details.thread", thread = e.thread));
+                let label = match (c.kind, &c.title) {
+                    (_, Some(title)) => format!("{title}: {value}"),
+                    (ColumnKind::Role(Role::Component), None) => {
+                        t!("details.component", component = value)
+                    }
+                    (ColumnKind::Role(Role::DateTime), None) => t!("details.time", time = value),
+                    (ColumnKind::Role(Role::Thread), None) => t!("details.thread", thread = value),
+                    _ => value,
+                };
+                ui.label(label);
             }
         });
         // Explanation of error codes found in the message.
@@ -1364,7 +1536,7 @@ impl App {
                 continue;
             }
             let hit = r.regex.is_match(&e.message)
-                || (r.rule.match_component && r.regex.is_match(&e.component));
+                || (r.rule.match_component && Self::other_columns_match(&r.regex, e));
             if hit {
                 let (fg, bg) = r.rule.colors(self.dark);
                 return (r.rule.use_fg.then(|| c32(fg)), r.rule.use_bg.then(|| c32(bg)));
@@ -1446,31 +1618,40 @@ impl App {
             ui.spacing().item_spacing.y * 0.5 + 0.5,
         );
 
+        // The columns come from the log format; every layout keeps its own column widths.
+        let columns = self.schema.columns.clone();
         let mut tb = TableBuilder::new(ui)
+            .id_salt(("log_table", &self.schema.name, columns.len()))
             .striped(true)
             .resizable(true)
             .sense(Sense::click())
             .auto_shrink([false, false])
             .stick_to_bottom(self.cfg.auto_scroll)
             .cell_layout(Layout::left_to_right(Align::Center))
-            .column(Column::initial(60.0).at_least(40.0).clip(true))
-            .column(Column::initial(720.0).at_least(120.0).clip(true))
-            .column(Column::initial(150.0).at_least(40.0).clip(true))
-            .column(Column::initial(175.0).at_least(40.0).clip(true))
-            .column(Column::remainder().at_least(60.0).clip(true));
+            .column(Column::initial(60.0).at_least(40.0).clip(true));
+        // With many columns (e.g. IIS) a narrower message leaves room for the others.
+        let msg_width = if columns.len() > 5 { 420.0 } else { 720.0 };
+        for (i, c) in columns.iter().enumerate() {
+            let col = if i + 1 == columns.len() {
+                Column::remainder().at_least(60.0)
+            } else {
+                match c.kind {
+                    ColumnKind::Role(Role::Message) => Column::initial(msg_width).at_least(120.0),
+                    ColumnKind::Role(Role::DateTime) => Column::initial(175.0).at_least(40.0),
+                    _ => Column::initial(150.0).at_least(40.0),
+                }
+            };
+            tb = tb.column(col.clip(true));
+        }
         if let Some(r) = self.scroll_to.take() {
             tb = tb.scroll_to_row(r, Some(Align::Center));
         }
 
         let mut clicked: Option<usize> = None;
         let mut action: Option<RowAction> = None;
-        let headers = [
-            t!("column.line"),
-            t!("column.message"),
-            t!("column.component"),
-            t!("column.datetime"),
-            t!("column.thread"),
-        ];
+        let headers: Vec<String> = std::iter::once(t!("column.line"))
+            .chain(columns.iter().map(Self::column_title))
+            .collect();
 
         tb.header(22.0, |mut h| {
             for title in headers {
@@ -1509,29 +1690,41 @@ impl App {
                 };
 
                 row.col(|ui| simple(ui, &e.line_no.to_string()));
-                row.col(|ui| {
-                    paint_bg(ui);
-                    let first = e.message.lines().next().unwrap_or("");
-                    let mut text: String = if first.len() > MAX_CELL_CHARS {
-                        let mut end = MAX_CELL_CHARS;
-                        while !first.is_char_boundary(end) {
-                            end -= 1;
+                for c in &columns {
+                    match c.kind {
+                        ColumnKind::Role(Role::Message) => {
+                            row.col(|ui| {
+                                paint_bg(ui);
+                                let first = e.message.lines().next().unwrap_or("");
+                                let mut text: String = if first.len() > MAX_CELL_CHARS {
+                                    let mut end = MAX_CELL_CHARS;
+                                    while !first.is_char_boundary(end) {
+                                        end -= 1;
+                                    }
+                                    format!("{}…", &first[..end])
+                                } else {
+                                    first.to_owned()
+                                };
+                                if e.message.contains('\n') {
+                                    text.push_str("  ↵");
+                                }
+                                let hit = self.is_match.get(idx).copied().unwrap_or(false);
+                                let spans = self.text_spans(&text, hit);
+                                let job = build_job(&text, &spans, fg_col, &font);
+                                ui.add(egui::Label::new(job).truncate().selectable(false));
+                            });
                         }
-                        format!("{}…", &first[..end])
-                    } else {
-                        first.to_owned()
-                    };
-                    if e.message.contains('\n') {
-                        text.push_str("  ↵");
+                        ColumnKind::Role(Role::Component) => {
+                            row.col(|ui| simple(ui, &e.component));
+                        }
+                        ColumnKind::Role(Role::Thread) => {
+                            row.col(|ui| simple(ui, &e.thread));
+                        }
+                        kind => {
+                            row.col(|ui| simple(ui, &self.cell_text(e, kind)));
+                        }
                     }
-                    let hit = self.is_match.get(idx).copied().unwrap_or(false);
-                    let spans = self.text_spans(&text, hit);
-                    let job = build_job(&text, &spans, fg_col, &font);
-                    ui.add(egui::Label::new(job).truncate().selectable(false));
-                });
-                row.col(|ui| simple(ui, &e.component));
-                row.col(|ui| simple(ui, &self.display_dt(&e.datetime)));
-                row.col(|ui| simple(ui, &e.thread));
+                }
 
                 let resp = row.response();
                 if resp.clicked() {
@@ -1595,13 +1788,9 @@ impl App {
                 RowAction::CopyMessage(i) => ctx.copy_text(self.entries[i].message.clone()),
                 RowAction::CopyRow(i) => {
                     let e = &self.entries[i];
-                    ctx.copy_text(format!(
-                        "{}\t{}\t{}\t{}",
-                        e.message,
-                        e.component,
-                        self.display_dt(&e.datetime),
-                        e.thread
-                    ));
+                    let cells: Vec<String> =
+                        columns.iter().map(|c| self.cell_text(e, c.kind)).collect();
+                    ctx.copy_text(cells.join("\t"));
                 }
                 RowAction::SearchComponent(i) => {
                     self.search_text = self.entries[i].component.clone();
@@ -2041,7 +2230,7 @@ impl App {
                     r.regex.is_match(&e.message)
                         || (r.rule.scope == HighlightScope::Row
                             && r.rule.match_component
-                            && r.regex.is_match(&e.component))
+                            && Self::other_columns_match(&r.regex, e))
                 }))
     }
 
@@ -2372,7 +2561,21 @@ impl App {
                         .collect()
                 })
                 .collect();
-            export::build_readable(&t!("export.header"), &row_blocks, &line_ranges, separators)
+            // Extra columns of a log definition are appended with their headers.
+            let mut header = t!("export.header");
+            for (i, name) in self.schema.extra_names.iter().enumerate() {
+                let title = self
+                    .schema
+                    .columns
+                    .iter()
+                    .find(|c| c.kind == ColumnKind::Extra(i))
+                    .and_then(|c| c.title.as_deref())
+                    .unwrap_or(name);
+                header.push('\t');
+                header.push_str(title);
+            }
+            let extra_cols = self.schema.extra_names.len();
+            export::build_readable(&header, &row_blocks, &line_ranges, separators, extra_cols)
         });
         let nblocks = blocks.len();
         let (tx, rx) = mpsc::channel();

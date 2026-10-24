@@ -6,6 +6,7 @@ mod config;
 mod errcodes;
 mod export;
 mod i18n;
+mod logdef;
 mod parser;
 
 use eframe::egui;
