@@ -18,6 +18,7 @@
 //! Dates are stored as ISO `YYYY-MM-DD HH:MM:SS.mmm`; the UI formats them per language.
 
 use crate::logdef::{self, DefLine, DefState, LogDef, Schema};
+use crate::store::LogStore;
 use std::fs::File;
 use std::io::{Read, Seek, SeekFrom};
 use std::path::{Path, PathBuf};
@@ -44,13 +45,6 @@ pub struct LogEntry {
     pub extra: Vec<String>,
 }
 
-impl LogEntry {
-    /// Value of an extra column (empty when the entry does not have it).
-    pub fn extra(&self, i: usize) -> &str {
-        self.extra.get(i).map_or("", String::as_str)
-    }
-}
-
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 enum Encoding {
     Utf8,
@@ -65,12 +59,12 @@ pub enum PollResult {
     Unchanged,
     /// New entries were appended at the end.
     Appended {
-        committed: Vec<LogEntry>,
+        committed: LogStore,
         provisional: Vec<LogEntry>,
     },
     /// The file was read from the start (first open, truncation, rotation).
     Reset {
-        committed: Vec<LogEntry>,
+        committed: LogStore,
         provisional: Vec<LogEntry>,
     },
 }
@@ -140,6 +134,9 @@ pub struct LogSource {
     pub format: FormatChoice,
     /// Available log definitions.
     pub defs: Arc<Vec<Arc<LogDef>>>,
+    /// Reads of at least this many bytes keep the message text in a memory-mapped temporary
+    /// file (`None` = always in memory).
+    pub temp_file_threshold: Option<u64>,
     /// The format for the current read has been chosen.
     format_decided: bool,
 }
@@ -156,6 +153,7 @@ impl LogSource {
             file_size: 0,
             format: FormatChoice::Auto,
             defs: Arc::new(Vec::new()),
+            temp_file_threshold: None,
             format_decided: false,
         }
     }
@@ -238,7 +236,13 @@ impl LogSource {
         progress.done.store(0, Ordering::Relaxed);
 
         f.seek(SeekFrom::Start(self.offset))?;
-        let mut committed = Vec::new();
+        let start_offset = self.offset;
+        let mut committed = if self.temp_file_threshold.is_some_and(|t| len - start_offset >= t) {
+            LogStore::new_mapped()
+        } else {
+            LogStore::new()
+        };
+        let mut reserved = false;
         let mut first = is_reset;
         let mut buf = Vec::new();
         while self.offset < len {
@@ -283,11 +287,21 @@ impl LogSource {
             let text = decode(&complete, self.encoding);
             drop(complete);
             self.decide_format(Some(&text));
-            committed.reserve(text.len() / 120);
             for line in split_complete_lines(&text) {
                 if let Some(e) = parse_line(&mut self.state, line, self.keyword_severity) {
                     committed.push(e);
                 }
+            }
+            // After the first chunk: room for the whole read, estimated from that chunk, so the
+            // storage does not grow (and copy) step by step.
+            let (done, rest) = (self.offset - start_offset, len - self.offset);
+            if !reserved && rest > 0 && !committed.is_empty() {
+                reserved = true;
+                let scale = rest as f64 / done as f64 * 1.05;
+                committed.reserve(
+                    (committed.len() as f64 * scale) as usize,
+                    (committed.text_len() as f64 * scale) as usize,
+                );
             }
         }
 
@@ -691,8 +705,8 @@ mod tests {
         match s.poll(&Progress::default()).unwrap() {
             PollResult::Appended { committed, provisional } => {
                 assert_eq!(committed.len(), 2);
-                assert_eq!(committed[0].message, "partial end");
-                assert_eq!(committed[0].line_no, 3);
+                assert_eq!(committed.at(0).message, "partial end");
+                assert_eq!(committed.at(0).line_no, 3);
                 assert!(provisional.is_empty());
             }
             _ => panic!(),
@@ -736,8 +750,8 @@ mod tests {
         else {
             panic!()
         };
-        assert_eq!(committed[0].message, "two\n   detail\n   more");
-        assert_eq!(committed[0].line_no, 2);
+        assert_eq!(committed.at(0).message, "two\n   detail\n   more");
+        assert_eq!(committed.at(0).line_no, 2);
         assert_eq!(provisional[0].message, "three");
         assert_eq!(provisional[0].line_no, 5);
 
@@ -752,8 +766,8 @@ mod tests {
             panic!()
         };
         assert_eq!(s.schema().name, "IIS web log (W3C)");
-        assert_eq!(committed[0].message, "GET /a");
-        assert_eq!(committed[0].severity, Severity::Error);
+        assert_eq!(committed.at(0).message, "GET /a");
+        assert_eq!(committed.at(0).severity, Severity::Error);
 
         // CMTrace content with a matching definition name pattern only by content → built-in.
         let mut s = open("other.log", "<![LOG[Hello]LOG]!><time=\"10:00:00.000+000\" date=\"10-23-2026\" component=\"C\" context=\"\" type=\"1\" thread=\"1\" file=\"\">\n");
@@ -767,8 +781,94 @@ mod tests {
             panic!()
         };
         assert_eq!(s.schema().name, "");
-        assert_eq!(committed[0].message, "2026-10-23 10:00:00, Info  DISM   x");
+        assert_eq!(committed.at(0).message, "2026-10-23 10:00:00, Info  DISM   x");
         std::fs::remove_dir_all(&dir).ok();
+    }
+
+    /// (private bytes, working set, peak working set) of this process in MB.
+    #[cfg(windows)]
+    fn mem_mb() -> (f64, f64, f64) {
+        #[repr(C)]
+        #[derive(Default)]
+        struct Counters {
+            cb: u32,
+            page_faults: u32,
+            peak_ws: usize,
+            ws: usize,
+            q1: usize,
+            q2: usize,
+            q3: usize,
+            q4: usize,
+            pagefile: usize,
+            peak_pagefile: usize,
+            private: usize,
+        }
+        #[link(name = "kernel32")]
+        unsafe extern "system" {
+            fn GetCurrentProcess() -> isize;
+            fn K32GetProcessMemoryInfo(p: isize, c: *mut Counters, cb: u32) -> i32;
+        }
+        let mut c = Counters {
+            cb: std::mem::size_of::<Counters>() as u32,
+            ..Default::default()
+        };
+        unsafe { K32GetProcessMemoryInfo(GetCurrentProcess(), &mut c, c.cb) };
+        let mb = |b: usize| b as f64 / 1048576.0;
+        (mb(c.private), mb(c.ws), mb(c.peak_ws))
+    }
+
+    /// Measures loading, search and random access on a big file:
+    /// `RUSTRACE_BENCH_FILE=<log> cargo test --release bench_large_file -- --ignored --nocapture`
+    /// (`RUSTRACE_BENCH_MAPPED=1` keeps the text in a memory-mapped temporary file).
+    #[cfg(windows)]
+    #[test]
+    #[ignore]
+    fn bench_large_file() {
+        let path = std::env::var("RUSTRACE_BENCH_FILE").expect("RUSTRACE_BENCH_FILE");
+        let mapped = std::env::var("RUSTRACE_BENCH_MAPPED").is_ok_and(|v| v == "1");
+        let before = mem_mb();
+        let t = std::time::Instant::now();
+        let mut s = LogSource::new(&path, true);
+        s.temp_file_threshold = mapped.then_some(0);
+        let PollResult::Reset { committed: entries, .. } = s.poll(&Progress::default()).unwrap() else {
+            panic!()
+        };
+        let load = t.elapsed();
+        let after = mem_mb();
+
+        let re = regex::RegexBuilder::new("error 0x8007").case_insensitive(true).build().unwrap();
+        let t = std::time::Instant::now();
+        let hits = (0..entries.len())
+            .filter(|&i| {
+                let e = entries.at(i);
+                re.is_match(e.message) || re.is_match(e.component)
+            })
+            .count();
+        let search = t.elapsed();
+
+        let t = std::time::Instant::now();
+        let mut x: u64 = 0x2545F4914F6CDD1D;
+        let mut sum = 0usize;
+        for _ in 0..1_000_000 {
+            x ^= x << 13;
+            x ^= x >> 7;
+            x ^= x << 17;
+            let e = entries.at((x % entries.len() as u64) as usize);
+            sum += e.message.lines().next().unwrap_or("").len() + e.component.len() + e.datetime().len();
+        }
+        let random = t.elapsed();
+        println!(
+            "BENCH mapped={} entries={} load={:.2?} search={:.2?} (hits {hits}) random1M={:.2?} (sum {sum})",
+            entries.is_mapped(),
+            entries.len(),
+            load,
+            search,
+            random
+        );
+        println!(
+            "BENCH private {:.0} -> {:.0} MB, working set {:.0} -> {:.0} MB, peak working set {:.0} MB",
+            before.0, after.0, before.1, after.1, after.2
+        );
     }
 
     #[test]
@@ -785,8 +885,8 @@ mod tests {
         match s.poll(&Progress::default()).unwrap() {
             PollResult::Reset { committed, .. } => {
                 assert_eq!(committed.len(), 2);
-                assert_eq!(committed[0].message, "Grüße, žluť");
-                assert_eq!(committed[1].severity, Severity::Error);
+                assert_eq!(committed.at(0).message, "Grüße, žluť");
+                assert_eq!(committed.at(1).severity, Severity::Error);
             }
             _ => panic!(),
         }
@@ -813,8 +913,8 @@ mod tests {
         match s.poll(&prog).unwrap() {
             PollResult::Reset { committed, .. } => {
                 assert_eq!(committed.len(), n + 1);
-                assert_eq!(committed[n].message, "žltva");
-                assert_eq!(committed[n].line_no, n + 1);
+                assert_eq!(committed.at(n).message, "žltva");
+                assert_eq!(committed.at(n).line_no, n + 1);
             }
             _ => panic!(),
         }

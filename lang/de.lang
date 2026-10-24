@@ -28,6 +28,8 @@ menu.view.theme.system = System
 menu.view.theme.light = Hell
 menu.view.theme.dark = Dunkel
 menu.view.font_size = Schriftgröße:
+menu.view.temp_file = Log-Text in temporärer Datei ab
+menu.view.temp_file.tip = Spart Speicher bei großen Logs: Der Meldungstext liegt in einer temporären Datei, die Windows im Cache hält, solange Speicher frei ist (so schnell wie Speicher). Gilt beim Lesen einer Datei von Anfang an (Öffnen, Strg+F5).
 menu.view.language = Sprache
 menu.view.format = Log-Format
 format.auto = Automatisch
@@ -101,6 +103,7 @@ status.refresh_every = alle {value} {unit}
 status.paused = Aktualisierung pausiert
 status.last_change = Letzte Änderung: {time}
 status.no_file = Keine Datei
+status.temp_file = Log-Text liegt in einer temporären Datei ({size}) – spart Speicher
 status.format.tip = Log-Format – ändern unter Ansicht → Log-Format
 
 # --- Tabelle ---

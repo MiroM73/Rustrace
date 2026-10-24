@@ -32,7 +32,22 @@ Features (all implemented, see README for user-facing details):
   provisional until the next one starts (`ParserState::pending_entry`).
 - Encodings: UTF-8 (BOM or not), UTF-16 LE/BE (BOM), ANSI Windows-1250 fallback.
 - Incremental reading in a **background thread** in 8 MB chunks with progress + cancel; truncation /
-  rotation detection; provisional last line. 400 MB / 2.2 M lines ≈ 3 s in release.
+  rotation detection; provisional last line. 400 MB / 1.8 M lines ≈ 3.7 s in release.
+- **Compact storage** (`src/store.rs`, `LogStore`): the parser still produces `LogEntry` (Strings)
+  per line, but they go straight into a `LogStore` – 32-byte `Rec` (message start in the text arena,
+  `i64` ms timestamp or tagged interned raw text, line, interned component/thread, severity), one
+  text arena in entry order (message `i` ends where `i + 1` starts), interner (id 0 = ""), extra
+  columns column-major as interned ids. `PollResult` carries a `LogStore`; appends are merged with
+  `LogStore::append` (re-interning). The parser reserves capacity after the first chunk (estimate).
+  Text arena = `String` or a **memory-mapped temp file** (`memmap2`, `FILE_ATTRIBUTE_TEMPORARY` +
+  `FILE_FLAG_DELETE_ON_CLOSE`, share mode 0, grows by doubling from 64 MB, falls back to memory on
+  error) for reads ≥ `cfg.temp_file_threshold_mb` (default 100, `cfg.temp_file_enabled`). Never map
+  the original log (blocks the writer from truncating / rotating it on Windows).
+- **DX12 on Windows** (`main.rs::prefer_dx12`): wgpu instance limited to DX12 when a non-CPU DX12
+  adapter exists (probe before start), unless `WGPU_BACKEND` is set. Default wgpu loads Vulkan +
+  DX12 + GL drivers: empty window 516 MB private vs 325 MB with DX12 only (AMD RX 9060 XT).
+- Measured (400 MB CMTrace, GUI private bytes): v0.2.0 1231 MB → 421 MB (temp file) / 582 MB (memory);
+  benchmark without GUI: 695 → 76 / 239 MB, load same, search 157 → 138 ms.
 - Auto refresh: interval in ms / s / min, pause/resume (Ctrl+P), presets, "follow end".
 - Highlight rules: text or regex, case, scope whole row / text only, also-component, order = priority,
   JSON import/export, **separate colors for light and dark theme**; severity + search colors per theme.
@@ -61,6 +76,8 @@ Features (all implemented, see README for user-facing details):
 - `src/parser.rs` – `LogSource::poll()` chunked incremental reading, encodings, format parsing,
   `read_line_ranges()` for original-line export. Dates stored as ISO `YYYY-MM-DD HH:MM:SS.mmm`,
   formatted for display by the UI (`format.date` in the language file).
+- `src/store.rs` – `LogStore` / `EntryRef` (compact entries, text arena memory / mapped temp file,
+  interner, `iso_to_ms` / `ms_to_iso`).
 - `src/logdef.rs` – log definitions: `.def` parsing, loading/overrides, choice by name/content,
   `DefState::parse()` line → `LogEntry`, `Schema` / `Column` / `Role`.
 - `src/export.rs` – pure export logic (range merging, time filter, date input parsing, last-N, output).
@@ -82,9 +99,14 @@ Features (all implemented, see README for user-facing details):
 
 ## Commands
 - `cargo build --release` → `target\release\rustrace.exe`
-- `cargo test` (25 tests: parsers, chunked/ANSI/UTF-16 reading, log definitions (CBS, DISM, IIS,
-  choice by name/content, appending across refreshes), export incl. end-to-end and visible rows as
-  highlighted rows, error codes, i18n completeness, config migration)
+- `cargo test` (30 tests: parsers, chunked/ANSI/UTF-16 reading, log definitions (CBS, DISM, IIS,
+  choice by name/content, appending across refreshes), store (32-byte record, ISO ↔ ms, push /
+  truncate / append, mapped temp file growing past 64 MB, interner), export incl. end-to-end and
+  visible rows as highlighted rows, error codes, i18n completeness, config migration)
+- Benchmark (ignored test, Windows): `RUSTRACE_BENCH_FILE=<log> cargo test --release
+  bench_large_file -- --ignored --nocapture` (`RUSTRACE_BENCH_MAPPED=1` = temp file); prints load /
+  search / random access times and private bytes. A realistic 400 MB CMTrace log can be generated
+  with a small script (random components, threads, messages, ~1 % multi-line).
 - `cargo clippy`
 - `scripts\package.ps1` → `dist\RusTrace-v<version>-windows-x64.exe` (7-Zip SFX, extracts to
   `RusTrace\` with `rustrace.exe` + `lang\` + `logdef\` + `LICENSE`) and `.sha256`. Needs 7-Zip.
@@ -115,15 +137,17 @@ Features (all implemented, see README for user-facing details):
 12. Export option "rows visible in the table" as the highlighted rows (context from the whole file).
 13. Log definitions (owner's idea): `logdef\*.def` files, built-in IIS (W3C) / DISM / CBS,
     View → Log format, dynamic table columns, extra columns in search/rules/details/readable export.
+14. Memory saving (owner's idea): measured first, then compact `LogStore`, text in a memory-mapped
+    temp file for big logs (View menu setting, 💾 in the status bar), DX12 preferred on Windows.
 
 ## Ideas not done yet (offered to the owner)
 - Several logs at once in tabs / merged by time (like CMTrace "Merge").
 - Filter by component or time range in the main view.
 
 ## Ideas not done yet (offered by the owner)
-- Instead of loading the entire file into the computer's memory, try to conserve memory as much as possible—for example, by using the page file—but ensure it doesn't negatively impact performance!
-  Plan proposed to the owner (2026-10-24): measure first; step 1 = compact storage (one text arena
-  instead of 4 `String`s per entry, interned components / repeated values, date as `i64`, generic
-  per-schema columns so log definitions fit); step 2 = the arena in a memory-mapped temp file
-  (`FILE_ATTRIBUTE_TEMPORARY` + `DELETE_ON_CLOSE`), optional above a size threshold. Do **not**
-  map the original log (on Windows it blocks the writer from truncating / rotating it).
+- (none open – the memory saving and the log definitions are done, see History 13 and 14)
+
+## Possible further memory work (not done)
+- The "original lines" export reads the whole log file into memory (`read_line_ranges`), a
+  temporary peak of ~2× the file size while exporting; could stream the file instead.
+- `filtered: Vec<usize>` could be `Vec<u32>` (8 → 4 bytes per visible row).

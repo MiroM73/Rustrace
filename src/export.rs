@@ -4,7 +4,7 @@
 //! Overlapping or touching ranges are merged, so every entry is exported at most once.
 //! The result is a list of blocks; blocks can be separated in the output.
 
-use crate::parser::LogEntry;
+use crate::store::{EntryRef, LogStore};
 use serde::{Deserialize, Serialize};
 
 /// Output format of the export.
@@ -42,17 +42,9 @@ pub fn merge_ranges(hits: &[usize], before: usize, after: usize, len: usize) -> 
 // Time filter and block limit
 // ----------------------------------------------------------------------
 
-/// Timestamp of an entry as a comparable ISO string ("YYYY-MM-DD HH:MM:SS.mmm"),
-/// or `None` when the log line has no date/time.
-pub fn timestamp(e: &LogEntry) -> Option<&str> {
-    let b = e.datetime.as_bytes();
-    (b.len() >= 10 && b[4] == b'-' && b[7] == b'-' && b[..4].iter().all(u8::is_ascii_digit))
-        .then_some(e.datetime.as_str())
-}
-
-/// Newest timestamp in the log (entries are not always strictly ordered).
-pub fn latest_timestamp(entries: &[LogEntry]) -> Option<String> {
-    entries.iter().filter_map(timestamp).max().map(str::to_owned)
+/// Newest timestamp in the log in milliseconds (entries are not always strictly ordered).
+pub fn latest_timestamp(store: &LogStore) -> Option<i64> {
+    (0..store.len()).filter_map(|i| store.timestamp(i)).max()
 }
 
 /// Parses a user-entered date/time into the ISO form used by the parser.
@@ -140,15 +132,15 @@ pub fn hours_before(iso: &str, hours: i64) -> Option<String> {
     Some((t - chrono::Duration::hours(hours)).format("%Y-%m-%d %H:%M:%S%.3f").to_string())
 }
 
-/// Keeps only hits at or after `since`. Entries without a timestamp are dropped
+/// Keeps only hits at or after `since` (milliseconds). Entries without a timestamp are dropped
 /// when a time filter is active (their time is unknown).
-pub fn filter_hits_since(hits: &[usize], entries: &[LogEntry], since: Option<&str>) -> Vec<usize> {
+pub fn filter_hits_since(hits: &[usize], store: &LogStore, since: Option<i64>) -> Vec<usize> {
     match since {
         None => hits.to_vec(),
         Some(since) => hits
             .iter()
             .copied()
-            .filter(|&i| timestamp(&entries[i]).is_some_and(|t| t >= since))
+            .filter(|&i| store.timestamp(i).is_some_and(|t| t >= since))
             .collect(),
     }
 }
@@ -158,14 +150,14 @@ pub fn filter_hits_since(hits: &[usize], entries: &[LogEntry], since: Option<&st
 /// (e.g. plain lines inside a CMTrace log) are kept.
 pub fn clip_blocks_since(
     blocks: &[(usize, usize)],
-    entries: &[LogEntry],
-    since: Option<&str>,
+    store: &LogStore,
+    since: Option<i64>,
 ) -> Vec<(usize, usize)> {
     let Some(since) = since else { return blocks.to_vec() };
     blocks
         .iter()
         .filter_map(|&(a, b)| {
-            let start = (a..=b).find(|&i| timestamp(&entries[i]).is_none_or(|t| t >= since))?;
+            let start = (a..=b).find(|&i| store.timestamp(i).is_none_or(|t| t >= since))?;
             Some((start, b))
         })
         .collect()
@@ -187,12 +179,13 @@ pub fn row_count(blocks: &[(usize, usize)]) -> usize {
 }
 
 /// Physical file lines (1-based, inclusive) covered by a block of entries.
-pub fn line_range(entries: &[LogEntry], block: (usize, usize)) -> (usize, usize) {
+pub fn line_range(store: &LogStore, block: (usize, usize)) -> (usize, usize) {
     let (a, b) = block;
-    let first = entries[a].line_no;
-    let last = match entries.get(b + 1) {
-        Some(next) => next.line_no.saturating_sub(1).max(entries[b].line_no),
-        None => entries[b].line_no + entries[b].message.lines().count().max(1) - 1,
+    let first = store.line_no(a);
+    let last = if b + 1 < store.len() {
+        store.line_no(b + 1).saturating_sub(1).max(store.line_no(b))
+    } else {
+        store.line_no(b) + store.message(b).lines().count().max(1) - 1
     };
     (first, last)
 }
@@ -231,7 +224,7 @@ pub struct ReadableRow<'a> {
     pub line: usize,
     pub datetime: String,
     pub severity: String,
-    pub entry: &'a LogEntry,
+    pub entry: EntryRef<'a>,
 }
 
 /// Builds the readable tab-separated table. `header` is the localized column header line;
@@ -279,7 +272,8 @@ pub fn build_readable(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::parser::Severity;
+    use crate::parser::{LogEntry, Severity};
+    use crate::store::iso_to_ms;
 
     fn entry(line_no: usize, msg: &str) -> LogEntry {
         LogEntry {
@@ -311,7 +305,7 @@ mod tests {
     #[test]
     fn line_ranges_with_multiline_entries() {
         // entry 1 spans lines 2-4 (multi-line message)
-        let e = vec![entry(1, "a"), entry(2, "b\nc\nd"), entry(5, "e"), entry(6, "f\ng")];
+        let e = LogStore::from_entries([entry(1, "a"), entry(2, "b\nc\nd"), entry(5, "e"), entry(6, "f\ng")]);
         assert_eq!(line_range(&e, (0, 1)), (1, 4));
         assert_eq!(line_range(&e, (2, 3)), (5, 7));
     }
@@ -324,13 +318,13 @@ mod tests {
         let with_sep = build_original(&ranges, &lines, true);
         assert!(with_sep.starts_with("-------- 1 – 2 --------\r\na\r\nb\r\n\r\n-------- 10 – 10"));
 
-        let e = entry(7, "two\nlines");
+        let e = LogStore::from_entries([entry(7, "two\nlines")]);
         let rows = vec![vec![ReadableRow {
             highlighted: true,
             line: 7,
             datetime: "t".into(),
             severity: "Error".into(),
-            entry: &e,
+            entry: e.at(0),
         }]];
         let txt = build_readable("H", &rows, &[(7, 8)], false, 0);
         assert_eq!(txt, "H\r\n»\t7\tt\tError\t\t\ttwo ↵ lines\r\n");
@@ -338,12 +332,13 @@ mod tests {
         // Extra columns of a log definition follow the message (missing values are empty).
         let mut e2 = entry(9, "GET /");
         e2.extra = vec!["500".into()];
+        let e2 = LogStore::from_entries([e2]);
         let rows = vec![vec![ReadableRow {
             highlighted: false,
             line: 9,
             datetime: "t".into(),
             severity: "Error".into(),
-            entry: &e2,
+            entry: e2.at(0),
         }]];
         let txt = build_readable("H", &rows, &[(9, 9)], false, 2);
         assert_eq!(txt, "H\r\n\t9\tt\tError\t\t\tGET /\t500\t\r\n");
@@ -380,7 +375,7 @@ mod tests {
         };
         assert_eq!(entries.len(), 9);
         let hits: Vec<usize> = (0..entries.len())
-            .filter(|&i| entries[i].severity == Severity::Error)
+            .filter(|&i| entries.severity(i) == Severity::Error)
             .collect();
         assert_eq!(hits, vec![2, 4, 8]);
 
@@ -402,7 +397,7 @@ mod tests {
         else {
             panic!()
         };
-        let msgs: Vec<&str> = again.iter().map(|e| e.message.as_str()).collect();
+        let msgs: Vec<&str> = (0..again.len()).map(|i| again.message(i)).collect();
         assert_eq!(msgs, ["two", "ERR A", "four", "ERR B", "multi\nline", "nine", "ERR C"]);
         std::fs::remove_dir_all(&dir).ok();
     }
@@ -411,19 +406,20 @@ mod tests {
     /// rows and the context comes from the whole file, whatever the severity of those rows.
     #[test]
     fn visible_rows_as_highlighted_rows() {
-        let mut e: Vec<LogEntry> = (0..40).map(|i| entry(i + 1, &format!("m{i}"))).collect();
+        let mut v: Vec<LogEntry> = (0..40).map(|i| entry(i + 1, &format!("m{i}"))).collect();
         for i in [3, 12, 25, 33] {
-            e[i].severity = Severity::Error;
+            v[i].severity = Severity::Error;
         }
+        let e = LogStore::from_entries(v);
         // The table shows only errors → these are the highlighted rows.
-        let visible: Vec<usize> = (0..e.len()).filter(|&i| e[i].severity == Severity::Error).collect();
+        let visible: Vec<usize> = (0..e.len()).filter(|&i| e.severity(i) == Severity::Error).collect();
         let blocks = merge_ranges(&visible, 5, 5, e.len());
         assert_eq!(blocks, vec![(0, 17), (20, 38)]); // 25 and 33 overlap → one block
         // Only the last block (around the newest errors); context rows of any severity.
         let last = keep_last_blocks(blocks, Some(1));
         assert_eq!(last, vec![(20, 38)]);
         assert_eq!(row_count(&last), 19);
-        assert!((20..=38).any(|i| e[i].severity == Severity::Info));
+        assert!((20..=38).any(|i| e.severity(i) == Severity::Info));
     }
 
     fn timed(i: usize, time: &str) -> LogEntry {
@@ -455,16 +451,17 @@ mod tests {
 
     #[test]
     fn time_filter_and_last_blocks() {
-        let e: Vec<LogEntry> = (0..10)
-            .map(|i| timed(i, &format!("2026-10-23 10:00:{:02}.000", i)))
-            .chain([timed(10, "")]) // a line without a timestamp
-            .collect();
-        let since = Some("2026-10-23 10:00:05.000");
+        let e = LogStore::from_entries(
+            (0..10)
+                .map(|i| timed(i, &format!("2026-10-23 10:00:{:02}.000", i)))
+                .chain([timed(10, "")]), // a line without a timestamp
+        );
+        let since = iso_to_ms("2026-10-23 10:00:05.000");
         assert_eq!(filter_hits_since(&[2, 5, 8, 10], &e, since), vec![5, 8]);
         assert_eq!(filter_hits_since(&[2, 5], &e, None), vec![2, 5]);
         // block 3..=7 is clipped to start at entry 5; block 0..=2 disappears completely
         assert_eq!(clip_blocks_since(&[(0, 2), (3, 7), (8, 10)], &e, since), vec![(5, 7), (8, 10)]);
-        assert_eq!(latest_timestamp(&e).unwrap(), "2026-10-23 10:00:09.000");
+        assert_eq!(latest_timestamp(&e), iso_to_ms("2026-10-23 10:00:09.000"));
 
         let b = vec![(0, 1), (3, 4), (6, 7)];
         assert_eq!(keep_last_blocks(b.clone(), Some(2)), vec![(3, 4), (6, 7)]);

@@ -28,6 +28,8 @@ menu.view.theme.system = Podľa systému
 menu.view.theme.light = Svetlá
 menu.view.theme.dark = Tmavá
 menu.view.font_size = Veľkosť písma:
+menu.view.temp_file = Text logu v dočasnom súbore od
+menu.view.temp_file.tip = Šetrí pamäť pri veľkých logoch: text správ je v dočasnom súbore, ktorý Windows drží v cache, kým je voľná pamäť (rovnako rýchle ako pamäť). Platí pri načítaní súboru od začiatku (otvorenie, Ctrl+F5).
 menu.view.language = Jazyk
 menu.view.format = Formát logu
 format.auto = Automaticky
@@ -101,6 +103,7 @@ status.refresh_every = každých {value} {unit}
 status.paused = Obnova pozastavená
 status.last_change = Posledná zmena: {time}
 status.no_file = Žiadny súbor
+status.temp_file = Text logu je v dočasnom súbore ({size}) – šetrí pamäť
 status.format.tip = Formát logu – zmeníš ho v Zobraziť → Formát logu
 
 # --- Tabuľka ---

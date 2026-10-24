@@ -45,6 +45,10 @@ Open a specific file: `rustrace.exe C:\Windows\CCM\Logs\AppEnforce.log`
 
 Tests: `cargo test`
 
+Benchmark (loading, search, random access and memory on a big log, Windows):
+`RUSTRACE_BENCH_FILE=<log> cargo test --release bench_large_file -- --ignored --nocapture`
+(`RUSTRACE_BENCH_MAPPED=1` = text in a temporary file)
+
 The C runtime is linked statically (`.cargo/config.toml`), so the exe runs without the
 Visual C++ Redistributable.
 
@@ -73,10 +77,32 @@ Visual C++ Redistributable.
 - **Pause / Resume** (Ctrl+P), manual refresh F5, full reload Ctrl+F5
 - reading runs **in a background thread** in 8 MB chunks – the window never freezes, even with logs of
   hundreds of MB; the first load shows progress in % with a **Cancel** button, later refreshes in the status bar
-- only newly appended data is read; test: 400 MB / 2.2 million lines ≈ 3 s (release build),
-  memory roughly 2× the file size
+- only newly appended data is read; test: 400 MB / 1.8 million lines ≈ 3.7 s (release build)
 - detects truncation/rotation (e.g. when ConfigMgr rolls a log over to `.lo_`) and reloads the file
 - "Follow end" – sticks to the last line; turns off when you scroll/navigate manually, End turns it on again
+
+**Memory**
+- entries are stored compactly: 32 bytes per entry plus the message text; components, threads
+  and other repeating values are stored only once, date/time as a number
+- **log text in a temporary file** (View → "Log text in a temporary file from … MB", default on,
+  from 100 MB): the message text of big logs is kept in a memory-mapped temporary file in `%TEMP%`
+  that only RusTrace can open and that Windows deletes when the program ends. While memory is free
+  Windows keeps it cached (as fast as memory); when memory is short it drops those pages instead of
+  swapping the program. The status bar shows 💾 when it is used. Applies when a file is read from
+  the start (open, Ctrl+F5). The log file itself is never mapped, so the program writing it can
+  still truncate or rotate it.
+- on Windows the window is drawn with Direct3D 12 when available (the graphics drivers alone take
+  ~190 MB less than with the default choice); `WGPU_BACKEND=vulkan|gl` overrides it
+- measured with a 400 MB CMTrace log (1.8 million lines), private bytes of the whole program:
+
+  | | private bytes | working set |
+  |---|---|---|
+  | version 0.2.0 | 1231 MB | 938 MB |
+  | log text in a temporary file (default) | 421 MB | 419 MB |
+  | everything in memory | 582 MB | 419 MB |
+
+  of which ~325 MB is the window and graphics stack itself; loading takes the same time and
+  searching is slightly faster than before
 
 **Color highlighting** (Highlighting → Highlight rules, Ctrl+H)
 - any number of rules: plain text or **regex**, optional case sensitivity
@@ -273,6 +299,8 @@ The built-in languages live in `lang/*.lang` in the source tree and are embedded
 ## Source layout
 
 - `src/parser.rs` – incremental chunked file reading with progress, encoding detection, format parsing (+ tests)
+- `src/store.rs` – compact entry storage: 32-byte records, text arena in memory or in a
+  memory-mapped temporary file, string interner, date/time as milliseconds (+ tests)
 - `src/logdef.rs` – log definitions: `.def` file format, loading, choosing by file name / content,
   parsing lines into columns (+ tests)
 - `src/errcodes.rs` – error code detection and lookup (+ tests)

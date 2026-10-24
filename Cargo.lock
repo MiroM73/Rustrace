@@ -3065,6 +3065,7 @@ dependencies = [
  "eframe",
  "egui_extras",
  "encoding_rs",
+ "memmap2",
  "open",
  "regex",
  "rfd",

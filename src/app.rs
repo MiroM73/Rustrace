@@ -3,7 +3,8 @@ use crate::errcodes::{self, CodeInfo};
 use crate::export::{self, ExportFormat, ReadableRow};
 use crate::i18n;
 use crate::logdef::{self, Column as LogColumn, ColumnKind, LogDef, Role, Schema};
-use crate::parser::{FormatChoice, LogEntry, LogSource, PollResult, Progress, Severity};
+use crate::parser::{FormatChoice, LogSource, PollResult, Progress, Severity};
+use crate::store::{iso_to_ms, ms_to_iso, EntryRef, LogStore};
 use crate::t;
 use eframe::egui::{
     self, text::LayoutJob, Align, Color32, FontId, Key, Layout, Modifiers, RichText, Sense,
@@ -81,7 +82,7 @@ pub struct App {
     file_size: u64,
     /// The file is added to recent files only after it has been read successfully.
     pending_recent: Option<String>,
-    entries: Vec<LogEntry>,
+    entries: LogStore,
     /// Number of "final" entries; provisional ones follow (incomplete last line).
     committed_len: usize,
     /// Indexes of the displayed entries (after filtering).
@@ -201,7 +202,7 @@ impl App {
             encoding_name: "",
             file_size: 0,
             pending_recent: None,
-            entries: Vec::new(),
+            entries: LogStore::new(),
             committed_len: 0,
             filtered: Vec::new(),
             is_match: Vec::new(),
@@ -357,13 +358,13 @@ impl App {
         self.refilter_from(0);
     }
 
-    fn entry_matches(re: &Regex, e: &LogEntry) -> bool {
-        re.is_match(&e.message) || Self::other_columns_match(re, e)
+    fn entry_matches(re: &Regex, e: &EntryRef) -> bool {
+        re.is_match(e.message) || Self::other_columns_match(re, e)
     }
 
     /// Component or one of the extra columns of a log definition matches.
-    fn other_columns_match(re: &Regex, e: &LogEntry) -> bool {
-        re.is_match(&e.component) || e.extra.iter().any(|v| re.is_match(v))
+    fn other_columns_match(re: &Regex, e: &EntryRef) -> bool {
+        re.is_match(e.component) || e.extras().any(|v| re.is_match(v))
     }
 
     /// (Re)loads the log definitions; a chosen definition is replaced by its new version.
@@ -407,12 +408,12 @@ impl App {
     }
 
     /// Text of a column for an entry (date/time formatted for display).
-    fn cell_text(&self, e: &LogEntry, kind: ColumnKind) -> String {
+    fn cell_text(&self, e: &EntryRef, kind: ColumnKind) -> String {
         match kind {
-            ColumnKind::Role(Role::Message) => e.message.clone(),
-            ColumnKind::Role(Role::Component) => e.component.clone(),
-            ColumnKind::Role(Role::DateTime) => self.display_dt(&e.datetime),
-            ColumnKind::Role(Role::Thread) => e.thread.clone(),
+            ColumnKind::Role(Role::Message) => e.message.to_owned(),
+            ColumnKind::Role(Role::Component) => e.component.to_owned(),
+            ColumnKind::Role(Role::DateTime) => self.display_dt(&e.datetime()),
+            ColumnKind::Role(Role::Thread) => e.thread.to_owned(),
             ColumnKind::Extra(i) => e.extra(i).to_owned(),
         }
     }
@@ -432,11 +433,11 @@ impl App {
         }
         self.is_match.truncate(start);
         for i in start..self.entries.len() {
-            let e = &self.entries[i];
+            let e = self.entries.at(i);
             let m = self
                 .search_re
                 .as_ref()
-                .is_some_and(|re| Self::entry_matches(re, e));
+                .is_some_and(|re| Self::entry_matches(re, &e));
             self.is_match.push(m);
             let pass_search = !self.filter_mode || self.search_re.is_none() || m;
             if pass_search && self.sev_visible(e.severity) {
@@ -491,7 +492,7 @@ impl App {
         self.source = Some(LogSource::new(path, self.cfg.keyword_severity));
         self.format_choice = FormatChoice::Auto;
         self.schema = Schema::default();
-        self.entries = Vec::new();
+        self.entries = LogStore::new();
         self.filtered.clear();
         self.is_match.clear();
         self.match_count = 0;
@@ -515,6 +516,10 @@ impl App {
         src.keyword_severity = self.cfg.keyword_severity;
         src.defs = self.defs.clone();
         src.format = self.format_choice.clone();
+        src.temp_file_threshold = self
+            .cfg
+            .temp_file_enabled
+            .then(|| u64::from(self.cfg.temp_file_threshold_mb) << 20);
         let progress = Arc::new(Progress::default());
         let (tx, rx) = mpsc::channel();
         let prog = progress.clone();
@@ -584,7 +589,9 @@ impl App {
                 self.status_error = None;
                 self.entries = committed;
                 self.committed_len = self.entries.len();
-                self.entries.extend(provisional);
+                for e in provisional {
+                    self.entries.push(e);
+                }
                 self.selected = None;
                 self.code_cache = None;
                 self.filtered.clear();
@@ -605,9 +612,11 @@ impl App {
                 self.status_error = None;
                 let start = self.committed_len;
                 self.entries.truncate(start);
-                self.entries.extend(committed);
+                self.entries.append(committed);
                 self.committed_len = self.entries.len();
-                self.entries.extend(provisional);
+                for e in provisional {
+                    self.entries.push(e);
+                }
                 if self.selected.is_some_and(|s| s >= start) {
                     self.code_cache = None;
                 }
@@ -675,7 +684,7 @@ impl App {
                 None => n - k,
             };
             let idx = self.filtered[pos];
-            if Self::entry_matches(&re, &self.entries[idx]) {
+            if Self::entry_matches(&re, &self.entries.at(idx)) {
                 self.select_row(pos);
                 return;
             }
@@ -824,7 +833,7 @@ impl App {
             self.select_row(t);
         }
         if copy && let Some(e) = self.selected.and_then(|i| self.entries.get(i)) {
-            ctx.copy_text(e.message.clone());
+            ctx.copy_text(e.message.to_owned());
         }
     }
 
@@ -947,6 +956,24 @@ impl App {
                         )
                         .changed()
                     {
+                        self.cfg_dirty = true;
+                    }
+                });
+                ui.horizontal(|ui| {
+                    let mut changed = ui
+                        .checkbox(&mut self.cfg.temp_file_enabled, t!("menu.view.temp_file"))
+                        .on_hover_text(t!("menu.view.temp_file.tip"))
+                        .changed();
+                    changed |= ui
+                        .add_enabled(
+                            self.cfg.temp_file_enabled,
+                            egui::DragValue::new(&mut self.cfg.temp_file_threshold_mb)
+                                .range(0..=100_000)
+                                .suffix(" MB"),
+                        )
+                        .on_hover_text(t!("menu.view.temp_file.tip"))
+                        .changed();
+                    if changed {
                         self.cfg_dirty = true;
                     }
                 });
@@ -1367,6 +1394,13 @@ impl App {
                     ui.label(format_size(self.file_size));
                     ui.separator();
                 }
+                if self.entries.is_mapped() {
+                    ui.label("💾").on_hover_text(t!(
+                        "status.temp_file",
+                        size = format_size(self.entries.text_len() as u64)
+                    ));
+                    ui.separator();
+                }
                 if self.filtered.len() == self.entries.len() {
                     ui.label(t!("status.entries", count = self.entries.len()));
                 } else {
@@ -1426,7 +1460,7 @@ impl App {
         let codes: Vec<CodeInfo> = self
             .entries
             .get(i)
-            .map(|e| errcodes::find_codes(&e.message))
+            .map(|e| errcodes::find_codes(e.message))
             .unwrap_or_default()
             .into_iter()
             .map(errcodes::lookup)
@@ -1469,7 +1503,7 @@ impl App {
             for c in &self.schema.columns {
                 let value = match c.kind {
                     ColumnKind::Role(Role::Message) => continue,
-                    kind => self.cell_text(e, kind),
+                    kind => self.cell_text(&e, kind),
                 };
                 if value.is_empty() {
                     continue;
@@ -1515,7 +1549,7 @@ impl App {
         let out = egui::ScrollArea::vertical()
             .auto_shrink([false, false])
             .show(ui, |ui| {
-                let mut s = e.message.as_str();
+                let mut s = e.message;
                 ui.add(
                     egui::TextEdit::multiline(&mut s)
                         .desired_width(f32::INFINITY)
@@ -1529,13 +1563,13 @@ impl App {
     }
 
     /// Whole-row colors: (foreground, background).
-    fn row_colors(&self, e: &LogEntry) -> (Option<Color32>, Option<Color32>) {
+    fn row_colors(&self, e: &EntryRef) -> (Option<Color32>, Option<Color32>) {
         // "Whole row" rules take precedence – the first matching one wins.
         for r in &self.rules {
             if r.rule.scope != HighlightScope::Row {
                 continue;
             }
-            let hit = r.regex.is_match(&e.message)
+            let hit = r.regex.is_match(e.message)
                 || (r.rule.match_component && Self::other_columns_match(&r.regex, e));
             if hit {
                 let (fg, bg) = r.rule.colors(self.dark);
@@ -1663,14 +1697,14 @@ impl App {
         .body(|body| {
             body.rows(row_h, self.filtered.len(), |mut row| {
                 let idx = self.filtered[row.index()];
-                let e = &self.entries[idx];
+                let e = self.entries.at(idx);
                 let is_sel = self.selected == Some(idx);
                 row.set_selected(is_sel);
 
                 let (fg, bg) = if is_sel {
                     (None, None)
                 } else {
-                    self.row_colors(e)
+                    self.row_colors(&e)
                 };
                 let fg_col = fg.unwrap_or(default_fg);
 
@@ -1715,13 +1749,13 @@ impl App {
                             });
                         }
                         ColumnKind::Role(Role::Component) => {
-                            row.col(|ui| simple(ui, &e.component));
+                            row.col(|ui| simple(ui, e.component));
                         }
                         ColumnKind::Role(Role::Thread) => {
-                            row.col(|ui| simple(ui, &e.thread));
+                            row.col(|ui| simple(ui, e.thread));
                         }
                         kind => {
-                            row.col(|ui| simple(ui, &self.cell_text(e, kind)));
+                            row.col(|ui| simple(ui, &self.cell_text(&e, kind)));
                         }
                     }
                 }
@@ -1739,7 +1773,7 @@ impl App {
                         action = Some(RowAction::CopyRow(idx));
                         ui.close();
                     }
-                    let codes = errcodes::find_codes(&e.message);
+                    let codes = errcodes::find_codes(e.message);
                     if !codes.is_empty() {
                         ui.separator();
                         for v in codes {
@@ -1785,20 +1819,20 @@ impl App {
             let ctx = ui.ctx().clone();
             match a {
                 RowAction::ExplainCode(v) => self.open_lookup(Some(v)),
-                RowAction::CopyMessage(i) => ctx.copy_text(self.entries[i].message.clone()),
+                RowAction::CopyMessage(i) => ctx.copy_text(self.entries.at(i).message.to_owned()),
                 RowAction::CopyRow(i) => {
-                    let e = &self.entries[i];
+                    let e = self.entries.at(i);
                     let cells: Vec<String> =
-                        columns.iter().map(|c| self.cell_text(e, c.kind)).collect();
+                        columns.iter().map(|c| self.cell_text(&e, c.kind)).collect();
                     ctx.copy_text(cells.join("\t"));
                 }
                 RowAction::SearchComponent(i) => {
-                    self.search_text = self.entries[i].component.clone();
+                    self.search_text = self.entries.at(i).component.to_owned();
                     self.search_regex = false;
                     self.recompile_search();
                 }
                 RowAction::RuleFromComponent(i) => {
-                    let comp = self.entries[i].component.clone();
+                    let comp = self.entries.at(i).component.to_owned();
                     self.cfg.rules.insert(
                         0,
                         HighlightRule {
@@ -2220,17 +2254,17 @@ impl App {
 
     /// Is the entry "highlighted" according to the export criteria?
     fn is_export_hit(&self, idx: usize) -> bool {
-        let e = &self.entries[idx];
+        let e = self.entries.at(idx);
         let c = &self.cfg;
         (c.export_errors && e.severity == Severity::Error)
             || (c.export_warnings && e.severity == Severity::Warning)
             || (c.export_search && self.is_match.get(idx).copied().unwrap_or(false))
             || (c.export_rules
                 && self.rules.iter().any(|r| {
-                    r.regex.is_match(&e.message)
+                    r.regex.is_match(e.message)
                         || (r.rule.scope == HighlightScope::Row
                             && r.rule.match_component
-                            && Self::other_columns_match(&r.regex, e))
+                            && Self::other_columns_match(&r.regex, &e))
                 }))
     }
 
@@ -2258,7 +2292,8 @@ impl App {
     /// Newest timestamp in the log (cached).
     fn latest_ts(&mut self) -> Option<String> {
         if self.latest_ts.as_ref().is_none_or(|(g, _)| *g != self.data_gen) {
-            self.latest_ts = Some((self.data_gen, export::latest_timestamp(&self.entries)));
+            let latest = export::latest_timestamp(&self.entries).map(ms_to_iso);
+            self.latest_ts = Some((self.data_gen, latest));
         }
         self.latest_ts.as_ref().and_then(|(_, t)| t.clone())
     }
@@ -2288,9 +2323,10 @@ impl App {
         } else {
             self.export_hits().to_vec()
         };
-        let hits = export::filter_hits_since(&all_hits, &self.entries, since.as_deref());
+        let since = since.as_deref().and_then(iso_to_ms);
+        let hits = export::filter_hits_since(&all_hits, &self.entries, since);
         let blocks = export::merge_ranges(&hits, before, after, len);
-        let blocks = export::clip_blocks_since(&blocks, &self.entries, since.as_deref());
+        let blocks = export::clip_blocks_since(&blocks, &self.entries, since);
         let last = self.cfg.export_last_enabled.then_some(self.cfg.export_last_blocks);
         let blocks = export::keep_last_blocks(blocks, last);
         // Count only hits that are really exported.
@@ -2409,7 +2445,8 @@ impl App {
                         let sel_ts = self
                             .selected
                             .and_then(|i| self.entries.get(i))
-                            .and_then(|e| export::timestamp(e).map(str::to_owned));
+                            .and_then(|e| e.timestamp())
+                            .map(ms_to_iso);
                         if ui
                             .add_enabled(sel_ts.is_some(), egui::Button::new(t!("export.since.selected")))
                             .clicked()
@@ -2545,11 +2582,11 @@ impl App {
                 .map(|&(a, b)| {
                     (a..=b)
                         .map(|i| {
-                            let e = &self.entries[i];
+                            let e = self.entries.at(i);
                             ReadableRow {
                                 highlighted: hits.binary_search(&i).is_ok(),
                                 line: e.line_no,
-                                datetime: self.display_dt(&e.datetime),
+                                datetime: self.display_dt(&e.datetime()),
                                 severity: match e.severity {
                                     Severity::Error => t!("severity.error"),
                                     Severity::Warning => t!("severity.warning"),
