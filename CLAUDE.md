@@ -132,8 +132,9 @@ Features (all implemented, see README for user-facing details):
   search / random access times and private bytes. A realistic 400 MB CMTrace log can be generated
   with a small script (random components, threads, messages, ~1 % multi-line).
 - `cargo clippy`
-- `scripts\package.ps1` → `dist\RusTrace-v<version>-windows-x64.exe` (7-Zip SFX, extracts to
-  `RusTrace\` with `rustrace.exe` + `lang\` + `logdef\` + `LICENSE`) and `.sha256`. Needs 7-Zip.
+- `scripts\package.ps1` → `dist\RusTrace-v<version>-windows-x64.exe` (7-Zip SFX) and `.zip` (same
+  content, for extracting manually), each with a `.sha256`; both extract to
+  `RusTrace\` with `rustrace.exe` + `lang\` + `logdef\` + `LICENSE`. Needs 7-Zip.
 - Releases: push tag `v<version>` (matching `Cargo.toml`) → GitHub Actions `release.yml` tests,
   builds, packages and creates a **draft** release; then publish it. Manual workflow run = artifact only.
 - Rust (rustup, stable MSVC) is installed on the owner's PC since 2026-10-24 (VS 2019 C++ tools);
@@ -170,6 +171,8 @@ Features (all implemented, see README for user-facing details):
     File column only for logs of several files) incl. rotation while watching.
 18. Memory protection for long-watched logs: automatic move to the temp file + size limit that
     removes the oldest records (owner agreed to dropping old records from memory and view).
+19. Release v0.3.0 (log definitions, memory saving, column filters, time range, rotated logs,
+    memory limit); the release now also contains a plain ZIP next to the self-extracting .exe.
 
 ## Ideas not done yet (offered to the owner)
 - Merge **different** logs into one view sorted by time (like CMTrace File → Open → "Merge

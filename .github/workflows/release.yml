@@ -1,5 +1,5 @@
-# Builds the Windows release and packages it as a self-extracting archive.
-# - push of a tag "v*"  -> creates a draft GitHub release with the archive attached
+# Builds the Windows release and packages it as a self-extracting archive and a plain ZIP.
+# - push of a tag "v*"  -> creates a draft GitHub release with both archives attached
 # - manual run          -> only uploads the archive as a workflow artifact (for testing)
 name: Release
 

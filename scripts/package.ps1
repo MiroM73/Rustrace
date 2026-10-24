@@ -4,8 +4,9 @@
 
 .DESCRIPTION
     Takes the release build of rustrace.exe, the built-in language files and log definitions and
-    produces dist\RusTrace-<version>-windows-x64.exe - a 7-Zip self-extracting archive (7z.sfx).
-    Running it asks for a destination folder and extracts:
+    produces dist\RusTrace-<version>-windows-x64.exe - a 7-Zip self-extracting archive (7z.sfx) -
+    and dist\RusTrace-<version>-windows-x64.zip with the same content, each with a .sha256 file.
+    Running the .exe asks for a destination folder and extracts:
 
         RusTrace\
             rustrace.exe
@@ -79,12 +80,24 @@ try {
     $out.Dispose()
 }
 Remove-Item $archive -Force
+
+# Plain ZIP with the same RusTrace folder, for people who prefer to extract it themselves.
+$zip = Join-Path $dist "RusTrace-$Version-windows-x64.zip"
+if (Test-Path $zip) { Remove-Item $zip -Force }
+Push-Location $stage
+try {
+    & $sevenZip a -tzip -mx=9 $zip 'RusTrace' | Out-Null
+    if ($LASTEXITCODE -ne 0) { throw "7-Zip failed with exit code $LASTEXITCODE" }
+} finally {
+    Pop-Location
+}
 Remove-Item $stage -Recurse -Force
 
-$hash = (Get-FileHash $output -Algorithm SHA256).Hash.ToLower()
-# LF line ending, so "sha256sum -c" on Linux / macOS reads the file too.
-[System.IO.File]::WriteAllText("$output.sha256", "$hash  $(Split-Path $output -Leaf)`n",
-    [System.Text.Encoding]::ASCII)
-
-Write-Host "Created $output"
-Write-Host "SHA256  $hash"
+foreach ($file in @($output, $zip)) {
+    $hash = (Get-FileHash $file -Algorithm SHA256).Hash.ToLower()
+    # LF line ending, so "sha256sum -c" on Linux / macOS reads the file too.
+    [System.IO.File]::WriteAllText("$file.sha256", "$hash  $(Split-Path $file -Leaf)`n",
+        [System.Text.Encoding]::ASCII)
+    Write-Host "Created $file"
+    Write-Host "SHA256  $hash"
+}

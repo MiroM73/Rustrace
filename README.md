@@ -14,9 +14,13 @@ highlighted rows with their context and a translatable user interface.
 
 ## Download
 
-Ready-made Windows builds are on the [Releases](https://github.com/MiroM73/Rustrace/releases) page:
-`RusTrace-<version>-windows-x64.exe` is a self-extracting archive. Run it, choose a destination
-folder, and it creates:
+Ready-made Windows builds are on the [Releases](https://github.com/MiroM73/Rustrace/releases) page,
+in two forms with the same content:
+
+- `RusTrace-<version>-windows-x64.exe` – self-extracting archive: run it and choose a destination folder,
+- `RusTrace-<version>-windows-x64.zip` – plain ZIP to extract yourself (e.g. Explorer → Extract all).
+
+Both create:
 
 ```
 RusTrace\
@@ -26,8 +30,8 @@ RusTrace\
     LICENSE           the Unlicense (public domain)
 ```
 
-The archive is not code-signed, so Windows SmartScreen may ask for confirmation
-("More info" → "Run anyway"). The `.sha256` file next to it contains the checksum.
+The programs are not code-signed, so Windows SmartScreen may ask for confirmation
+("More info" → "Run anyway"). The `.sha256` files contain the checksums.
 
 ## Building
 
@@ -55,7 +59,7 @@ Visual C++ Redistributable.
 ### Making a release
 
 - Locally: `cargo build --release`, then `scripts\package.ps1` (needs 7-Zip) →
-  `dist\RusTrace-v<version>-windows-x64.exe` + `.sha256`.
+  `dist\RusTrace-v<version>-windows-x64.exe` and `.zip`, each with a `.sha256`.
 - On GitHub: bump `version` in `Cargo.toml`, commit, then push a tag, e.g.
   `git tag v0.1.0 && git push origin v0.1.0`. The workflow `.github/workflows/release.yml` runs the
   tests, builds, packages and creates a **draft** release with the archive attached; review it and
