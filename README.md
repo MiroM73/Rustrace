@@ -186,7 +186,16 @@ Visual C++ Redistributable.
   - the date/time column is filtered as displayed (e.g. `23.10.2026 10:2`)
   - an active field is highlighted, the button shows the number of active filters, ✖ in the line
     column clears them all; they are cleared when a log with other columns is opened
-- the "rows visible in the table" export uses the column filters too
+- **Time range** (toolbar button 🕑) – show only records from – to a date/time:
+  - entered in the date format of the UI language or as ISO; the time is optional; either bound
+    may stay empty (only "from" or only "to")
+  - "to" includes the whole entered day / hour / minute / second (`23.10.2026` = the whole day,
+    `23.10.2026 10:30` = up to 10:30:59.999)
+  - presets: from / to the selected row, last hour, last 24 h (relative to the newest record)
+  - rows without a date/time are hidden while a range is active; invalid input is marked ⚠
+  - works together with the search filter, the severity toggles and the column filters; the
+    button shows "(on)" while a range is active, also when the row is hidden
+- the "rows visible in the table" export uses the column filters and the time range too
 
 Settings and rules are saved automatically to `%APPDATA%\RusTrace\config.json`
 (Linux: `~/.config/RusTrace/config.json`).

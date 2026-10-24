@@ -173,6 +173,8 @@ pub struct Config {
     pub show_details: bool,
     /// Show the filter row under the column headers.
     pub show_column_filters: bool,
+    /// Show the time range (from – to) filter row.
+    pub show_time_range: bool,
     /// "system" | "dark" | "light"
     pub theme: String,
     /// Font size of the log text (table and message in the details pane).
@@ -235,6 +237,7 @@ impl Default for Config {
             recent_files: Vec::new(),
             show_details: true,
             show_column_filters: false,
+            show_time_range: false,
             theme: "system".into(),
             font_size: 13.0,
             ui_zoom: 1.0,

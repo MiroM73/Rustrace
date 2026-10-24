@@ -4,7 +4,7 @@
 //! Overlapping or touching ranges are merged, so every entry is exported at most once.
 //! The result is a list of blocks; blocks can be separated in the output.
 
-use crate::store::{EntryRef, LogStore};
+use crate::store::{iso_to_ms, EntryRef, LogStore};
 use serde::{Deserialize, Serialize};
 
 /// Output format of the export.
@@ -122,6 +122,30 @@ pub fn parse_datetime_input(input: &str, date_pattern: &str) -> Option<String> {
         "{} {hh:02}:{mm:02}:{ss:02}.{ms:03}",
         date.format("%Y-%m-%d")
     ))
+}
+
+/// Parses one bound of a time range (milliseconds) – the same input as
+/// [`parse_datetime_input`]. For the inclusive end (`end = true`) the parts that were not
+/// entered are filled up: a date alone means the whole day, `10` the whole hour, `10:30` the
+/// whole minute, `10:30:15` the whole second.
+pub fn parse_range_bound(input: &str, date_pattern: &str, end: bool) -> Option<i64> {
+    let ms = iso_to_ms(&parse_datetime_input(input, date_pattern)?)?;
+    if !end {
+        return Some(ms);
+    }
+    let time = input.trim().split_once(['T', ' ']).map_or("", |(_, t)| t.trim());
+    let rest = if time.is_empty() {
+        86_400_000
+    } else if time.contains(['.', ',']) {
+        1
+    } else {
+        match time.split(':').count() {
+            1 => 3_600_000,
+            2 => 60_000,
+            _ => 1000,
+        }
+    };
+    Some(ms + rest - 1)
 }
 
 /// ISO timestamp `hours` before the given ISO timestamp (for "last hour" style presets).
@@ -432,6 +456,21 @@ mod tests {
             severity: Severity::Info,
             extra: Vec::new(),
         }
+    }
+
+    #[test]
+    fn range_bounds() {
+        let sk = "{d}.{m}.{y}";
+        let ms = |s: &str| iso_to_ms(s).unwrap();
+        // The start is exactly what was entered.
+        assert_eq!(parse_range_bound("23.10.2026 10:30", sk, false), Some(ms("2026-10-23 10:30:00.000")));
+        // The end includes the whole entered day / hour / minute / second.
+        assert_eq!(parse_range_bound("23.10.2026", sk, true), Some(ms("2026-10-23 23:59:59.999")));
+        assert_eq!(parse_range_bound("23.10.2026 10", sk, true), Some(ms("2026-10-23 10:59:59.999")));
+        assert_eq!(parse_range_bound("23.10.2026 10:30", sk, true), Some(ms("2026-10-23 10:30:59.999")));
+        assert_eq!(parse_range_bound("2026-10-23T10:30:15", sk, true), Some(ms("2026-10-23 10:30:15.999")));
+        assert_eq!(parse_range_bound("2026-10-23 10:30:15.250", sk, true), Some(ms("2026-10-23 10:30:15.250")));
+        assert_eq!(parse_range_bound("nonsense", sk, true), None);
     }
 
     #[test]

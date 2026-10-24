@@ -100,6 +100,17 @@ toolbar.column_filters.tip = Zeigt unter jeder Spaltenüberschrift ein Filterfel
 filter.hint = Filter
 filter.tip = Text = enthält (Groß-/Kleinschreibung egal)\n=Text = genau dieser Wert\na|b = einer davon\n! am Anfang = keiner davon (z. B. !Info|=0)
 filter.clear = Alle Spaltenfilter löschen
+toolbar.time_range = Zeitraum
+toolbar.time_range.active = Zeitraum (aktiv)
+toolbar.time_range.tip = Nur Einträge von – bis Datum/Uhrzeit anzeigen. Ein aktiver Zeitraum gilt auch bei ausgeblendeter Zeile.
+time.from = Von
+time.to = bis
+time.tip = Datum/Uhrzeit im Datumsformat der Oberflächensprache oder ISO; die Uhrzeit ist optional.\n„bis“ schließt den ganzen eingegebenen Tag / die Stunde / Minute / Sekunde ein.\nZeilen ohne Datum/Uhrzeit werden bei aktivem Zeitraum ausgeblendet.
+time.invalid = Ungültiges Datum/Uhrzeit. Beispiel: {example}
+time.from_selected = Ab ausgewählter Zeile
+time.to_selected = Bis ausgewählte Zeile
+time.clear = Löschen
+time.no_time = Dieses Log enthält keine Datums-/Zeitangaben.
 search.not_found = Nicht gefunden
 
 # --- Statusleiste ---

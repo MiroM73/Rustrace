@@ -114,6 +114,17 @@ toolbar.column_filters.tip = Shows a filter field under every column header – 
 filter.hint = filter
 filter.tip = text = contains (case-insensitive)\n=text = exactly this value\na|b = any of them\n! at the start = none of them (e.g. !Info|=0)
 filter.clear = Clear all column filters
+toolbar.time_range = Time range
+toolbar.time_range.active = Time range (on)
+toolbar.time_range.tip = Show only records from – to a date/time. An active range keeps working while the row is hidden.
+time.from = From
+time.to = to
+time.tip = Date/time in the date format of the UI language or ISO; the time is optional.\n"to" includes the whole entered day / hour / minute / second.\nRows without a date/time are hidden while a range is active.
+time.invalid = Invalid date/time. Example: {example}
+time.from_selected = From selected row
+time.to_selected = To selected row
+time.clear = Clear
+time.no_time = This log has no date/time information.
 search.not_found = Not found
 
 # --- Status bar ---

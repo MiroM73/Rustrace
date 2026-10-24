@@ -100,6 +100,17 @@ toolbar.column_filters.tip = Zobrazí pole pro filtr pod záhlavím každého sl
 filter.hint = filtr
 filter.tip = text = obsahuje (bez ohledu na velikost písmen)\n=text = přesně tato hodnota\na|b = kterákoli z nich\n! na začátku = žádná z nich (např. !Info|=0)
 filter.clear = Zrušit všechny filtry sloupců
+toolbar.time_range = Časový rozsah
+toolbar.time_range.active = Časový rozsah (zapnutý)
+toolbar.time_range.tip = Zobrazit jen záznamy od – do data a času. Aktivní rozsah platí i při skrytém řádku.
+time.from = Od
+time.to = do
+time.tip = Datum a čas ve formátu data jazyka rozhraní nebo ISO; čas je nepovinný.\n„do“ zahrnuje celý zadaný den / hodinu / minutu / sekundu.\nŘádky bez data a času jsou při aktivním rozsahu skryté.
+time.invalid = Neplatné datum/čas. Příklad: {example}
+time.from_selected = Od vybraného řádku
+time.to_selected = Do vybraného řádku
+time.clear = Zrušit
+time.no_time = Tento log neobsahuje datum a čas.
 search.not_found = Nenalezeno
 
 # --- Stavový řádek ---

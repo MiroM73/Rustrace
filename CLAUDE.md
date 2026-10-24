@@ -104,7 +104,7 @@ Features (all implemented, see README for user-facing details):
 
 ## Commands
 - `cargo build --release` → `target\release\rustrace.exe`
-- `cargo test` (31 tests: column filter syntax, parsers, chunked/ANSI/UTF-16 reading, log definitions (CBS, DISM, IIS,
+- `cargo test` (32 tests: time range bounds, column filter syntax, parsers, chunked/ANSI/UTF-16 reading, log definitions (CBS, DISM, IIS,
   choice by name/content, appending across refreshes), store (32-byte record, ISO ↔ ms, push /
   truncate / append, mapped temp file growing past 64 MB, interner), export incl. end-to-end and
   visible rows as highlighted rows, error codes, i18n completeness, config migration)
@@ -145,10 +145,11 @@ Features (all implemented, see README for user-facing details):
 14. Memory saving (owner's idea): measured first, then compact `LogStore`, text in a memory-mapped
     temp file for big logs (View menu setting, 💾 in the status bar), DX12 preferred on Windows.
 15. Column filters: filter row under the headers, adapts to the columns of the open log type.
+16. Time range filter (from – to) in the main view: `cfg.show_time_range`, `App::time_range` (ms),
+    `export::parse_range_bound` (inclusive end fills up the missing day/hour/minute/second).
 
 ## Ideas not done yet (offered to the owner)
 - Several logs at once in tabs / merged by time (like CMTrace "Merge").
-- Time range filter (from – to) in the main view (column filters only match the date/time as text).
 
 ## Ideas not done yet (offered by the owner)
 - (none open – the memory saving and the log definitions are done, see History 13 and 14)

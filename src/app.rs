@@ -160,6 +160,11 @@ pub struct App {
     /// Texts of the column filters (filter row under the headers) and their compiled form.
     col_filter_text: HashMap<ColumnKind, String>,
     col_filters: Vec<(ColumnKind, ColumnFilter)>,
+    /// Time range filter: texts as entered, parsed bounds (ms) and which text is invalid.
+    time_from: String,
+    time_to: String,
+    time_range: (Option<i64>, Option<i64>),
+    time_invalid: (bool, bool),
 }
 
 /// Limits of Ctrl + mouse wheel zoom.
@@ -256,6 +261,10 @@ impl App {
             schema: Schema::default(),
             col_filter_text: HashMap::new(),
             col_filters: Vec::new(),
+            time_from: String::new(),
+            time_to: String::new(),
+            time_range: (None, None),
+            time_invalid: (false, false),
         };
         app.load_defs();
         app.apply_theme(&cc.egui_ctx);
@@ -326,6 +335,8 @@ impl App {
         self.code_cache = None;
         self.lookup_cache = None;
         self.cfg_dirty = true;
+        // The date order of the time range texts depends on the language.
+        self.apply_time_range();
     }
 
     fn recompile_rules(&mut self) {
@@ -447,7 +458,11 @@ impl App {
                 .is_some_and(|re| Self::entry_matches(re, &e));
             self.is_match.push(m);
             let pass_search = !self.filter_mode || self.search_re.is_none() || m;
-            if pass_search && self.sev_visible(e.severity) && self.passes_column_filters(&e) {
+            if pass_search
+                && self.sev_visible(e.severity)
+                && self.in_time_range(e.timestamp())
+                && self.passes_column_filters(&e)
+            {
                 self.filtered.push(i);
             }
         }
@@ -468,6 +483,39 @@ impl App {
             ColumnKind::Role(Role::DateTime) => f.matches(&self.display_dt(&e.datetime())),
             ColumnKind::Extra(i) => f.matches(e.extra(*i)),
         })
+    }
+
+    /// The time range filter lets the entry through. With an active range, entries without
+    /// a date/time are hidden (their time is unknown).
+    fn in_time_range(&self, ts: Option<i64>) -> bool {
+        match self.time_range {
+            (None, None) => true,
+            (from, to) => ts.is_some_and(|t| from.is_none_or(|f| t >= f) && to.is_none_or(|x| t <= x)),
+        }
+    }
+
+    fn time_range_active(&self) -> bool {
+        self.time_range != (None, None)
+    }
+
+    /// Parses the from / to texts and filters the table again.
+    fn apply_time_range(&mut self) {
+        let parse = |text: &str, end: bool| {
+            if text.trim().is_empty() {
+                (None, false)
+            } else {
+                let b = export::parse_range_bound(text, &self.date_format, end);
+                (b, b.is_none())
+            }
+        };
+        let (from, from_bad) = parse(&self.time_from, false);
+        let (to, to_bad) = parse(&self.time_to, true);
+        self.time_invalid = (from_bad, to_bad);
+        if (from, to) != self.time_range {
+            self.time_range = (from, to);
+            self.filtered.clear();
+            self.refilter_from(0);
+        }
     }
 
     /// Compiles the column filter texts and filters the table again.
@@ -1383,6 +1431,18 @@ impl App {
             {
                 self.cfg_dirty = true;
             }
+            let label = if self.time_range_active() {
+                t!("toolbar.time_range.active")
+            } else {
+                t!("toolbar.time_range")
+            };
+            if ui
+                .toggle_value(&mut self.cfg.show_time_range, format!("🕑 {label}"))
+                .on_hover_text(t!("toolbar.time_range.tip"))
+                .changed()
+            {
+                self.cfg_dirty = true;
+            }
             if ui.button("⬆").on_hover_text(t!("search.prev.tip")).clicked() {
                 self.find(false);
             }
@@ -1426,7 +1486,90 @@ impl App {
                 self.show_rules = true;
             }
         });
+        if self.cfg.show_time_range {
+            self.time_range_row(ui);
+        }
         ui.add_space(2.0);
+    }
+
+    /// Time range filter: from / to fields with presets.
+    fn time_range_row(&mut self, ui: &mut egui::Ui) {
+        let latest = self.latest_ts();
+        let example = self.input_dt(latest.as_deref().unwrap_or("2026-10-23 08:00:00.000"));
+        let selected = self
+            .selected
+            .and_then(|i| self.entries.get(i))
+            .and_then(|e| e.timestamp())
+            .map(|ms| self.input_dt(&ms_to_iso(ms)));
+        let mut changed = false;
+        ui.horizontal_wrapped(|ui| {
+            ui.label(format!("🕑 {}", t!("time.from")));
+            fn field<'a>(text: &'a mut String, hint: &str) -> egui::TextEdit<'a> {
+                egui::TextEdit::singleline(text)
+                    .hint_text(hint)
+                    .desired_width(170.0)
+                    .font(TextStyle::Monospace)
+            }
+            changed |= ui
+                .add(field(&mut self.time_from, &example))
+                .on_hover_text(t!("time.tip"))
+                .changed();
+            if self.time_invalid.0 {
+                ui.colored_label(RED, "⚠").on_hover_text(t!("time.invalid", example = example));
+            }
+            ui.label(t!("time.to"));
+            changed |= ui
+                .add(field(&mut self.time_to, &example))
+                .on_hover_text(t!("time.tip"))
+                .changed();
+            if self.time_invalid.1 {
+                ui.colored_label(RED, "⚠").on_hover_text(t!("time.invalid", example = example));
+            }
+            ui.separator();
+            if ui
+                .add_enabled(selected.is_some(), egui::Button::new(t!("time.from_selected")))
+                .clicked()
+            {
+                self.time_from = selected.clone().unwrap_or_default();
+                changed = true;
+            }
+            if ui
+                .add_enabled(selected.is_some(), egui::Button::new(t!("time.to_selected")))
+                .clicked()
+            {
+                self.time_to = selected.clone().unwrap_or_default();
+                changed = true;
+            }
+            for (hours, key) in [(1, "export.since.last_hour"), (24, "export.since.last_day")] {
+                if ui
+                    .add_enabled(latest.is_some(), egui::Button::new(t!(key)))
+                    .on_hover_text(t!("export.since.presets.tip"))
+                    .clicked()
+                {
+                    let from = latest.as_deref().and_then(|l| export::hours_before(l, hours));
+                    self.time_from = from.map(|f| self.input_dt(&f)).unwrap_or_default();
+                    self.time_to.clear();
+                    changed = true;
+                }
+            }
+            if ui
+                .add_enabled(
+                    !self.time_from.is_empty() || !self.time_to.is_empty(),
+                    egui::Button::new(format!("✖ {}", t!("time.clear"))),
+                )
+                .clicked()
+            {
+                self.time_from.clear();
+                self.time_to.clear();
+                changed = true;
+            }
+            if self.cur_path.is_some() && latest.is_none() && !self.entries.is_empty() {
+                ui.colored_label(ORANGE, t!("time.no_time"));
+            }
+        });
+        if changed {
+            self.apply_time_range();
+        }
     }
 
     fn status_bar(&mut self, ui: &mut egui::Ui) {
