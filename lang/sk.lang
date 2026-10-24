@@ -94,6 +94,12 @@ search.next.tip = Ďalší (F3 / Enter)
 search.invalid_regex = Neplatný regex
 search.matches = Zhody: {count}
 search.clear.tip = Zrušiť hľadanie
+toolbar.column_filters = Filtre stĺpcov
+toolbar.column_filters.active = Filtre stĺpcov ({count})
+toolbar.column_filters.tip = Zobrazí pole na filter pod hlavičkou každého stĺpca – polia sa prispôsobia stĺpcom typu otvoreného logu. Aktívne filtre platia aj pri skrytom riadku.
+filter.hint = filter
+filter.tip = text = obsahuje (bez ohľadu na veľkosť písmen)\n=text = presne táto hodnota\na|b = ktorákoľvek z nich\n! na začiatku = žiadna z nich (napr. !Info|=0)
+filter.clear = Zrušiť všetky filtre stĺpcov
 search.not_found = Nenájdené
 
 # --- Stavový riadok ---

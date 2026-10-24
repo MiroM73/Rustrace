@@ -56,6 +56,11 @@ Features (all implemented, see README for user-facing details):
   elsewhere → whole-UI `zoom_factor` (0.5–3.0, saved as `cfg.ui_zoom`, also Ctrl+plus/minus/0).
   Hover is tracked per frame in `hover_log`, applied in `handle_zoom` after the panels are drawn.
 - Search: text/regex, next/prev, filter mode, info/warning/error toggles.
+- Column filters (`src/colfilter.rs`, toolbar toggle `cfg.show_column_filters`): filter row in the
+  table header built from `Schema::columns` (adapts to the log type); `App::col_filter_text`
+  (by `ColumnKind`) → `col_filters` compiled; checked in `refilter_from` via
+  `passes_column_filters` (date/time as displayed). Syntax: contains / `=exact` / `a|b` / leading
+  `!` negation, case-insensitive. Cleared when the columns change (other log type).
 - Error code lookup (Ctrl+E) + automatic explanation in the details pane; descriptions from language
   files (`code.0xXXXXXXXX`) + Windows `FormatMessageW` (also wininet/winhttp).
 - Export highlighted rows with context (Ctrl+Shift+S): lines before/after, criteria (rules, errors,
@@ -99,7 +104,7 @@ Features (all implemented, see README for user-facing details):
 
 ## Commands
 - `cargo build --release` → `target\release\rustrace.exe`
-- `cargo test` (30 tests: parsers, chunked/ANSI/UTF-16 reading, log definitions (CBS, DISM, IIS,
+- `cargo test` (31 tests: column filter syntax, parsers, chunked/ANSI/UTF-16 reading, log definitions (CBS, DISM, IIS,
   choice by name/content, appending across refreshes), store (32-byte record, ISO ↔ ms, push /
   truncate / append, mapped temp file growing past 64 MB, interner), export incl. end-to-end and
   visible rows as highlighted rows, error codes, i18n completeness, config migration)
@@ -139,10 +144,11 @@ Features (all implemented, see README for user-facing details):
     View → Log format, dynamic table columns, extra columns in search/rules/details/readable export.
 14. Memory saving (owner's idea): measured first, then compact `LogStore`, text in a memory-mapped
     temp file for big logs (View menu setting, 💾 in the status bar), DX12 preferred on Windows.
+15. Column filters: filter row under the headers, adapts to the columns of the open log type.
 
 ## Ideas not done yet (offered to the owner)
 - Several logs at once in tabs / merged by time (like CMTrace "Merge").
-- Filter by component or time range in the main view.
+- Time range filter (from – to) in the main view (column filters only match the date/time as text).
 
 ## Ideas not done yet (offered by the owner)
 - (none open – the memory saving and the log definitions are done, see History 13 and 14)

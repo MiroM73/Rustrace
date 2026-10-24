@@ -94,6 +94,12 @@ search.next.tip = Nächster (F3 / Eingabe)
 search.invalid_regex = Ungültiger Regex
 search.matches = Treffer: {count}
 search.clear.tip = Suche löschen
+toolbar.column_filters = Spaltenfilter
+toolbar.column_filters.active = Spaltenfilter ({count})
+toolbar.column_filters.tip = Zeigt unter jeder Spaltenüberschrift ein Filterfeld – die Felder richten sich nach den Spalten des geöffneten Log-Typs. Aktive Filter gelten auch bei ausgeblendeter Zeile.
+filter.hint = Filter
+filter.tip = Text = enthält (Groß-/Kleinschreibung egal)\n=Text = genau dieser Wert\na|b = einer davon\n! am Anfang = keiner davon (z. B. !Info|=0)
+filter.clear = Alle Spaltenfilter löschen
 search.not_found = Nicht gefunden
 
 # --- Statusleiste ---

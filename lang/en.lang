@@ -108,6 +108,12 @@ search.next.tip = Next (F3 / Enter)
 search.invalid_regex = Invalid regex
 search.matches = Matches: {count}
 search.clear.tip = Clear search
+toolbar.column_filters = Column filters
+toolbar.column_filters.active = Column filters ({count})
+toolbar.column_filters.tip = Shows a filter field under every column header – the fields follow the columns of the open log type. Active filters keep working while the row is hidden.
+filter.hint = filter
+filter.tip = text = contains (case-insensitive)\n=text = exactly this value\na|b = any of them\n! at the start = none of them (e.g. !Info|=0)
+filter.clear = Clear all column filters
 search.not_found = Not found
 
 # --- Status bar ---

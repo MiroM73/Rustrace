@@ -176,6 +176,17 @@ Visual C++ Redistributable.
 - Enter/F3 = next, Shift+Enter/Shift+F3 = previous
 - **Filter** (Ctrl+L) – show only matching rows
 - Info / Warnings / Errors toggles
+- **Column filters** (toolbar button) – a filter field under every column header; the fields
+  always follow the columns of the open log type (CMTrace, DISM, CBS, IIS or your own log
+  definition). All active column filters must match, together with the search filter and the
+  severity toggles. Syntax (case-insensitive):
+  - `text` – the value contains the text, `=text` – exactly this value
+  - `a|b` – any of them (`Error|Warning`, `=404|=500`)
+  - `!` at the start – none of them (`!Info`, `!=0`)
+  - the date/time column is filtered as displayed (e.g. `23.10.2026 10:2`)
+  - an active field is highlighted, the button shows the number of active filters, ✖ in the line
+    column clears them all; they are cleared when a log with other columns is opened
+- the "rows visible in the table" export uses the column filters too
 
 Settings and rules are saved automatically to `%APPDATA%\RusTrace\config.json`
 (Linux: `~/.config/RusTrace/config.json`).
@@ -299,6 +310,7 @@ The built-in languages live in `lang/*.lang` in the source tree and are embedded
 ## Source layout
 
 - `src/parser.rs` – incremental chunked file reading with progress, encoding detection, format parsing (+ tests)
+- `src/colfilter.rs` – column filter syntax (+ tests)
 - `src/store.rs` – compact entry storage: 32-byte records, text arena in memory or in a
   memory-mapped temporary file, string interner, date/time as milliseconds (+ tests)
 - `src/logdef.rs` – log definitions: `.def` file format, loading, choosing by file name / content,

@@ -1,4 +1,5 @@
 use crate::config::{Config, HighlightRule, HighlightScope, IntervalUnit};
+use crate::colfilter::ColumnFilter;
 use crate::errcodes::{self, CodeInfo};
 use crate::export::{self, ExportFormat, ReadableRow};
 use crate::i18n;
@@ -12,6 +13,7 @@ use eframe::egui::{
 };
 use egui_extras::{Column, TableBuilder};
 use regex::{Regex, RegexBuilder};
+use std::collections::HashMap;
 use std::path::PathBuf;
 use std::sync::atomic::Ordering;
 use std::sync::{mpsc, Arc};
@@ -155,6 +157,9 @@ pub struct App {
     format_choice: FormatChoice,
     /// Columns of the current log.
     schema: Schema,
+    /// Texts of the column filters (filter row under the headers) and their compiled form.
+    col_filter_text: HashMap<ColumnKind, String>,
+    col_filters: Vec<(ColumnKind, ColumnFilter)>,
 }
 
 /// Limits of Ctrl + mouse wheel zoom.
@@ -249,6 +254,8 @@ impl App {
             def_errors: Vec::new(),
             format_choice: FormatChoice::Auto,
             schema: Schema::default(),
+            col_filter_text: HashMap::new(),
+            col_filters: Vec::new(),
         };
         app.load_defs();
         app.apply_theme(&cc.egui_ctx);
@@ -440,7 +447,7 @@ impl App {
                 .is_some_and(|re| Self::entry_matches(re, &e));
             self.is_match.push(m);
             let pass_search = !self.filter_mode || self.search_re.is_none() || m;
-            if pass_search && self.sev_visible(e.severity) {
+            if pass_search && self.sev_visible(e.severity) && self.passes_column_filters(&e) {
                 self.filtered.push(i);
             }
         }
@@ -450,6 +457,32 @@ impl App {
         {
             self.selected = None;
         }
+    }
+
+    /// All column filters match the entry (the date/time as displayed).
+    fn passes_column_filters(&self, e: &EntryRef) -> bool {
+        self.col_filters.iter().all(|(kind, f)| match kind {
+            ColumnKind::Role(Role::Message) => f.matches(e.message),
+            ColumnKind::Role(Role::Component) => f.matches(e.component),
+            ColumnKind::Role(Role::Thread) => f.matches(e.thread),
+            ColumnKind::Role(Role::DateTime) => f.matches(&self.display_dt(&e.datetime())),
+            ColumnKind::Extra(i) => f.matches(e.extra(*i)),
+        })
+    }
+
+    /// Compiles the column filter texts and filters the table again.
+    fn apply_column_filters(&mut self) {
+        self.col_filters = self
+            .schema
+            .columns
+            .iter()
+            .filter_map(|c| {
+                let text = self.col_filter_text.get(&c.kind)?;
+                ColumnFilter::parse(text).map(|f| (c.kind, f))
+            })
+            .collect();
+        self.filtered.clear();
+        self.refilter_from(0);
     }
 
     /// Formats an ISO date-time ("2026-10-23 13:22:01.123") using the language pattern.
@@ -556,6 +589,11 @@ impl App {
                 self.encoding_name = src.encoding_name();
                 self.file_size = src.file_size;
                 if self.schema != *src.schema() {
+                    // Other columns (another log type): the column filters no longer apply.
+                    if self.schema.columns != src.schema().columns {
+                        self.col_filter_text.clear();
+                        self.col_filters.clear();
+                    }
                     self.schema = src.schema().clone();
                 }
                 self.source = Some(src);
@@ -1332,6 +1370,19 @@ impl App {
             if changed {
                 self.recompile_search();
             }
+            let active = self.col_filters.len();
+            let label = if active > 0 {
+                t!("toolbar.column_filters.active", count = active)
+            } else {
+                t!("toolbar.column_filters")
+            };
+            if ui
+                .toggle_value(&mut self.cfg.show_column_filters, label)
+                .on_hover_text(t!("toolbar.column_filters.tip"))
+                .changed()
+            {
+                self.cfg_dirty = true;
+            }
             if ui.button("⬆").on_hover_text(t!("search.prev.tip")).clicked() {
                 self.find(false);
             }
@@ -1687,10 +1738,48 @@ impl App {
             .chain(columns.iter().map(Self::column_title))
             .collect();
 
-        tb.header(22.0, |mut h| {
-            for title in headers {
+        // Filter row under the headers: one field per column of the current log type.
+        let show_filters = self.cfg.show_column_filters;
+        let mut filter_texts: Vec<String> = columns
+            .iter()
+            .map(|c| self.col_filter_text.get(&c.kind).cloned().unwrap_or_default())
+            .collect();
+        let mut filters_changed = false;
+        let mut clear_filters = false;
+        let any_filter = !self.col_filters.is_empty();
+        let header_h = if show_filters { 48.0 } else { 22.0 };
+
+        tb.header(header_h, |mut h| {
+            for (i, title) in headers.into_iter().enumerate() {
                 h.col(|ui| {
-                    ui.strong(title);
+                    ui.vertical(|ui| {
+                        ui.strong(title);
+                        if !show_filters {
+                            return;
+                        }
+                        if i == 0 {
+                            // The line column: button that clears all column filters.
+                            if ui
+                                .add_enabled(any_filter, egui::Button::new("✖").small())
+                                .on_hover_text(t!("filter.clear"))
+                                .clicked()
+                            {
+                                clear_filters = true;
+                            }
+                        } else {
+                            let text = &mut filter_texts[i - 1];
+                            let active = ColumnFilter::parse(text).is_some();
+                            let mut edit = egui::TextEdit::singleline(text)
+                                .id_salt(("column_filter", i))
+                                .hint_text(t!("filter.hint"))
+                                .desired_width(f32::INFINITY);
+                            if active {
+                                edit = edit.background_color(c32(self.cfg.palette(self.dark).search.1).gamma_multiply(0.35));
+                            }
+                            filters_changed |=
+                                ui.add(edit).on_hover_text(t!("filter.tip")).changed();
+                        }
+                    });
                 });
             }
         })
@@ -1814,6 +1903,19 @@ impl App {
 
         if let Some(i) = clicked {
             self.selected = Some(i);
+        }
+        if clear_filters {
+            self.col_filter_text.clear();
+            self.apply_column_filters();
+        } else if filters_changed {
+            for (c, text) in columns.iter().zip(filter_texts) {
+                if text.is_empty() {
+                    self.col_filter_text.remove(&c.kind);
+                } else {
+                    self.col_filter_text.insert(c.kind, text);
+                }
+            }
+            self.apply_column_filters();
         }
         if let Some(a) = action {
             let ctx = ui.ctx().clone();

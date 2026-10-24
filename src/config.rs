@@ -171,6 +171,8 @@ pub struct Config {
     pub search_bg_dark: [u8; 4],
     pub recent_files: Vec<String>,
     pub show_details: bool,
+    /// Show the filter row under the column headers.
+    pub show_column_filters: bool,
     /// "system" | "dark" | "light"
     pub theme: String,
     /// Font size of the log text (table and message in the details pane).
@@ -232,6 +234,7 @@ impl Default for Config {
             search_bg_dark: [240, 150, 30, 255],
             recent_files: Vec::new(),
             show_details: true,
+            show_column_filters: false,
             theme: "system".into(),
             font_size: 13.0,
             ui_zoom: 1.0,
