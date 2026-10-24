@@ -127,6 +127,13 @@ Features (all implemented, see README for user-facing details):
   choice by name/content, appending across refreshes), store (32-byte record, ISO ↔ ms, push /
   truncate / append, mapped temp file growing past 64 MB, interner), export incl. end-to-end and
   visible rows as highlighted rows, error codes, i18n completeness, config migration)
+- **Test logs**: `python scripts/gen_testlogs.py [--small-only]` creates `testlogs/` (in `.gitignore`,
+  ~650 MB with the big ones, ~1 min) – CMTrace (UTF-8, UTF-8 BOM, UTF-16 LE, multi-line, unfinished
+  last line), SMS format, plain ANSI 1250 / without timestamps, CBS, DISM, IIS (two `#Fields` sets,
+  detection by content), a rotation set with set modification times, big CMTrace 400 MB / CBS
+  100 MB / IIS 100 MB; list in `testlogs/README.txt`. Use these for manual / GUI checks.
+  `cargo test --release testlogs_overview -- --ignored --nocapture` loads all of them and prints
+  format, encoding, files, entries, errors/warnings, dated entries and time.
 - Benchmark (ignored test, Windows): `RUSTRACE_BENCH_FILE=<log> cargo test --release
   bench_large_file -- --ignored --nocapture` (`RUSTRACE_BENCH_MAPPED=1` = temp file); prints load /
   search / random access times and private bytes. A realistic 400 MB CMTrace log can be generated
@@ -173,6 +180,9 @@ Features (all implemented, see README for user-facing details):
     removes the oldest records (owner agreed to dropping old records from memory and view).
 19. Release v0.3.0 (log definitions, memory saving, column filters, time range, rotated logs,
     memory limit); the release now also contains a plain ZIP next to the self-extracting .exe.
+20. Test logs generator (`scripts/gen_testlogs.py`, `testlogs/` not in git) + `testlogs_overview`;
+    it found that a `.lo_` opened directly was merged with itself – fixed (rotated parts opened
+    directly are never merged).
 
 ## Ideas not done yet (offered to the owner)
 - Merge **different** logs into one view sorted by time (like CMTrace File → Open → "Merge

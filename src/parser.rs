@@ -157,6 +157,10 @@ pub fn rotated_parts(active: &Path) -> Vec<PathBuf> {
         return Vec::new();
     };
     let (stem, ext) = (stem.to_lowercase(), ext.to_lowercase());
+    // A rotated part itself (service.lo_) has no older parts of its own.
+    if ext.is_empty() || ext.ends_with('_') {
+        return Vec::new();
+    }
     // "log" → "lo_"
     let rotated_ext = format!("{}_", &ext[..ext.len() - ext.chars().last().map_or(0, char::len_utf8)]);
     let is_part = |name: &str| {
@@ -1014,6 +1018,8 @@ mod tests {
             .map(|p| p.file_name().unwrap().to_string_lossy().into_owned())
             .collect();
         assert_eq!(names, ["Service-20261023-101500.log", "service.lo_"]);
+        // A rotated part opened directly is not merged with anything (not even with itself).
+        assert!(rotated_parts(&dir.join("service.lo_")).is_empty());
         std::fs::remove_dir_all(&dir).ok();
     }
 
@@ -1110,6 +1116,53 @@ mod tests {
         };
         assert_eq!(messages(&committed), [(0, 1, "second line")]);
         std::fs::remove_dir_all(&dir).ok();
+    }
+
+    /// Reads every log in testlogs/ (made by scripts/gen_testlogs.py) like the program does and
+    /// prints format, encoding, files and entry counts:
+    /// `cargo test --release testlogs_overview -- --ignored --nocapture`
+    #[test]
+    #[ignore]
+    fn testlogs_overview() {
+        let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("testlogs");
+        let defs = Arc::new(logdef::load_from(&[]).defs);
+        let mut paths = Vec::new();
+        let mut dirs = vec![root.clone()];
+        while let Some(d) = dirs.pop() {
+            for e in std::fs::read_dir(&d).expect("run scripts/gen_testlogs.py first").flatten() {
+                let p = e.path();
+                if p.is_dir() {
+                    dirs.push(p);
+                } else if p.file_name().is_some_and(|n| n != "README.txt") {
+                    paths.push(p);
+                }
+            }
+        }
+        paths.sort();
+        for p in paths {
+            let mut s = LogSource::new(&p, true);
+            s.defs = defs.clone();
+            s.merge_rotated = true;
+            let t = std::time::Instant::now();
+            let (store, provisional) = match s.poll(&Progress::default()).unwrap() {
+                PollResult::Reset { committed, provisional } => (committed, provisional.len()),
+                _ => panic!(),
+            };
+            let count = |sev| (0..store.len()).filter(|&i| store.at(i).severity == sev).count();
+            let name = s.schema().name.clone();
+            println!(
+                "{:<40} {:<22} {:<11} files={} entries={} (+{provisional} provisional) errors={} warnings={} dated={} {:.2?}",
+                p.strip_prefix(&root).unwrap().display().to_string(),
+                if name.is_empty() { "CMTrace/plain (built-in)".to_owned() } else { name },
+                s.encoding_name(),
+                s.files().len(),
+                store.len(),
+                count(Severity::Error),
+                count(Severity::Warning),
+                (0..store.len()).filter(|&i| store.timestamp(i).is_some()).count(),
+                t.elapsed()
+            );
+        }
     }
 
     /// (private bytes, working set, peak working set) of this process in MB.

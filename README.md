@@ -49,6 +49,13 @@ Open a specific file: `rustrace.exe C:\Windows\CCM\Logs\AppEnforce.log`
 
 Tests: `cargo test`
 
+Test logs: `python scripts/gen_testlogs.py` (add `--small-only` to skip the big ones) creates the
+folder `testlogs\` (not in git) with small and big logs of every supported kind – CMTrace in several
+encodings, multi-line and unfinished entries, the old SMS format, plain text, CBS, DISM, IIS, a set of
+rotated parts – described in `testlogs\README.txt`.
+`cargo test --release testlogs_overview -- --ignored --nocapture` reads all of them and prints the
+detected format, encoding, files and entry counts.
+
 Benchmark (loading, search, random access and memory on a big log, Windows):
 `RUSTRACE_BENCH_FILE=<log> cargo test --release bench_large_file -- --ignored --nocapture`
 (`RUSTRACE_BENCH_MAPPED=1` = text in a temporary file)
@@ -358,7 +365,8 @@ The built-in languages live in `lang/*.lang` in the source tree and are embedded
 - `src/main.rs` – window start-up
 - `lang/*.lang` – built-in translations
 - `logdef/*.def` – built-in log definitions (IIS, DISM, CBS)
-- `scripts/package.ps1` – packs the release build into the self-extracting archive
+- `scripts/package.ps1` – packs the release build into the self-extracting archive and the ZIP
+- `scripts/gen_testlogs.py` – generates the test logs in `testlogs/` (not in git)
 - `.github/workflows/release.yml` – builds and publishes releases on GitHub
 
 - `LICENSE` – the Unlicense (public domain)
