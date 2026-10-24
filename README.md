@@ -255,6 +255,15 @@ Built in: `iisweb.log.def` (IIS web logs `u_ex*.log`, W3C format), `dism.log.def
 After editing, use View → Log format → **Reload log definitions**; errors (invalid regex, unknown key)
 are listed in that menu.
 
+Every `.def` file in these folders is loaded – a copy with another name (e.g. `my-iis.def`) is an
+**additional** definition, it does not replace the built-in one. When the names of several
+definitions match the opened file, the one with the highest priority is used: **your folder**
+(`%APPDATA%\RusTrace\logdef`) → `logdef\` next to the program → built-in; within one folder by file
+name. The status bar shows the definition in use with its file name (the tooltip shows its path)
+and ⚠ when several match; View → Log format lists them with the one in use marked ✔ and shows
+where every definition comes from. To switch a definition off, delete it or change its extension
+(e.g. `my-iis.def.off`), or choose another one in the menu.
+
 **Format** – `key = value` per line, `#` starts a comment line. Example (`cbs.log.def`):
 
 ```

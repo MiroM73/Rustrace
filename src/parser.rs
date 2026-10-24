@@ -272,6 +272,11 @@ impl LogSource {
         &self.state.schema
     }
 
+    /// The log definition in use (`None` = built-in CMTrace / SMS / plain text parser).
+    pub fn active_def(&self) -> Option<Arc<LogDef>> {
+        self.state.def.as_ref().map(|d| d.def().clone())
+    }
+
     fn use_def(&mut self, def: Arc<LogDef>) {
         self.state.def = Some(DefState::new(def, &mut self.state.schema));
     }

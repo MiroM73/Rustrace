@@ -155,6 +155,8 @@ pub struct App {
     def_errors: Vec<String>,
     /// Format chosen for the current file (View → Log format); `Auto` for every newly opened file.
     format_choice: FormatChoice,
+    /// The log definition the current file is read with (`None` = built-in parser).
+    active_def: Option<Arc<LogDef>>,
     /// Columns of the current log.
     schema: Schema,
     /// Texts of the column filters (filter row under the headers) and their compiled form.
@@ -269,6 +271,7 @@ impl App {
             defs: Arc::new(Vec::new()),
             def_errors: Vec::new(),
             format_choice: FormatChoice::Auto,
+            active_def: None,
             schema: Schema::default(),
             col_filter_text: HashMap::new(),
             col_filters: Vec::new(),
@@ -672,6 +675,7 @@ impl App {
         self.cur_path = Some(PathBuf::from(path));
         self.source = Some(LogSource::new(path, self.cfg.keyword_severity));
         self.format_choice = FormatChoice::Auto;
+        self.active_def = None;
         self.schema = Schema::default();
         self.set_files(Vec::new());
         self.dropped = 0;
@@ -747,6 +751,7 @@ impl App {
                     }
                     self.schema = src.schema().clone();
                 }
+                self.active_def = src.active_def();
                 if self.files != src.files() {
                     self.set_files(src.files().to_vec());
                 }
@@ -1245,12 +1250,57 @@ impl App {
     }
 
     /// Name of the format in use.
+    /// Name of the format in use, with the file name of the log definition.
     fn format_name(&self) -> String {
-        if self.schema.name.is_empty() {
-            t!("format.builtin")
-        } else {
-            self.schema.name.clone()
+        match &self.active_def {
+            Some(d) => format!("{} – {}", d.name, d.id),
+            None => t!("format.builtin"),
         }
+    }
+
+    /// Where a log definition comes from (user folder, folder next to the program, built-in).
+    fn def_source(d: &LogDef) -> String {
+        match &d.path {
+            None => t!("format.source.builtin"),
+            Some(p) if logdef::user_def_dir().is_some_and(|u| p.starts_with(u)) => {
+                t!("format.source.user")
+            }
+            Some(_) => t!("format.source.exe"),
+        }
+    }
+
+    /// Log definitions whose file name patterns match the open file (when chosen automatically
+    /// and more than one matches – the first one is used).
+    fn competing_defs(&self) -> Vec<Arc<LogDef>> {
+        match (&self.cur_path, &self.format_choice) {
+            (Some(p), FormatChoice::Auto) => {
+                let m = logdef::matching_by_name(&self.defs, p);
+                if m.len() > 1 { m } else { Vec::new() }
+            }
+            _ => Vec::new(),
+        }
+    }
+
+    /// Tooltip of the format in the status bar: where the definition is loaded from.
+    fn format_tip(&self) -> String {
+        let mut tip = t!("status.format.tip");
+        if let Some(d) = &self.active_def {
+            tip.push('\n');
+            tip.push_str(&d.path.as_ref().map_or_else(Self::builtin_label, |p| p.display().to_string()));
+        }
+        let competing = self.competing_defs();
+        if !competing.is_empty() {
+            tip.push_str("\n\n");
+            tip.push_str(&t!("format.several"));
+            for d in &competing {
+                tip.push_str(&format!("\n• {} – {} ({})", d.name, d.id, Self::def_source(d)));
+            }
+        }
+        tip
+    }
+
+    fn builtin_label() -> String {
+        t!("format.source.builtin")
     }
 
     fn format_menu(&mut self, ui: &mut egui::Ui) {
@@ -1276,16 +1326,25 @@ impl App {
         ui.separator();
         for d in self.defs.iter() {
             let selected = matches!(&self.format_choice, FormatChoice::Def(c) if c.id == d.id);
-            let mut label = format!("{}  ({})", d.name, d.id);
-            if d.path.is_some() {
-                label.push_str(" *");
-            }
+            let label = format!("{}  ({}, {})", d.name, d.id, Self::def_source(d));
             let mut r = ui.radio(selected, label);
             if let Some(p) = &d.path {
                 r = r.on_hover_text(p.display().to_string());
             }
             if r.clicked() {
                 choice = Some(FormatChoice::Def(d.clone()));
+            }
+        }
+        // Several definitions match the open file: show which one is used and why.
+        let competing = self.competing_defs();
+        if !competing.is_empty() {
+            ui.separator();
+            ui.colored_label(ORANGE, format!("⚠ {}", t!("format.several")))
+                .on_hover_text(t!("format.priority.tip"));
+            for (i, d) in competing.iter().enumerate() {
+                let mark = if i == 0 { "✔" } else { "    " };
+                ui.label(format!("{mark} {} – {} ({})", d.name, d.id, Self::def_source(d)))
+                    .on_hover_text(d.path.as_ref().map_or_else(Self::builtin_label, |p| p.display().to_string()));
             }
         }
         ui.separator();
@@ -1720,8 +1779,9 @@ impl App {
                     ui.label(self.encoding_name);
                     ui.separator();
                 }
-                ui.label(format!("📐 {}", self.format_name()))
-                    .on_hover_text(t!("status.format.tip"));
+                let warn = if self.competing_defs().is_empty() { "" } else { " ⚠" };
+                ui.label(format!("📐 {}{warn}", self.format_name()))
+                    .on_hover_text(self.format_tip());
                 ui.separator();
                 if self.file_size > 0 {
                     ui.label(format_size(self.file_size));

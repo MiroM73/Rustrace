@@ -151,6 +151,9 @@ pub struct LogDef {
     pub name: String,
     /// Where it was loaded from (`None` = built-in).
     pub path: Option<PathBuf>,
+    /// Where it comes from: 0 = built-in, then the folders of `load_from` in their order
+    /// (higher wins when several definitions match the same file name).
+    pub priority: u8,
     files: Vec<String>,
     detect: Option<Regex>,
     kind: Kind,
@@ -287,6 +290,7 @@ impl LogDef {
             id: id.to_owned(),
             name: get("name").unwrap_or(stem).to_owned(),
             path,
+            priority: 0,
             files: get("files")
                 .map(|f| {
                     f.split(';')
@@ -498,6 +502,11 @@ impl DefState {
         }
     }
 
+    /// The definition in use.
+    pub fn def(&self) -> &Arc<LogDef> {
+        &self.def
+    }
+
     /// Lines that do not match are appended to the previous entry.
     pub fn appends_unmatched(&self) -> bool {
         self.def.unmatched == Unmatched::Append
@@ -619,14 +628,16 @@ pub fn user_def_dir() -> Option<PathBuf> {
 }
 
 /// Loads the built-in definitions and the `.def` files from `dirs` (later folders override
-/// earlier ones and the built-in files with the same name).
+/// earlier ones and the built-in files with the same name). The result is ordered by priority
+/// (the last folder first, built-in last), then by file name – so when several definitions
+/// match a file, the user's own one wins and the order does not depend on file names alone.
 pub fn load_from(dirs: &[PathBuf]) -> DefSet {
-    let mut texts: BTreeMap<String, (String, String, Option<PathBuf>)> = BUILTIN
+    let mut texts: BTreeMap<String, (String, String, Option<PathBuf>, u8)> = BUILTIN
         .iter()
-        .map(|(id, t)| (id.to_lowercase(), ((*id).to_owned(), (*t).to_owned(), None)))
+        .map(|(id, t)| (id.to_lowercase(), ((*id).to_owned(), (*t).to_owned(), None, 0)))
         .collect();
     let mut set = DefSet::default();
-    for dir in dirs {
+    for (prio, dir) in (1u8..).zip(dirs) {
         let Ok(rd) = std::fs::read_dir(dir) else { continue };
         for e in rd.flatten() {
             let p = e.path();
@@ -636,19 +647,24 @@ pub fn load_from(dirs: &[PathBuf]) -> DefSet {
             let Some(id) = p.file_name().and_then(|s| s.to_str()).map(str::to_owned) else { continue };
             match std::fs::read_to_string(&p) {
                 Ok(t) => {
-                    texts.insert(id.to_lowercase(), (id, t, Some(p)));
+                    texts.insert(id.to_lowercase(), (id, t, Some(p), prio));
                 }
                 Err(err) => set.errors.push(format!("{}: {err}", p.display())),
             }
         }
     }
-    for (id, text, path) in texts.into_values() {
+    for (id, text, path, priority) in texts.into_values() {
         let shown = path.as_ref().map_or_else(|| id.clone(), |p| p.display().to_string());
         match LogDef::parse(&id, &text, path) {
-            Ok(d) => set.defs.push(Arc::new(d)),
+            Ok(d) => set.defs.push(Arc::new(LogDef { priority, ..d })),
             Err(e) => set.errors.push(format!("{shown}: {e}")),
         }
     }
+    set.defs.sort_by(|a, b| {
+        b.priority
+            .cmp(&a.priority)
+            .then_with(|| a.id.to_lowercase().cmp(&b.id.to_lowercase()))
+    });
     set
 }
 
@@ -656,10 +672,15 @@ pub fn load_all() -> DefSet {
     load_from(&def_dirs())
 }
 
-/// The definition for a file by its name (`files` patterns).
+/// The definition for a file by its name (`files` patterns); the first of `matching_by_name`.
 pub fn by_file_name(defs: &[Arc<LogDef>], path: &Path) -> Option<Arc<LogDef>> {
-    let name = path.file_name()?.to_string_lossy();
-    defs.iter().find(|d| d.matches_file(&name)).cloned()
+    matching_by_name(defs, path).into_iter().next()
+}
+
+/// All definitions whose `files` patterns match the file name, in priority order.
+pub fn matching_by_name(defs: &[Arc<LogDef>], path: &Path) -> Vec<Arc<LogDef>> {
+    let Some(name) = path.file_name().map(|n| n.to_string_lossy()) else { return Vec::new() };
+    defs.iter().filter(|d| d.matches_file(&name)).cloned().collect()
 }
 
 /// The definition for a file by its first lines (`detect`).
@@ -841,6 +862,35 @@ mod tests {
         assert_eq!((e[1].message.as_str(), extra(&e[1], &s, "s-ip")), ("POST /b", ""));
         assert_eq!((extra(&e[1], &s, "sc-status"), extra(&e[1], &s, "time-taken")), ("500", "15"));
         assert_eq!(e[1].severity, Severity::Error);
+    }
+
+    /// Several definitions for the same files: the user's folder wins over the folder next to
+    /// the program and over the built-in one, whatever the file names are.
+    #[test]
+    fn priority_of_matching_definitions() {
+        let base = std::env::temp_dir().join(format!("rustrace_defprio_{}", std::process::id()));
+        let (exe_dir, user_dir) = (base.join("exe"), base.join("user"));
+        std::fs::create_dir_all(&exe_dir).unwrap();
+        std::fs::create_dir_all(&user_dir).unwrap();
+        let def = |name: &str| format!("name = {name}\nfiles = u_ex*.log\nformat = w3c\n");
+        std::fs::write(exe_dir.join("iisweb.log.def"), def("next to exe")).unwrap(); // overrides built-in
+        std::fs::write(exe_dir.join("aaa.def"), def("exe aaa")).unwrap();
+        std::fs::write(user_dir.join("zzz.def"), def("user zzz")).unwrap();
+        let set = load_from(&[exe_dir, user_dir]);
+        assert!(set.errors.is_empty(), "{:?}", set.errors);
+        let matching = matching_by_name(&set.defs, Path::new("u_ex261023.log"));
+        let names: Vec<&str> = matching
+            .iter()
+            .map(|d| d.name.as_str())
+            .collect();
+        assert_eq!(names, ["user zzz", "exe aaa", "next to exe"]);
+        assert_eq!(by_file_name(&set.defs, Path::new("x/u_ex1.log")).unwrap().name, "user zzz");
+        let prio: Vec<(&str, u8)> = set.defs.iter().map(|d| (d.id.as_str(), d.priority)).collect();
+        assert_eq!(
+            prio,
+            [("zzz.def", 2), ("aaa.def", 1), ("iisweb.log.def", 1), ("cbs.log.def", 0), ("dism.log.def", 0)]
+        );
+        std::fs::remove_dir_all(&base).ok();
     }
 
     #[test]

@@ -27,6 +27,10 @@ Features (all implemented, see README for user-facing details):
   Roles fill the standard columns (message/component/datetime/thread), `role.severity` + regexes give
   the severity, other groups are extra columns (`LogEntry::extra`, `Schema::extra_names`). The table
   columns come from `Schema` (`LogSource::schema()`); CMTrace = `Schema::default()`. Format choice:
+  Priority when several definitions match a file name: `LogDef::priority` (0 built-in, then the
+  folders of `load_from` in order: exe dir 1, user dir 2), `DefSet::defs` sorted by priority desc,
+  then id; `logdef::matching_by_name`; the UI shows the active definition (`LogSource::active_def`,
+  name – file in the status bar, ⚠ + list in the menu when several match).
   View → Log format (Auto = file name → content `detect` → built-in; CMTrace content never uses
   `detect`), reset to Auto for every newly opened file. `unmatched = append` keeps the last entry
   provisional until the next one starts (`ParserState::pending_entry`).
@@ -187,6 +191,8 @@ Features (all implemented, see README for user-facing details):
 19. Release v0.3.0 (log definitions, memory saving, column filters, time range, rotated logs,
     memory limit); the release now also contains a plain ZIP next to the self-extracting .exe.
 23. Horizontal scroll bar under the table for columns that do not fit (Shift + wheel too).
+24. Log definitions: clear priority (user folder > next to exe > built-in) instead of file-name
+    order, active definition with its file shown, warning when several match (owner's report).
 20. Test logs generator (`scripts/gen_testlogs.py`, `testlogs/` not in git) + `testlogs_overview`;
     it found that a `.lo_` opened directly was merged with itself – fixed (rotated parts opened
     directly are never merged).
