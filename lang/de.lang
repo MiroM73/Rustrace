@@ -30,6 +30,8 @@ menu.view.theme.dark = Dunkel
 menu.view.font_size = Schriftgröße:
 menu.view.temp_file = Log-Text in temporärer Datei ab
 menu.view.temp_file.tip = Spart Speicher bei großen Logs: Der Meldungstext liegt in einer temporären Datei, die Windows im Cache hält, solange Speicher frei ist (so schnell wie Speicher). Gilt beim Lesen einer Datei von Anfang an (Öffnen, Strg+F5).
+menu.view.merge_rotated = Rotierte Teile des Logs zusammenführen (.lo_, -Datum-Zeit.log)
+menu.view.merge_rotated.tip = Beim Öffnen von service.log werden die älteren Teile service.lo_ und service-JJJJMMTT-HHMMSS.log davor als ein Log angezeigt. Wird das Log während der Beobachtung rotiert, geht nichts bereits Gelesenes verloren.
 menu.view.language = Sprache
 menu.view.format = Log-Format
 format.auto = Automatisch
@@ -100,6 +102,7 @@ toolbar.column_filters.tip = Zeigt unter jeder Spaltenüberschrift ein Filterfel
 filter.hint = Filter
 filter.tip = Text = enthält (Groß-/Kleinschreibung egal)\n=Text = genau dieser Wert\na|b = einer davon\n! am Anfang = keiner davon (z. B. !Info|=0)
 filter.clear = Alle Spaltenfilter löschen
+file.overwritten = {name} (überschrieben)
 toolbar.time_range = Zeitraum
 toolbar.time_range.active = Zeitraum (aktiv)
 toolbar.time_range.tip = Nur Einträge von – bis Datum/Uhrzeit anzeigen. Ein aktiver Zeitraum gilt auch bei ausgeblendeter Zeile.
@@ -120,6 +123,7 @@ status.refresh_every = alle {value} {unit}
 status.paused = Aktualisierung pausiert
 status.last_change = Letzte Änderung: {time}
 status.no_file = Keine Datei
+status.parts = {count} Dateien
 status.temp_file = Log-Text liegt in einer temporären Datei ({size}) – spart Speicher
 status.format.tip = Log-Format – ändern unter Ansicht → Log-Format
 
@@ -130,6 +134,7 @@ column.message = Meldung
 column.component = Komponente
 column.datetime = Datum / Uhrzeit
 column.thread = Thread
+column.file = Datei
 
 # --- Kontextmenü ---
 context.copy_message = Meldung kopieren

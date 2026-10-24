@@ -4,7 +4,7 @@ use crate::errcodes::{self, CodeInfo};
 use crate::export::{self, ExportFormat, ReadableRow};
 use crate::i18n;
 use crate::logdef::{self, Column as LogColumn, ColumnKind, LogDef, Role, Schema};
-use crate::parser::{FormatChoice, LogSource, PollResult, Progress, Severity};
+use crate::parser::{FormatChoice, LogSource, PollResult, Progress, Severity, SourceFile};
 use crate::store::{iso_to_ms, ms_to_iso, EntryRef, LogStore};
 use crate::t;
 use eframe::egui::{
@@ -165,6 +165,10 @@ pub struct App {
     time_to: String,
     time_range: (Option<i64>, Option<i64>),
     time_invalid: (bool, bool),
+    /// Files the log is made of (rotated parts + active file; index = file id of the entries)
+    /// and their labels for the File column.
+    files: Vec<SourceFile>,
+    file_labels: Vec<String>,
 }
 
 /// Limits of Ctrl + mouse wheel zoom.
@@ -265,6 +269,8 @@ impl App {
             time_to: String::new(),
             time_range: (None, None),
             time_invalid: (false, false),
+            files: Vec::new(),
+            file_labels: Vec::new(),
         };
         app.load_defs();
         app.apply_theme(&cc.egui_ctx);
@@ -337,6 +343,8 @@ impl App {
         self.cfg_dirty = true;
         // The date order of the time range texts depends on the language.
         self.apply_time_range();
+        let files = std::mem::take(&mut self.files);
+        self.set_files(files);
     }
 
     fn recompile_rules(&mut self) {
@@ -422,6 +430,7 @@ impl App {
             ColumnKind::Role(Role::DateTime) => t!("column.datetime"),
             ColumnKind::Role(Role::Thread) => t!("column.thread"),
             ColumnKind::Extra(_) => String::new(),
+            ColumnKind::File => t!("column.file"),
         }
     }
 
@@ -433,6 +442,7 @@ impl App {
             ColumnKind::Role(Role::DateTime) => self.display_dt(&e.datetime()),
             ColumnKind::Role(Role::Thread) => e.thread.to_owned(),
             ColumnKind::Extra(i) => e.extra(i).to_owned(),
+            ColumnKind::File => self.file_label(e.file),
         }
     }
 
@@ -482,6 +492,7 @@ impl App {
             ColumnKind::Role(Role::Thread) => f.matches(e.thread),
             ColumnKind::Role(Role::DateTime) => f.matches(&self.display_dt(&e.datetime())),
             ColumnKind::Extra(i) => f.matches(e.extra(*i)),
+            ColumnKind::File => f.matches(self.file_labels.get(e.file as usize).map_or("", String::as_str)),
         })
     }
 
@@ -518,11 +529,40 @@ impl App {
         }
     }
 
+    /// Table columns: the columns of the log type, plus the File column first when the log is
+    /// merged from several files (rotated parts).
+    fn columns(&self) -> Vec<LogColumn> {
+        let mut cols = self.schema.columns.clone();
+        if self.files.len() > 1 {
+            cols.insert(
+                0,
+                LogColumn {
+                    kind: ColumnKind::File,
+                    title: Some(t!("column.file")),
+                },
+            );
+        }
+        cols
+    }
+
+    fn set_files(&mut self, files: Vec<SourceFile>) {
+        self.files = files;
+        self.file_labels = (0..self.files.len() as u16).map(|i| self.file_label(i)).collect();
+    }
+
+    /// Name of a file of the log ("(overwritten)" when a later rotation replaced it).
+    fn file_label(&self, id: u16) -> String {
+        match self.files.get(id as usize) {
+            Some(f) if f.path.is_some() => f.name.clone(),
+            Some(f) => t!("file.overwritten", name = f.name),
+            None => String::new(),
+        }
+    }
+
     /// Compiles the column filter texts and filters the table again.
     fn apply_column_filters(&mut self) {
         self.col_filters = self
-            .schema
-            .columns
+            .columns()
             .iter()
             .filter_map(|c| {
                 let text = self.col_filter_text.get(&c.kind)?;
@@ -573,6 +613,7 @@ impl App {
         self.source = Some(LogSource::new(path, self.cfg.keyword_severity));
         self.format_choice = FormatChoice::Auto;
         self.schema = Schema::default();
+        self.set_files(Vec::new());
         self.entries = LogStore::new();
         self.filtered.clear();
         self.is_match.clear();
@@ -597,6 +638,7 @@ impl App {
         src.keyword_severity = self.cfg.keyword_severity;
         src.defs = self.defs.clone();
         src.format = self.format_choice.clone();
+        src.merge_rotated = self.cfg.merge_rotated;
         src.temp_file_threshold = self
             .cfg
             .temp_file_enabled
@@ -644,6 +686,9 @@ impl App {
                     }
                     self.schema = src.schema().clone();
                 }
+                if self.files != src.files() {
+                    self.set_files(src.files().to_vec());
+                }
                 self.source = Some(src);
                 self.apply_result(res);
                 self.last_refresh = Some(Instant::now());
@@ -661,6 +706,8 @@ impl App {
 
     fn apply_result(&mut self, res: std::io::Result<PollResult>) {
         let before = self.filtered.len();
+        // Provisional entries belong to the active file (the last one).
+        let active = self.files.len().saturating_sub(1) as u16;
         if matches!(res, Ok(PollResult::Reset { .. }) | Ok(PollResult::Appended { .. })) {
             self.data_gen += 1;
         }
@@ -676,7 +723,7 @@ impl App {
                 self.entries = committed;
                 self.committed_len = self.entries.len();
                 for e in provisional {
-                    self.entries.push(e);
+                    self.entries.push(e, active);
                 }
                 self.selected = None;
                 self.code_cache = None;
@@ -701,7 +748,7 @@ impl App {
                 self.entries.append(committed);
                 self.committed_len = self.entries.len();
                 for e in provisional {
-                    self.entries.push(e);
+                    self.entries.push(e, active);
                 }
                 if self.selected.is_some_and(|s| s >= start) {
                     self.code_cache = None;
@@ -1063,6 +1110,16 @@ impl App {
                         self.cfg_dirty = true;
                     }
                 });
+                if ui
+                    .checkbox(&mut self.cfg.merge_rotated, t!("menu.view.merge_rotated"))
+                    .on_hover_text(t!("menu.view.merge_rotated.tip"))
+                    .changed()
+                {
+                    self.cfg_dirty = true;
+                    if self.cur_path.is_some() {
+                        self.reload_full();
+                    }
+                }
                 ui.separator();
                 ui.menu_button(format!("📐 {}", t!("menu.view.format")), |ui| {
                     self.format_menu(ui);
@@ -1588,6 +1645,11 @@ impl App {
                     ui.label(format_size(self.file_size));
                     ui.separator();
                 }
+                if self.files.len() > 1 {
+                    ui.label(format!("📚 {}", t!("status.parts", count = self.files.len())))
+                        .on_hover_text(self.file_labels.join("\n"));
+                    ui.separator();
+                }
                 if self.entries.is_mapped() {
                     ui.label("💾").on_hover_text(t!(
                         "status.temp_file",
@@ -1694,7 +1756,7 @@ impl App {
             };
             ui.colored_label(col, txt);
             // Every column except the message (shown below), in the order of the table.
-            for c in &self.schema.columns {
+            for c in &self.columns() {
                 let value = match c.kind {
                     ColumnKind::Role(Role::Message) => continue,
                     kind => self.cell_text(&e, kind),
@@ -1847,7 +1909,7 @@ impl App {
         );
 
         // The columns come from the log format; every layout keeps its own column widths.
-        let columns = self.schema.columns.clone();
+        let columns = self.columns();
         let mut tb = TableBuilder::new(ui)
             .id_salt(("log_table", &self.schema.name, columns.len()))
             .striped(true)
@@ -2813,15 +2875,32 @@ impl App {
         }
         let Some(target) = dlg.save_file() else { return };
 
-        let line_ranges: Vec<(usize, usize)> = blocks
-            .iter()
-            .map(|&b| export::line_range(&self.entries, b))
-            .collect();
+        // Blocks split by file (a log merged from rotated parts); file names only then.
+        let multi = self.files.len() > 1;
+        let segs: Vec<Vec<export::Segment>> =
+            blocks.iter().map(|&b| export::segments(&self.entries, b)).collect();
+        let seg_sep = |s: &export::Segment| {
+            let name = multi.then(|| self.file_label(s.file));
+            export::separator(name.as_deref(), s.lines.0, s.lines.1)
+        };
         let rows = export::row_count(&blocks);
         let separators = self.cfg.export_separators;
         // The readable text is built here (it needs translations and date formatting);
-        // the original lines are read from the file in the thread.
+        // the original lines are read from the files in the thread.
         let readable_text = readable.then(|| {
+            let block_seps: Vec<String> = segs
+                .iter()
+                .map(|parts| match parts.as_slice() {
+                    [one] => seg_sep(one),
+                    many => {
+                        let label: Vec<String> = many
+                            .iter()
+                            .map(|s| format!("{}: {} – {}", self.file_label(s.file), s.lines.0, s.lines.1))
+                            .collect();
+                        format!("-------- {} --------", label.join(", "))
+                    }
+                })
+                .collect();
             let row_blocks: Vec<Vec<ReadableRow<'_>>> = blocks
                 .iter()
                 .map(|&(a, b)| {
@@ -2830,7 +2909,11 @@ impl App {
                             let e = self.entries.at(i);
                             ReadableRow {
                                 highlighted: hits.binary_search(&i).is_ok(),
-                                line: e.line_no,
+                                line: if multi {
+                                    format!("{}:{}", self.file_label(e.file), e.line_no)
+                                } else {
+                                    e.line_no.to_string()
+                                },
                                 datetime: self.display_dt(&e.datetime()),
                                 severity: match e.severity {
                                     Severity::Error => t!("severity.error"),
@@ -2857,8 +2940,39 @@ impl App {
                 header.push_str(title);
             }
             let extra_cols = self.schema.extra_names.len();
-            export::build_readable(&header, &row_blocks, &line_ranges, separators, extra_cols)
+            export::build_readable(&header, &row_blocks, &block_seps, separators, extra_cols)
         });
+        // Original lines: every part is read from its file in the thread; a part whose file
+        // was overwritten by a later rotation falls back to the message texts.
+        enum PartSrc {
+            File { job: usize, range: usize },
+            Text(Vec<String>),
+        }
+        let mut jobs: Vec<(PathBuf, Vec<(usize, usize)>)> = Vec::new();
+        let mut parts: Vec<(String, PartSrc)> = Vec::new();
+        if !readable {
+            for s in segs.iter().flatten() {
+                let src = match self.files.get(s.file as usize).and_then(|f| f.path.clone()) {
+                    Some(path) => {
+                        let job = match jobs.iter().position(|(p, _)| *p == path) {
+                            Some(j) => j,
+                            None => {
+                                jobs.push((path, Vec::new()));
+                                jobs.len() - 1
+                            }
+                        };
+                        jobs[job].1.push(s.lines);
+                        PartSrc::File { job, range: jobs[job].1.len() - 1 }
+                    }
+                    None => PartSrc::Text(
+                        (s.entries.0..=s.entries.1)
+                            .flat_map(|i| self.entries.message(i).lines().map(str::to_owned).collect::<Vec<_>>())
+                            .collect(),
+                    ),
+                };
+                parts.push((seg_sep(s), src));
+            }
+        }
         let nblocks = blocks.len();
         let (tx, rx) = mpsc::channel();
         let ctx = self.ctx.clone();
@@ -2873,8 +2987,22 @@ impl App {
             .spawn(move || {
                 let text = match readable_text {
                     Some(t) => Ok(t),
-                    None => crate::parser::read_line_ranges(&src, &line_ranges)
-                        .map(|lines| export::build_original(&line_ranges, &lines, separators)),
+                    None => jobs
+                        .iter()
+                        .map(|(path, ranges)| crate::parser::read_line_ranges(path, ranges))
+                        .collect::<std::io::Result<Vec<_>>>()
+                        .map(|mut read| {
+                            let parts: Vec<(String, Vec<String>)> = parts
+                                .into_iter()
+                                .map(|(sep, src)| match src {
+                                    PartSrc::File { job, range } => {
+                                        (sep, std::mem::take(&mut read[job][range]))
+                                    }
+                                    PartSrc::Text(t) => (sep, t),
+                                })
+                                .collect();
+                            export::build_original(&parts, separators)
+                        }),
                 };
                 let res = text
                     .and_then(|t| std::fs::write(&target, t))

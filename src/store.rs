@@ -364,6 +364,8 @@ struct Rec {
     line: u32,
     component: u32,
     thread: u32,
+    /// Which file of the log (rotated parts + active file) the entry comes from.
+    file: u16,
     severity: Severity,
 }
 
@@ -392,6 +394,8 @@ pub struct EntryRef<'a> {
     pub component: &'a str,
     pub thread: &'a str,
     pub severity: Severity,
+    /// File id (index into `LogSource::files`).
+    pub file: u16,
 }
 
 impl<'a> EntryRef<'a> {
@@ -461,7 +465,8 @@ impl LogStore {
         self.text.reserve(text_bytes);
     }
 
-    pub fn push(&mut self, e: LogEntry) {
+    /// Adds an entry of file `file` (index into `LogSource::files`).
+    pub fn push(&mut self, e: LogEntry, file: u16) {
         let start = self.text.len() as u64;
         self.text.push_str(&e.message);
         let ts = if e.datetime.is_empty() {
@@ -475,6 +480,7 @@ impl LogStore {
             line: e.line_no.min(u32::MAX as usize) as u32,
             component: self.strings.intern(&e.component),
             thread: self.strings.intern(&e.thread),
+            file,
             severity: e.severity,
         });
         let n = self.recs.len();
@@ -553,6 +559,7 @@ impl LogStore {
             component: self.strings.get(r.component),
             thread: self.strings.get(r.thread),
             severity: r.severity,
+            file: r.file,
         }
     }
 
@@ -569,6 +576,11 @@ impl LogStore {
 
     pub fn line_no(&self, i: usize) -> usize {
         self.recs[i].line as usize
+    }
+
+    /// File id of entry `i`.
+    pub fn file(&self, i: usize) -> u16 {
+        self.recs[i].file
     }
 
     /// Milliseconds since 1970 (`None` without an ISO date/time).
@@ -594,7 +606,7 @@ impl LogStore {
     pub fn from_entries(entries: impl IntoIterator<Item = LogEntry>) -> Self {
         let mut s = Self::new();
         for e in entries {
-            s.push(e);
+            s.push(e, 0);
         }
         s
     }
@@ -638,9 +650,9 @@ mod tests {
     #[test]
     fn push_get_truncate_append() {
         let mut s = LogStore::new();
-        s.push(entry(1, "one", "CompA", "2026-10-23 10:00:00.000", &[]));
-        s.push(entry(2, "two\nlines", "CompB", "13:00:00", &["x", "y"]));
-        s.push(entry(4, "", "CompA", "", &["z"]));
+        s.push(entry(1, "one", "CompA", "2026-10-23 10:00:00.000", &[]), 0);
+        s.push(entry(2, "two\nlines", "CompB", "13:00:00", &["x", "y"]), 0);
+        s.push(entry(4, "", "CompA", "", &["z"]), 0);
         assert_eq!(s.len(), 3);
         let e = s.at(1);
         assert_eq!((e.line_no, e.message, e.component, e.thread), (2, "two\nlines", "CompB", "7 (0x0007)"));
@@ -660,12 +672,12 @@ mod tests {
         s.truncate(1);
         assert_eq!(s.len(), 1);
         assert_eq!(s.text_len(), 3);
-        s.push(entry(5, "five", "CompC", "2026-10-23 11:00:00.000", &[]));
+        s.push(entry(5, "five", "CompC", "2026-10-23 11:00:00.000", &[]), 0);
         assert_eq!(s.message(0), "one");
         assert_eq!(s.message(1), "five");
 
         let mut other = LogStore::new();
-        other.push(entry(6, "six", "CompB", "raw date", &["", "q"]));
+        other.push(entry(6, "six", "CompB", "raw date", &["", "q"]), 0);
         s.append(other);
         assert_eq!(s.len(), 3);
         let e = s.at(2);
@@ -682,14 +694,14 @@ mod tests {
         // More than the first 64 MB of the temporary file → it has to grow and be mapped again.
         let n = 70_000;
         for i in 0..n {
-            s.push(entry(i + 1, &line, "C", "", &[]));
+            s.push(entry(i + 1, &line, "C", "", &[]), 0);
         }
         assert!(s.text_len() > MIN_MAPPED);
         assert_eq!(s.message(n - 1), line);
         assert_eq!(s.message(12_345), line);
         s.truncate(10);
         assert_eq!(s.text_len(), 10 * line.len());
-        s.push(entry(11, "end", "C", "", &[]));
+        s.push(entry(11, "end", "C", "", &[]), 0);
         assert_eq!(s.message(10), "end");
     }
 

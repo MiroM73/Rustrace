@@ -33,6 +33,18 @@ Features (all implemented, see README for user-facing details):
 - Encodings: UTF-8 (BOM or not), UTF-16 LE/BE (BOM), ANSI Windows-1250 fallback.
 - Incremental reading in a **background thread** in 8 MB chunks with progress + cancel; truncation /
   rotation detection; provisional last line. 400 MB / 1.8 M lines ≈ 3.7 s in release.
+- **Rotated logs merged** (`cfg.merge_rotated`, default on; `parser::rotated_parts`): opening
+  `service.log` also reads `service.lo_` and `service-YYYYMMDD-HHMMSS.log` first (sorted by mtime,
+  then name; only for the active file name, not when a part itself is opened). `LogSource::files`
+  (`SourceFile { name, path: Option }`) = file id of every entry (`Rec::file: u16`, fits the
+  32-byte record); line numbers are per file. Rotation/replacement detection: the first 4 KB of the
+  active file (`head`) must still match and the file must not shrink; on a mismatch with merging the
+  older part starting with `head` (and ≥ offset) is the renamed active file → its unread rest is
+  read, the file id is retagged to the new name, files with that path before are marked overwritten
+  (`path = None`), the new active file is read from 0 – an `Appended` result, nothing is lost.
+  Otherwise (or without merging) a full reset. UI: `App::columns()` adds `ColumnKind::File` first
+  when `files.len() > 1`; status bar 📚 with the list. Export: `export::segments` splits blocks by
+  file; original lines are read per file, overwritten parts fall back to the message texts.
 - **Compact storage** (`src/store.rs`, `LogStore`): the parser still produces `LogEntry` (Strings)
   per line, but they go straight into a `LogStore` – 32-byte `Rec` (message start in the text arena,
   `i64` ms timestamp or tagged interned raw text, line, interned component/thread, severity), one
@@ -104,7 +116,8 @@ Features (all implemented, see README for user-facing details):
 
 ## Commands
 - `cargo build --release` → `target\release\rustrace.exe`
-- `cargo test` (32 tests: time range bounds, column filter syntax, parsers, chunked/ANSI/UTF-16 reading, log definitions (CBS, DISM, IIS,
+- `cargo test` (37 tests: rotated parts (naming, merge on open, rotation while watching, replaced
+  file), export segments by file, time range bounds, column filter syntax, parsers, chunked/ANSI/UTF-16 reading, log definitions (CBS, DISM, IIS,
   choice by name/content, appending across refreshes), store (32-byte record, ISO ↔ ms, push /
   truncate / append, mapped temp file growing past 64 MB, interner), export incl. end-to-end and
   visible rows as highlighted rows, error codes, i18n completeness, config migration)
@@ -147,9 +160,13 @@ Features (all implemented, see README for user-facing details):
 15. Column filters: filter row under the headers, adapts to the columns of the open log type.
 16. Time range filter (from – to) in the main view: `cfg.show_time_range`, `App::time_range` (ms),
     `export::parse_range_bound` (inclusive end fills up the missing day/hour/minute/second).
+17. Merging of rotated logs (owner: only concatenation for now, also the dated history files,
+    File column only for logs of several files) incl. rotation while watching.
 
 ## Ideas not done yet (offered to the owner)
-- Several logs at once in tabs / merged by time (like CMTrace "Merge").
+- Merge **different** logs into one view sorted by time (like CMTrace File → Open → "Merge
+  selected files", e.g. AppEnforce.log + AppDiscovery.log). The owner wants it noted as an idea;
+  tabs with several logs are not wanted. The rotated-parts merge (concatenation) already exists.
 
 ## Ideas not done yet (offered by the owner)
 - (none open – the memory saving and the log definitions are done, see History 13 and 14)

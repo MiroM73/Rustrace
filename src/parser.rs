@@ -120,12 +120,82 @@ pub struct Progress {
 /// Read chunk size – the file is never loaded into memory all at once.
 const CHUNK: u64 = 8 * 1024 * 1024;
 
+/// Bytes from the start of the active file that are remembered; when the file no longer starts
+/// with them it was rotated (renamed) or replaced.
+const HEAD_LEN: usize = 4096;
+
+/// One file of the log: the active file or one of its rotated older parts.
+#[derive(Clone, Debug, PartialEq)]
+pub struct SourceFile {
+    /// File name shown in the UI.
+    pub name: String,
+    /// Where the lines of this file are now (`None` = overwritten by a later rotation).
+    pub path: Option<PathBuf>,
+}
+
+impl SourceFile {
+    fn new(path: &Path) -> Self {
+        Self {
+            name: path
+                .file_name()
+                .map(|n| n.to_string_lossy().into_owned())
+                .unwrap_or_default(),
+            path: Some(path.to_path_buf()),
+        }
+    }
+}
+
+/// Rotated older parts of a log, oldest first: `service.lo_` (ConfigMgr renames the full log)
+/// and `service-YYYYMMDD-HHMMSS.log` (newer ConfigMgr versions with more history files).
+/// Sorted by modification time, then by name.
+pub fn rotated_parts(active: &Path) -> Vec<PathBuf> {
+    let (Some(dir), Some(stem), Some(ext)) = (
+        active.parent(),
+        active.file_stem().and_then(|s| s.to_str()),
+        active.extension().and_then(|s| s.to_str()),
+    ) else {
+        return Vec::new();
+    };
+    let (stem, ext) = (stem.to_lowercase(), ext.to_lowercase());
+    // "log" → "lo_"
+    let rotated_ext = format!("{}_", &ext[..ext.len() - ext.chars().last().map_or(0, char::len_utf8)]);
+    let is_part = |name: &str| {
+        let name = name.to_lowercase();
+        if name == format!("{stem}.{rotated_ext}") {
+            return true;
+        }
+        // stem-YYYYMMDD-HHMMSS.ext
+        let Some(rest) = name.strip_prefix(&format!("{stem}-")) else { return false };
+        let Some(stamp) = rest.strip_suffix(&format!(".{ext}")) else { return false };
+        let b = stamp.as_bytes();
+        b.len() == 15
+            && b[8] == b'-'
+            && b.iter().enumerate().all(|(i, c)| i == 8 || c.is_ascii_digit())
+    };
+    let dir = if dir.as_os_str().is_empty() { Path::new(".") } else { dir };
+    let Ok(rd) = std::fs::read_dir(dir) else { return Vec::new() };
+    let mut parts: Vec<(std::time::SystemTime, String, PathBuf)> = rd
+        .flatten()
+        .filter_map(|e| {
+            let name = e.file_name().to_string_lossy().into_owned();
+            let meta = e.metadata().ok()?;
+            (meta.is_file() && is_part(&name)).then(|| {
+                (meta.modified().unwrap_or(std::time::UNIX_EPOCH), name.to_lowercase(), e.path())
+            })
+        })
+        .collect();
+    parts.sort();
+    parts.into_iter().map(|(_, _, p)| p).collect()
+}
+
 pub struct LogSource {
     pub path: PathBuf,
     offset: u64,
     encoding: Encoding,
     /// Bytes after the last line break (incomplete line).
     leftover: Vec<u8>,
+    /// First bytes of the active file (up to `HEAD_LEN`).
+    head: Vec<u8>,
     state: ParserState,
     /// Assign severity by keywords (error/fail/warn) to entries without a type.
     pub keyword_severity: bool,
@@ -137,6 +207,11 @@ pub struct LogSource {
     /// Reads of at least this many bytes keep the message text in a memory-mapped temporary
     /// file (`None` = always in memory).
     pub temp_file_threshold: Option<u64>,
+    /// Also read the rotated older parts of the log (see `rotated_parts`) and keep the history
+    /// when the active file is rotated while it is watched.
+    pub merge_rotated: bool,
+    /// Files the entries come from (`LogStore` file id = index); the last one is the active file.
+    files: Vec<SourceFile>,
     /// The format for the current read has been chosen.
     format_decided: bool,
 }
@@ -148,22 +223,44 @@ impl LogSource {
             offset: 0,
             encoding: Encoding::Utf8,
             leftover: Vec::new(),
+            head: Vec::new(),
             state: ParserState::new(),
             keyword_severity,
             file_size: 0,
             format: FormatChoice::Auto,
             defs: Arc::new(Vec::new()),
             temp_file_threshold: None,
+            merge_rotated: false,
+            files: Vec::new(),
             format_decided: false,
         }
     }
 
     fn reset(&mut self) {
+        self.start_file();
+        self.state = ParserState::new();
+        self.files.clear();
+        self.format_decided = false;
+    }
+
+    /// Reading state for the next file (the format and the columns stay).
+    fn start_file(&mut self) {
         self.offset = 0;
         self.encoding = Encoding::Utf8;
         self.leftover.clear();
-        self.state = ParserState::new();
-        self.format_decided = false;
+        self.head.clear();
+        self.state.next_line = 1;
+        self.state.pending = None;
+        self.state.pending_entry = None;
+    }
+
+    /// Files the entries come from (index = file id of the entries); the last one is active.
+    pub fn files(&self) -> &[SourceFile] {
+        &self.files
+    }
+
+    fn active_id(&self) -> u16 {
+        self.files.len().saturating_sub(1) as u16
     }
 
     /// Columns of the log (the built-in ones until a definition is chosen).
@@ -218,92 +315,94 @@ impl LogSource {
         }
     }
 
-    /// Reads new data from the file (in chunks). Called from a background thread.
+    /// The active file still starts with the remembered first bytes.
+    fn head_matches(&self, f: &mut File) -> std::io::Result<bool> {
+        if self.head.is_empty() {
+            return Ok(true);
+        }
+        let mut buf = vec![0u8; self.head.len()];
+        f.seek(SeekFrom::Start(0))?;
+        let n = f.read(&mut buf)?;
+        Ok(n == buf.len() && buf == self.head)
+    }
+
+    /// After the active file was rotated: the older part that now holds its lines (it starts
+    /// with the same bytes and is at least as long as what was read).
+    fn find_rotated(&self) -> Option<PathBuf> {
+        rotated_parts(&self.path).into_iter().rev().find(|p| {
+            let Ok(mut f) = File::open(p) else { return false };
+            let long_enough = f.metadata().is_ok_and(|m| m.len() >= self.offset);
+            long_enough && self.head_matches(&mut f).unwrap_or(false)
+        })
+    }
+
+    /// Reads new data (in chunks). Called from a background thread.
+    ///
+    /// With `merge_rotated` the first read also reads the rotated older parts (oldest first),
+    /// and when the active file is rotated while it is watched, the rest of the old file is read
+    /// from its new name and the new active file is appended – nothing read so far is lost.
     pub fn poll(&mut self, progress: &Progress) -> std::io::Result<PollResult> {
         let mut f = File::open(&self.path)?;
         let len = f.metadata()?.len();
-        self.file_size = len;
 
-        if len < self.offset {
-            // The file was truncated or replaced by a new one.
-            self.reset();
+        let mut rotated = None;
+        if self.offset > 0 && (len < self.offset || !self.head_matches(&mut f)?) {
+            // The file was rotated, truncated or replaced by a new one.
+            rotated = if self.merge_rotated { self.find_rotated() } else { None };
+            if rotated.is_none() {
+                self.reset();
+            }
         }
-        let is_reset = self.offset == 0;
-        if len == self.offset && !is_reset {
+        let is_reset = self.files.is_empty();
+        let older = if is_reset && self.merge_rotated {
+            rotated_parts(&self.path)
+        } else {
+            Vec::new()
+        };
+        let size = |p: &Path| std::fs::metadata(p).map_or(0, |m| m.len());
+        let rest_of_rotated = rotated.as_deref().map_or(0, |p| size(p).saturating_sub(self.offset));
+        let active_start = if rotated.is_some() { 0 } else { self.offset };
+        let total = older.iter().map(|p| size(p)).sum::<u64>() + rest_of_rotated + len - active_start;
+        if !is_reset && rotated.is_none() && len == self.offset {
             return Ok(PollResult::Unchanged);
         }
-        progress.total.store(len - self.offset, Ordering::Relaxed);
+        progress.total.store(total, Ordering::Relaxed);
         progress.done.store(0, Ordering::Relaxed);
 
-        f.seek(SeekFrom::Start(self.offset))?;
-        let start_offset = self.offset;
-        let mut committed = if self.temp_file_threshold.is_some_and(|t| len - start_offset >= t) {
+        let mut committed = if self.temp_file_threshold.is_some_and(|t| total >= t) {
             LogStore::new_mapped()
         } else {
             LogStore::new()
         };
         let mut reserved = false;
-        let mut first = is_reset;
-        let mut buf = Vec::new();
-        while self.offset < len {
-            if progress.cancel.load(Ordering::Relaxed) {
-                return Err(std::io::Error::new(std::io::ErrorKind::Interrupted, "cancelled"));
+        if is_reset {
+            for p in &older {
+                self.files.push(SourceFile::new(p));
+                let id = self.active_id();
+                let mut pf = File::open(p)?;
+                self.read_to_end(&mut pf, id, &mut committed, progress, &mut reserved)?;
+                self.finish_file(&mut committed, id);
             }
-            buf.clear();
-            let want = (len - self.offset).min(CHUNK);
-            let n = (&mut f).take(want).read_to_end(&mut buf)?;
-            if n == 0 {
-                break; // the file got shorter in the meantime
-            }
-            self.offset += n as u64;
-            progress.done.fetch_add(n as u64, Ordering::Relaxed);
-
-            let mut data: &[u8] = &buf;
-            if first {
-                first = false;
-                // BOM detection.
-                if data.starts_with(&[0xEF, 0xBB, 0xBF]) {
-                    data = &data[3..];
-                } else if data.starts_with(&[0xFF, 0xFE]) {
-                    self.encoding = Encoding::Utf16Le;
-                    data = &data[2..];
-                } else if data.starts_with(&[0xFE, 0xFF]) {
-                    self.encoding = Encoding::Utf16Be;
-                    data = &data[2..];
-                }
-            }
-            self.leftover.extend_from_slice(data);
-
-            // Split complete lines from the incomplete tail.
-            let cut = self.last_line_end();
-            if cut == 0 {
-                continue;
-            }
-            let complete: Vec<u8> = self.leftover.drain(..cut).collect();
-            if self.encoding == Encoding::Utf8 && std::str::from_utf8(&complete).is_err() {
-                // Not valid UTF-8 → read as ANSI (Windows-1250) from now on.
-                self.encoding = Encoding::Ansi;
-            }
-            let text = decode(&complete, self.encoding);
-            drop(complete);
-            self.decide_format(Some(&text));
-            for line in split_complete_lines(&text) {
-                if let Some(e) = parse_line(&mut self.state, line, self.keyword_severity) {
-                    committed.push(e);
-                }
-            }
-            // After the first chunk: room for the whole read, estimated from that chunk, so the
-            // storage does not grow (and copy) step by step.
-            let (done, rest) = (self.offset - start_offset, len - self.offset);
-            if !reserved && rest > 0 && !committed.is_empty() {
-                reserved = true;
-                let scale = rest as f64 / done as f64 * 1.05;
-                committed.reserve(
-                    (committed.len() as f64 * scale) as usize,
-                    (committed.text_len() as f64 * scale) as usize,
-                );
-            }
+            self.files.push(SourceFile::new(&self.path));
         }
+        if let Some(rot) = rotated {
+            // The rest of the old active file is now in the rotated file.
+            let id = self.active_id();
+            let mut rf = File::open(&rot)?;
+            self.read_to_end(&mut rf, id, &mut committed, progress, &mut reserved)?;
+            self.finish_file(&mut committed, id);
+            // A file overwritten by this rotation (e.g. the previous .lo_) is gone.
+            for file in &mut self.files {
+                if file.path.as_deref() == Some(rot.as_path()) {
+                    file.path = None;
+                }
+            }
+            self.files[id as usize] = SourceFile::new(&rot);
+            self.files.push(SourceFile::new(&self.path));
+        }
+        let id = self.active_id();
+        self.read_to_end(&mut f, id, &mut committed, progress, &mut reserved)?;
+        self.file_size = self.files.iter().filter_map(|s| s.path.as_deref()).map(size).sum();
 
         // Provisional entries: incomplete last line + unfinished multi-line entry.
         // The parser state is not changed – the next refresh replaces them with real ones.
@@ -337,6 +436,99 @@ impl LogSource {
                 provisional,
             }
         })
+    }
+
+    /// End of a complete (older) file: its last line and an unfinished entry are final.
+    fn finish_file(&mut self, committed: &mut LogStore, id: u16) {
+        let tail = decode(&self.leftover, self.encoding);
+        let tail = tail.trim_end_matches(['\r', '\n']);
+        if !tail.is_empty() {
+            self.decide_format(Some(tail));
+            if let Some(e) = parse_line(&mut self.state, tail, self.keyword_severity) {
+                committed.push(e, id);
+            }
+        }
+        if let Some(e) = flush_pending(&mut self.state, self.keyword_severity) {
+            committed.push(e, id);
+        }
+        self.start_file();
+    }
+
+    /// Reads `f` from `self.offset` to its current end into `committed` (entries of file `id`).
+    fn read_to_end(
+        &mut self,
+        f: &mut File,
+        id: u16,
+        committed: &mut LogStore,
+        progress: &Progress,
+        reserved: &mut bool,
+    ) -> std::io::Result<()> {
+        let len = f.metadata()?.len();
+        f.seek(SeekFrom::Start(self.offset))?;
+        let mut first = self.offset == 0;
+        let mut buf = Vec::new();
+        while self.offset < len {
+            if progress.cancel.load(Ordering::Relaxed) {
+                return Err(std::io::Error::new(std::io::ErrorKind::Interrupted, "cancelled"));
+            }
+            buf.clear();
+            let want = (len - self.offset).min(CHUNK);
+            let n = (&mut *f).take(want).read_to_end(&mut buf)?;
+            if n == 0 {
+                break; // the file got shorter in the meantime
+            }
+            self.offset += n as u64;
+            progress.done.fetch_add(n as u64, Ordering::Relaxed);
+
+            let mut data: &[u8] = &buf;
+            if first {
+                first = false;
+                self.head = buf[..buf.len().min(HEAD_LEN)].to_vec();
+                // BOM detection.
+                if data.starts_with(&[0xEF, 0xBB, 0xBF]) {
+                    data = &data[3..];
+                } else if data.starts_with(&[0xFF, 0xFE]) {
+                    self.encoding = Encoding::Utf16Le;
+                    data = &data[2..];
+                } else if data.starts_with(&[0xFE, 0xFF]) {
+                    self.encoding = Encoding::Utf16Be;
+                    data = &data[2..];
+                }
+            }
+            self.leftover.extend_from_slice(data);
+
+            // Split complete lines from the incomplete tail.
+            let cut = self.last_line_end();
+            if cut == 0 {
+                continue;
+            }
+            let complete: Vec<u8> = self.leftover.drain(..cut).collect();
+            if self.encoding == Encoding::Utf8 && std::str::from_utf8(&complete).is_err() {
+                // Not valid UTF-8 → read as ANSI (Windows-1250) from now on.
+                self.encoding = Encoding::Ansi;
+            }
+            let text = decode(&complete, self.encoding);
+            drop(complete);
+            self.decide_format(Some(&text));
+            for line in split_complete_lines(&text) {
+                if let Some(e) = parse_line(&mut self.state, line, self.keyword_severity) {
+                    committed.push(e, id);
+                }
+            }
+            // After the first chunk: room for the whole read, estimated from that chunk, so the
+            // storage does not grow (and copy) step by step.
+            let done = progress.done.load(Ordering::Relaxed);
+            let rest = progress.total.load(Ordering::Relaxed).saturating_sub(done);
+            if !*reserved && rest > 0 && done > 0 && !committed.is_empty() {
+                *reserved = true;
+                let scale = rest as f64 / done as f64 * 1.05;
+                committed.reserve(
+                    (committed.len() as f64 * scale) as usize,
+                    (committed.text_len() as f64 * scale) as usize,
+                );
+            }
+        }
+        Ok(())
     }
 
     /// Byte index just after the last line break in `leftover` (0 if none).
@@ -782,6 +974,141 @@ mod tests {
         };
         assert_eq!(s.schema().name, "");
         assert_eq!(committed.at(0).message, "2026-10-23 10:00:00, Info  DISM   x");
+        std::fs::remove_dir_all(&dir).ok();
+    }
+
+    fn messages(s: &LogStore) -> Vec<(u16, usize, &str)> {
+        (0..s.len()).map(|i| (s.file(i), s.line_no(i), s.message(i))).collect()
+    }
+
+    fn test_dir(name: &str) -> PathBuf {
+        let dir = std::env::temp_dir().join(format!("rustrace_{name}_{}", std::process::id()));
+        std::fs::remove_dir_all(&dir).ok();
+        std::fs::create_dir_all(&dir).unwrap();
+        dir
+    }
+
+    fn set_age(p: &Path, secs_ago: u64) {
+        let f = std::fs::OpenOptions::new().write(true).open(p).unwrap();
+        f.set_modified(std::time::SystemTime::now() - std::time::Duration::from_secs(secs_ago))
+            .unwrap();
+    }
+
+    #[test]
+    fn rotated_parts_by_name_and_age() {
+        let dir = test_dir("parts");
+        for (name, age) in [
+            ("service.lo_", 100),
+            ("Service-20261023-101500.log", 200),
+            ("service.log", 0),
+            ("service2.log", 50),
+            ("service-2026.log", 50),
+            ("service-20261023-101500.txt", 50),
+            ("other.lo_", 50),
+        ] {
+            std::fs::write(dir.join(name), "x\n").unwrap();
+            set_age(&dir.join(name), age);
+        }
+        let names: Vec<String> = rotated_parts(&dir.join("service.log"))
+            .iter()
+            .map(|p| p.file_name().unwrap().to_string_lossy().into_owned())
+            .collect();
+        assert_eq!(names, ["Service-20261023-101500.log", "service.lo_"]);
+        std::fs::remove_dir_all(&dir).ok();
+    }
+
+    /// Opening a log reads its rotated parts first (oldest first), each with its own line numbers.
+    #[test]
+    fn merged_rotated_parts_on_open() {
+        let dir = test_dir("merge");
+        std::fs::write(dir.join("service-20261023-101500.log"), "h1\nh2").unwrap(); // no final newline
+        std::fs::write(dir.join("service.lo_"), "r1\n").unwrap();
+        std::fs::write(dir.join("service.log"), "a1\na2\n").unwrap();
+        set_age(&dir.join("service-20261023-101500.log"), 200);
+        set_age(&dir.join("service.lo_"), 100);
+
+        let mut s = LogSource::new(dir.join("service.log"), false);
+        s.merge_rotated = true;
+        let PollResult::Reset { committed, provisional } = s.poll(&Progress::default()).unwrap() else {
+            panic!()
+        };
+        assert!(provisional.is_empty());
+        assert_eq!(
+            messages(&committed),
+            [(0, 1, "h1"), (0, 2, "h2"), (1, 1, "r1"), (2, 1, "a1"), (2, 2, "a2")]
+        );
+        let names: Vec<&str> = s.files().iter().map(|f| f.name.as_str()).collect();
+        assert_eq!(names, ["service-20261023-101500.log", "service.lo_", "service.log"]);
+
+        // Without merging only the active file is read.
+        let mut s = LogSource::new(dir.join("service.log"), false);
+        let PollResult::Reset { committed, .. } = s.poll(&Progress::default()).unwrap() else {
+            panic!()
+        };
+        assert_eq!(messages(&committed), [(0, 1, "a1"), (0, 2, "a2")]);
+        std::fs::remove_dir_all(&dir).ok();
+    }
+
+    /// Rotation while the log is watched: the unread rest of the old file is read from its new
+    /// name, the new file is appended, and a file overwritten by the next rotation is marked.
+    #[test]
+    fn rotation_while_watching() {
+        let dir = test_dir("rotate");
+        let log = dir.join("service.log");
+        let lo = dir.join("service.lo_");
+        std::fs::write(&log, "a\nb\npart").unwrap();
+        let mut s = LogSource::new(&log, false);
+        s.merge_rotated = true;
+        let PollResult::Reset { committed, provisional } = s.poll(&Progress::default()).unwrap() else {
+            panic!()
+        };
+        assert_eq!(committed.len(), 2);
+        assert_eq!(provisional[0].message, "part");
+
+        // The writer finishes the line, rotates, and continues in a new file.
+        let mut f = std::fs::OpenOptions::new().append(true).open(&log).unwrap();
+        f.write_all(b" end\nc\n").unwrap();
+        drop(f);
+        std::fs::rename(&log, &lo).unwrap();
+        std::fs::write(&log, "x\ny\n").unwrap();
+        let PollResult::Appended { committed, provisional } = s.poll(&Progress::default()).unwrap()
+        else {
+            panic!("rotation must not reset the log")
+        };
+        assert!(provisional.is_empty());
+        assert_eq!(messages(&committed), [(0, 3, "part end"), (0, 4, "c"), (1, 1, "x"), (1, 2, "y")]);
+        let files: Vec<(&str, bool)> = s.files().iter().map(|f| (f.name.as_str(), f.path.is_some())).collect();
+        assert_eq!(files, [("service.lo_", true), ("service.log", true)]);
+
+        // Next rotation overwrites service.lo_ – its old lines are no longer in any file.
+        let mut f = std::fs::OpenOptions::new().append(true).open(&log).unwrap();
+        f.write_all(b"z\n").unwrap();
+        drop(f);
+        std::fs::rename(&log, &lo).unwrap();
+        std::fs::write(&log, "q\n").unwrap();
+        let PollResult::Appended { committed, .. } = s.poll(&Progress::default()).unwrap() else {
+            panic!()
+        };
+        assert_eq!(messages(&committed), [(1, 3, "z"), (2, 1, "q")]);
+        let files: Vec<(&str, bool)> = s.files().iter().map(|f| (f.name.as_str(), f.path.is_some())).collect();
+        assert_eq!(files, [("service.lo_", false), ("service.lo_", true), ("service.log", true)]);
+        assert!(matches!(s.poll(&Progress::default()).unwrap(), PollResult::Unchanged));
+        std::fs::remove_dir_all(&dir).ok();
+    }
+
+    /// A file replaced by different content of at least the same size is read again.
+    #[test]
+    fn replaced_file_is_read_again() {
+        let dir = test_dir("replace");
+        let log = dir.join("x.log");
+        std::fs::write(&log, "first\n").unwrap();
+        let mut s = LogSource::new(&log, false);
+        s.poll(&Progress::default()).unwrap();
+        std::fs::write(&log, "second line\n").unwrap();
+        let PollResult::Reset { committed, .. } = s.poll(&Progress::default()).unwrap() else {
+            panic!("a replaced file must be read from the start")
+        };
+        assert_eq!(messages(&committed), [(0, 1, "second line")]);
         std::fs::remove_dir_all(&dir).ok();
     }
 

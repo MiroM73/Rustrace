@@ -202,36 +202,62 @@ pub fn row_count(blocks: &[(usize, usize)]) -> usize {
     blocks.iter().map(|(a, b)| b - a + 1).sum()
 }
 
-/// Physical file lines (1-based, inclusive) covered by a block of entries.
-pub fn line_range(store: &LogStore, block: (usize, usize)) -> (usize, usize) {
+/// The part of a block of entries that lies in one file of the log.
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+pub struct Segment {
+    /// File id (index into `LogSource::files`).
+    pub file: u16,
+    /// Entry indexes (inclusive).
+    pub entries: (usize, usize),
+    /// Physical lines of that file (1-based, inclusive).
+    pub lines: (usize, usize),
+}
+
+/// Splits a block of entries by file (a log merged from rotated parts) and computes the
+/// physical lines every part covers.
+pub fn segments(store: &LogStore, block: (usize, usize)) -> Vec<Segment> {
     let (a, b) = block;
-    let first = store.line_no(a);
-    let last = if b + 1 < store.len() {
-        store.line_no(b + 1).saturating_sub(1).max(store.line_no(b))
-    } else {
-        store.line_no(b) + store.message(b).lines().count().max(1) - 1
-    };
-    (first, last)
+    let mut out = Vec::new();
+    let mut start = a;
+    while start <= b {
+        let file = store.file(start);
+        let mut end = start;
+        while end < b && store.file(end + 1) == file {
+            end += 1;
+        }
+        // The last line: just before the next entry of the same file, or the end of the message.
+        let last = if end + 1 < store.len() && store.file(end + 1) == file {
+            store.line_no(end + 1).saturating_sub(1).max(store.line_no(end))
+        } else {
+            store.line_no(end) + store.message(end).lines().count().max(1) - 1
+        };
+        out.push(Segment {
+            file,
+            entries: (start, end),
+            lines: (store.line_no(start), last),
+        });
+        start = end + 1;
+    }
+    out
 }
 
-/// Separator line written between blocks.
-pub fn separator(first_line: usize, last_line: usize) -> String {
-    format!("-------- {first_line} – {last_line} --------")
+/// Separator line written between blocks (with the file name for logs of several files).
+pub fn separator(file: Option<&str>, first_line: usize, last_line: usize) -> String {
+    match file {
+        Some(f) => format!("-------- {f}: {first_line} – {last_line} --------"),
+        None => format!("-------- {first_line} – {last_line} --------"),
+    }
 }
 
-/// Builds the output of the "original lines" format from lines already read from the file.
-pub fn build_original(
-    line_ranges: &[(usize, usize)],
-    lines: &[Vec<String>],
-    with_separators: bool,
-) -> String {
+/// Builds the output of the "original lines" format: (separator line, lines) per part.
+pub fn build_original(parts: &[(String, Vec<String>)], with_separators: bool) -> String {
     let mut out = String::new();
-    for (i, ((first, last), block)) in line_ranges.iter().zip(lines).enumerate() {
+    for (i, (sep, block)) in parts.iter().enumerate() {
         if with_separators {
             if i > 0 {
                 out.push_str("\r\n");
             }
-            out.push_str(&separator(*first, *last));
+            out.push_str(sep);
             out.push_str("\r\n");
         }
         for l in block {
@@ -245,30 +271,32 @@ pub fn build_original(
 /// One row of the readable format (all texts already localized / formatted).
 pub struct ReadableRow<'a> {
     pub highlighted: bool,
-    pub line: usize,
+    /// Line number (`file:line` for logs of several files).
+    pub line: String,
     pub datetime: String,
     pub severity: String,
     pub entry: EntryRef<'a>,
 }
 
-/// Builds the readable tab-separated table. `header` is the localized column header line;
-/// `extra_cols` extra columns of a log definition are appended after the message.
+/// Builds the readable tab-separated table. `header` is the localized column header line,
+/// `separators` the separator line of every block; `extra_cols` extra columns of a log
+/// definition are appended after the message.
 pub fn build_readable(
     header: &str,
     blocks: &[Vec<ReadableRow<'_>>],
-    line_ranges: &[(usize, usize)],
+    separators: &[String],
     with_separators: bool,
     extra_cols: usize,
 ) -> String {
     let mut out = String::new();
     out.push_str(header);
     out.push_str("\r\n");
-    for (i, (rows, (first, last))) in blocks.iter().zip(line_ranges).enumerate() {
+    for (i, (rows, sep)) in blocks.iter().zip(separators).enumerate() {
         if with_separators {
             if i > 0 {
                 out.push_str("\r\n");
             }
-            out.push_str(&separator(*first, *last));
+            out.push_str(sep);
             out.push_str("\r\n");
         }
         for r in rows {
@@ -330,27 +358,49 @@ mod tests {
     fn line_ranges_with_multiline_entries() {
         // entry 1 spans lines 2-4 (multi-line message)
         let e = LogStore::from_entries([entry(1, "a"), entry(2, "b\nc\nd"), entry(5, "e"), entry(6, "f\ng")]);
-        assert_eq!(line_range(&e, (0, 1)), (1, 4));
-        assert_eq!(line_range(&e, (2, 3)), (5, 7));
+        let lines = |b| segments(&e, b).iter().map(|s| s.lines).collect::<Vec<_>>();
+        assert_eq!(lines((0, 1)), [(1, 4)]);
+        assert_eq!(lines((2, 3)), [(5, 7)]);
+    }
+
+    /// A block over the end of a rotated part and the start of the active file is split by file.
+    #[test]
+    fn segments_of_merged_files() {
+        let mut s = LogStore::new();
+        s.push(entry(9, "old a"), 0);
+        s.push(entry(10, "old b\ncontinued"), 0);
+        s.push(entry(1, "new a"), 1);
+        s.push(entry(2, "new b"), 1);
+        assert_eq!(
+            segments(&s, (0, 3)),
+            [
+                Segment { file: 0, entries: (0, 1), lines: (9, 11) },
+                Segment { file: 1, entries: (2, 3), lines: (1, 2) },
+            ]
+        );
+        assert_eq!(segments(&s, (2, 2)), [Segment { file: 1, entries: (2, 2), lines: (1, 1) }]);
+        assert_eq!(separator(Some("x.lo_"), 9, 11), "-------- x.lo_: 9 – 11 --------");
     }
 
     #[test]
     fn outputs() {
-        let ranges = vec![(1, 2), (10, 10)];
-        let lines = vec![vec!["a".to_owned(), "b".to_owned()], vec!["x".to_owned()]];
-        assert_eq!(build_original(&ranges, &lines, false), "a\r\nb\r\nx\r\n");
-        let with_sep = build_original(&ranges, &lines, true);
+        let parts = vec![
+            (separator(None, 1, 2), vec!["a".to_owned(), "b".to_owned()]),
+            (separator(None, 10, 10), vec!["x".to_owned()]),
+        ];
+        assert_eq!(build_original(&parts, false), "a\r\nb\r\nx\r\n");
+        let with_sep = build_original(&parts, true);
         assert!(with_sep.starts_with("-------- 1 – 2 --------\r\na\r\nb\r\n\r\n-------- 10 – 10"));
 
         let e = LogStore::from_entries([entry(7, "two\nlines")]);
         let rows = vec![vec![ReadableRow {
             highlighted: true,
-            line: 7,
+            line: "7".into(),
             datetime: "t".into(),
             severity: "Error".into(),
             entry: e.at(0),
         }]];
-        let txt = build_readable("H", &rows, &[(7, 8)], false, 0);
+        let txt = build_readable("H", &rows, &[separator(None, 7, 8)], false, 0);
         assert_eq!(txt, "H\r\n»\t7\tt\tError\t\t\ttwo ↵ lines\r\n");
 
         // Extra columns of a log definition follow the message (missing values are empty).
@@ -359,12 +409,12 @@ mod tests {
         let e2 = LogStore::from_entries([e2]);
         let rows = vec![vec![ReadableRow {
             highlighted: false,
-            line: 9,
+            line: "9".into(),
             datetime: "t".into(),
             severity: "Error".into(),
             entry: e2.at(0),
         }]];
-        let txt = build_readable("H", &rows, &[(9, 9)], false, 2);
+        let txt = build_readable("H", &rows, &[separator(None, 9, 9)], false, 2);
         assert_eq!(txt, "H\r\n\t9\tt\tError\t\t\tGET /\t500\t\r\n");
     }
 
@@ -405,11 +455,12 @@ mod tests {
 
         let blocks = merge_ranges(&hits, 1, 1, entries.len());
         assert_eq!(blocks, vec![(1, 5), (7, 8)]); // entry 3 is shared by A and B only once
-        let ranges: Vec<_> = blocks.iter().map(|&b| line_range(&entries, b)).collect();
+        let ranges: Vec<_> = blocks.iter().map(|&b| segments(&entries, b)[0].lines).collect();
         assert_eq!(ranges, vec![(2, 7), (9, 10)]);
 
         let raw = crate::parser::read_line_ranges(&p, &ranges).unwrap();
-        let out = build_original(&ranges, &raw, false);
+        let parts: Vec<_> = ranges.iter().zip(raw).map(|(r, l)| (separator(None, r.0, r.1), l)).collect();
+        let out = build_original(&parts, false);
         let expected: Vec<String> = [&lines[1..7], &lines[8..10]].concat();
         assert_eq!(out, expected.join("\r\n") + "\r\n");
 

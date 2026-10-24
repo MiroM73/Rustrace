@@ -78,7 +78,18 @@ Visual C++ Redistributable.
 - reading runs **in a background thread** in 8 MB chunks – the window never freezes, even with logs of
   hundreds of MB; the first load shows progress in % with a **Cancel** button, later refreshes in the status bar
 - only newly appended data is read; test: 400 MB / 1.8 million lines ≈ 3.7 s (release build)
-- detects truncation/rotation (e.g. when ConfigMgr rolls a log over to `.lo_`) and reloads the file
+- **rotated logs are merged** (View → "Merge rotated parts of the log", default on): when
+  `service.log` is opened, its older parts `service.lo_` (ConfigMgr renames the full log) and
+  `service-YYYYMMDD-HHMMSS.log` (newer ConfigMgr versions keeping more history files) are shown
+  before it as one log, oldest first (by modification time); then a **File** column shows where
+  every row comes from (line numbers are per file) and the status bar shows the number of files
+  (📚, the list in its tooltip)
+- **rotation while watching**: when the active log is renamed to `.lo_` (or a dated file) and a new
+  one is started, the rest of the old file is read from its new name and the new file is appended –
+  nothing read so far disappears. A part overwritten by a later rotation is marked "(overwritten)";
+  the export of original lines then uses the message texts kept in memory for it
+- other truncation / replacement of the file (also with different content of the same size) is
+  detected and the file is read again
 - "Follow end" – sticks to the last line; turns off when you scroll/navigate manually, End turns it on again
 
 **Memory**
@@ -148,7 +159,9 @@ Visual C++ Redistributable.
     opens again in CMTrace / RusTrace
   - **Readable table** – tab-separated: highlight marker `»`, line, date/time, severity, component,
     thread, message (in the UI language, good for e-mails, tickets or Excel)
-- optional separator line between blocks with the original line numbers (`-------- 9 – 15 --------`)
+- optional separator line between blocks with the original line numbers (`-------- 9 – 15 --------`);
+  for a log merged from rotated parts with the file name (`-------- service.lo_: 9 – 15 --------`),
+  original lines are read from the right file and a block over a file boundary is split
 - **only records from a date/time** (if the log contains timestamps):
   - entered in the date format of the UI language or as ISO (`23.10.2026 13:05`, `2026-10-23 13:05:30`);
     the time part, seconds and milliseconds are optional

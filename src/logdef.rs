@@ -77,6 +77,8 @@ pub enum ColumnKind {
     Role(Role),
     /// Index into `LogEntry::extra` / `Schema::extra_names`.
     Extra(usize),
+    /// The file of the entry – added by the UI when the log is merged from rotated parts.
+    File,
 }
 
 /// A table column (after the line number).

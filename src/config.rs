@@ -208,6 +208,9 @@ pub struct Config {
     /// temporary file instead of the process memory.
     pub temp_file_enabled: bool,
     pub temp_file_threshold_mb: u32,
+    /// Also read the rotated older parts of a log (`name.lo_`, `name-YYYYMMDD-HHMMSS.log`) and keep
+    /// the history when the log is rotated while it is watched.
+    pub merge_rotated: bool,
 }
 
 impl Default for Config {
@@ -257,6 +260,7 @@ impl Default for Config {
             export_visible_only: false,
             temp_file_enabled: true,
             temp_file_threshold_mb: 100,
+            merge_rotated: true,
         }
     }
 }
