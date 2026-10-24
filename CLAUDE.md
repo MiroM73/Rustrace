@@ -37,10 +37,11 @@ Features (all implemented, see README for user-facing details):
 - Export highlighted rows with context (Ctrl+Shift+S): lines before/after, criteria (rules, errors,
   warnings, search), overlapping ranges merged (no duplicates), formats original lines / readable
   table, separators, **only records since date/time** (with presets relative to newest log record),
-  **only the last N blocks**, **only rows visible in the table** (`export::View` with
-  `rows = Some(&filtered)`: hits and blocks are view positions, a block can be several runs of
-  consecutive entries – `entry_runs` / `group_runs` for original lines).
-  Order: (view) → hits → time filter → merge → clip older context → last N.
+  **only the last N blocks**, **rows visible in the table = highlighted rows**
+  (`export_visible_only`: hits = `filtered`, the rules/errors/warnings/search criteria are disabled;
+  context always from the whole file – the owner's expectation, an earlier variant that also took
+  context only from visible rows was rejected). Order: hits → time filter → merge → clip older
+  context → last N.
 - Localization: built-in en / sk / cs / de; external `<code>.lang` files load **without recompiling**
   from `lang\` next to the exe or `%APPDATA%\RusTrace\lang`; fallback to English.
 - Settings saved automatically to `%APPDATA%\RusTrace\config.json` (with migration of old settings).
@@ -69,8 +70,8 @@ Features (all implemented, see README for user-facing details):
 
 ## Commands
 - `cargo build --release` → `target\release\rustrace.exe`
-- `cargo test` (20 tests: parsers, chunked/ANSI/UTF-16 reading, export incl. end-to-end and
-  visible-rows export, error codes, i18n completeness, config migration)
+- `cargo test` (19 tests: parsers, chunked/ANSI/UTF-16 reading, export incl. end-to-end and
+  visible rows as highlighted rows, error codes, i18n completeness, config migration)
 - `cargo clippy`
 - `scripts\package.ps1` → `dist\RusTrace-v<version>-windows-x64.exe` (7-Zip SFX, extracts to
   `RusTrace\` with `rustrace.exe` + `lang\` + `LICENSE`) and `.sha256`. Needs 7-Zip.
@@ -98,7 +99,7 @@ Features (all implemented, see README for user-facing details):
 9. Unlicense added, AI-authorship notice moved to the top of the README, CLAUDE.md committed.
 10. (2026-10-24) Ctrl + mouse wheel zoom: log text vs. whole UI depending on the pointer position.
 11. Release v0.2.0 (zoom; LICENSE now shipped in the archive).
-12. Export option "only rows visible in the table".
+12. Export option "rows visible in the table" as the highlighted rows (context from the whole file).
 
 ## Ideas not done yet (offered to the owner)
 - Several logs at once in tabs / merged by time (like CMTrace "Merge").

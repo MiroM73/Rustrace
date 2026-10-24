@@ -130,15 +130,15 @@ Visual C++ Redistributable.
   - logs without timestamps show a notice instead
 - **only the last N blocks** – keeps the newest N blocks after merging (e.g. "what happened during
   the last 3 failures"); can be combined with the time filter
-- **only rows visible in the table** – uses just the rows currently shown (search filter in
-  Filter mode and the Info / Warnings / Errors toggles); hidden rows are skipped as if they were not
-  in the file, so they are neither highlighted rows nor context lines (the checkbox shows how many
-  rows are visible, e.g. "28 of 40"); with the original-lines format the exported lines of a block
-  are the visible entries only, the separator shows the line range of the whole block
-- without that option the whole file is used, independent of the current filter
+- **rows visible in the table** as the highlighted rows – every row currently shown in the table
+  (search filter in Filter mode and the Info / Warnings / Errors toggles) counts as highlighted and
+  the other criteria are not used (the checkbox shows how many rows are visible, e.g.
+  "1124 of 53762"). Example: show only Errors, 5 lines before/after, only the last 2 blocks →
+  the two newest errors (or groups of close errors) with 5 surrounding lines of any kind
+- the lines before and after are always taken from the whole file, independent of the current filter
 - live preview of the number of highlighted rows, blocks and rows to export
-- order of processing: (visible rows) → highlighted rows → time filter → context ranges merged →
-  older context clipped → last N blocks
+- order of processing: highlighted rows → time filter → context ranges merged → older context
+  clipped → last N blocks
 - writing runs in a background thread; settings are remembered
 
 **Search**

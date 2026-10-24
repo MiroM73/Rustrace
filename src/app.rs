@@ -2074,19 +2074,10 @@ impl App {
         self.latest_ts.as_ref().and_then(|(_, t)| t.clone())
     }
 
-    /// Rows the export works on: all entries or only the rows visible in the table.
-    fn export_view(&self) -> export::View<'_> {
-        export::View {
-            entries: &self.entries,
-            rows: self.cfg.export_visible_only.then_some(self.filtered.as_slice()),
-        }
-    }
-
     /// Computes what will be exported: highlighted rows → time filter → context ranges
     /// merged → older context clipped → only the last N blocks.
-    /// Hits and blocks are positions in [`Self::export_view`].
     fn export_plan(&mut self) -> ExportPlan {
-        let (before, after) = (self.cfg.export_before, self.cfg.export_after);
+        let (before, after, len) = (self.cfg.export_before, self.cfg.export_after, self.entries.len());
         let since = if self.cfg.export_since_enabled {
             match export::parse_datetime_input(&self.cfg.export_since, &self.date_format) {
                 Some(iso) => Some(iso),
@@ -2101,12 +2092,16 @@ impl App {
         } else {
             None
         };
-        let all_hits = self.export_hits().to_vec();
-        let view = self.export_view();
-        let hits = view.positions_of(&all_hits);
-        let hits = export::filter_hits_since(&hits, view, since.as_deref());
-        let blocks = export::merge_ranges(&hits, before, after, view.len());
-        let blocks = export::clip_blocks_since(&blocks, view, since.as_deref());
+        // "Rows visible in the table": every row shown in the table is a highlighted row
+        // (the criteria are not used); the context still comes from the whole file.
+        let all_hits = if self.cfg.export_visible_only {
+            self.filtered.clone()
+        } else {
+            self.export_hits().to_vec()
+        };
+        let hits = export::filter_hits_since(&all_hits, &self.entries, since.as_deref());
+        let blocks = export::merge_ranges(&hits, before, after, len);
+        let blocks = export::clip_blocks_since(&blocks, &self.entries, since.as_deref());
         let last = self.cfg.export_last_enabled.then_some(self.cfg.export_last_blocks);
         let blocks = export::keep_last_blocks(blocks, last);
         // Count only hits that are really exported.
@@ -2157,18 +2152,6 @@ impl App {
                 });
                 ui.separator();
                 ui.label(t!("export.include"));
-                changed |= ui.checkbox(&mut self.cfg.export_rules, t!("export.inc.rules")).changed();
-                changed |= ui.checkbox(&mut self.cfg.export_errors, t!("export.inc.errors")).changed();
-                changed |= ui
-                    .checkbox(&mut self.cfg.export_warnings, t!("export.inc.warnings"))
-                    .changed();
-                changed |= ui
-                    .add_enabled(
-                        self.search_re.is_some(),
-                        egui::Checkbox::new(&mut self.cfg.export_search, t!("export.inc.search")),
-                    )
-                    .changed();
-                ui.separator();
                 let (visible, total) = (self.filtered.len(), self.entries.len());
                 changed |= ui
                     .checkbox(
@@ -2177,6 +2160,22 @@ impl App {
                     )
                     .on_hover_text(t!("export.visible_only.tip"))
                     .changed();
+                // The criteria are not used while every visible row counts as highlighted.
+                ui.add_enabled_ui(!self.cfg.export_visible_only, |ui| {
+                    changed |=
+                        ui.checkbox(&mut self.cfg.export_rules, t!("export.inc.rules")).changed();
+                    changed |=
+                        ui.checkbox(&mut self.cfg.export_errors, t!("export.inc.errors")).changed();
+                    changed |= ui
+                        .checkbox(&mut self.cfg.export_warnings, t!("export.inc.warnings"))
+                        .changed();
+                    changed |= ui
+                        .add_enabled(
+                            self.search_re.is_some(),
+                            egui::Checkbox::new(&mut self.cfg.export_search, t!("export.inc.search")),
+                        )
+                        .changed();
+                });
                 ui.separator();
                 ui.label(t!("export.format"));
                 changed |= ui
@@ -2343,24 +2342,10 @@ impl App {
         }
         let Some(target) = dlg.save_file() else { return };
 
-        // With only the visible rows a block can consist of several runs of consecutive entries;
-        // the original lines are read per run. The separator shows the lines of the whole block.
-        let view = self.export_view();
-        let run_lines: Vec<Vec<(usize, usize)>> = blocks
+        let line_ranges: Vec<(usize, usize)> = blocks
             .iter()
-            .map(|&b| {
-                export::entry_runs(view, b)
-                    .into_iter()
-                    .map(|run| export::line_range(&self.entries, run))
-                    .collect()
-            })
+            .map(|&b| export::line_range(&self.entries, b))
             .collect();
-        let line_ranges: Vec<(usize, usize)> = run_lines
-            .iter()
-            .map(|r| (r[0].0, r[r.len() - 1].1))
-            .collect();
-        let runs_per_block: Vec<usize> = run_lines.iter().map(Vec::len).collect();
-        let run_ranges: Vec<(usize, usize)> = run_lines.concat();
         let rows = export::row_count(&blocks);
         let separators = self.cfg.export_separators;
         // The readable text is built here (it needs translations and date formatting);
@@ -2370,10 +2355,10 @@ impl App {
                 .iter()
                 .map(|&(a, b)| {
                     (a..=b)
-                        .map(|p| {
-                            let e = view.entry(p);
+                        .map(|i| {
+                            let e = &self.entries[i];
                             ReadableRow {
-                                highlighted: hits.binary_search(&p).is_ok(),
+                                highlighted: hits.binary_search(&i).is_ok(),
                                 line: e.line_no,
                                 datetime: self.display_dt(&e.datetime),
                                 severity: match e.severity {
@@ -2403,10 +2388,8 @@ impl App {
             .spawn(move || {
                 let text = match readable_text {
                     Some(t) => Ok(t),
-                    None => crate::parser::read_line_ranges(&src, &run_ranges).map(|lines| {
-                        let lines = export::group_runs(lines, &runs_per_block);
-                        export::build_original(&line_ranges, &lines, separators)
-                    }),
+                    None => crate::parser::read_line_ranges(&src, &line_ranges)
+                        .map(|lines| export::build_original(&line_ranges, &lines, separators)),
                 };
                 let res = text
                     .and_then(|t| std::fs::write(&target, t))

@@ -3,61 +3,8 @@
 //! For every highlighted entry the range `[index - before, index + after]` is taken.
 //! Overlapping or touching ranges are merged, so every entry is exported at most once.
 //! The result is a list of blocks; blocks can be separated in the output.
-//!
-//! All indexes are positions in a [`View`]: either all entries of the log, or only the rows
-//! currently visible in the table. With the visible rows, hidden rows are skipped as if they
-//! were not in the file (context lines are visible rows too).
 
 use crate::parser::LogEntry;
-
-/// The rows the export works on.
-#[derive(Clone, Copy)]
-pub struct View<'a> {
-    pub entries: &'a [LogEntry],
-    /// Entry indexes of the visible rows (ascending), or `None` for all entries.
-    pub rows: Option<&'a [usize]>,
-}
-
-impl<'a> View<'a> {
-    pub fn len(&self) -> usize {
-        self.rows.map_or(self.entries.len(), <[usize]>::len)
-    }
-
-    /// Entry index of the row at view position `pos`.
-    pub fn entry_index(&self, pos: usize) -> usize {
-        self.rows.map_or(pos, |r| r[pos])
-    }
-
-    pub fn entry(&self, pos: usize) -> &'a LogEntry {
-        &self.entries[self.entry_index(pos)]
-    }
-
-    /// View positions of the given entry indexes (both sorted ascending); entries that are
-    /// not in the view are dropped.
-    pub fn positions_of(&self, entry_indexes: &[usize]) -> Vec<usize> {
-        match self.rows {
-            None => entry_indexes.to_vec(),
-            Some(rows) => entry_indexes
-                .iter()
-                .filter_map(|i| rows.binary_search(i).ok())
-                .collect(),
-        }
-    }
-}
-
-/// Splits a block of view positions into runs of consecutive entry indexes
-/// (with all entries the block is a single run).
-pub fn entry_runs(view: View<'_>, block: (usize, usize)) -> Vec<(usize, usize)> {
-    let mut runs: Vec<(usize, usize)> = Vec::new();
-    for pos in block.0..=block.1 {
-        let i = view.entry_index(pos);
-        match runs.last_mut() {
-            Some(last) if last.1 + 1 == i => last.1 = i,
-            _ => runs.push((i, i)),
-        }
-    }
-    runs
-}
 use serde::{Deserialize, Serialize};
 
 /// Output format of the export.
@@ -195,13 +142,13 @@ pub fn hours_before(iso: &str, hours: i64) -> Option<String> {
 
 /// Keeps only hits at or after `since`. Entries without a timestamp are dropped
 /// when a time filter is active (their time is unknown).
-pub fn filter_hits_since(hits: &[usize], view: View<'_>, since: Option<&str>) -> Vec<usize> {
+pub fn filter_hits_since(hits: &[usize], entries: &[LogEntry], since: Option<&str>) -> Vec<usize> {
     match since {
         None => hits.to_vec(),
         Some(since) => hits
             .iter()
             .copied()
-            .filter(|&p| timestamp(view.entry(p)).is_some_and(|t| t >= since))
+            .filter(|&i| timestamp(&entries[i]).is_some_and(|t| t >= since))
             .collect(),
     }
 }
@@ -211,14 +158,14 @@ pub fn filter_hits_since(hits: &[usize], view: View<'_>, since: Option<&str>) ->
 /// (e.g. plain lines inside a CMTrace log) are kept.
 pub fn clip_blocks_since(
     blocks: &[(usize, usize)],
-    view: View<'_>,
+    entries: &[LogEntry],
     since: Option<&str>,
 ) -> Vec<(usize, usize)> {
     let Some(since) = since else { return blocks.to_vec() };
     blocks
         .iter()
         .filter_map(|&(a, b)| {
-            let start = (a..=b).find(|&p| timestamp(view.entry(p)).is_none_or(|t| t >= since))?;
+            let start = (a..=b).find(|&i| timestamp(&entries[i]).is_none_or(|t| t >= since))?;
             Some((start, b))
         })
         .collect()
@@ -248,15 +195,6 @@ pub fn line_range(entries: &[LogEntry], block: (usize, usize)) -> (usize, usize)
         None => entries[b].line_no + entries[b].message.lines().count().max(1) - 1,
     };
     (first, last)
-}
-
-/// Joins lines read per run back into blocks; `runs_per_block[i]` runs belong to block `i`.
-pub fn group_runs(run_lines: Vec<Vec<String>>, runs_per_block: &[usize]) -> Vec<Vec<String>> {
-    let mut it = run_lines.into_iter();
-    runs_per_block
-        .iter()
-        .map(|&n| it.by_ref().take(n).flatten().collect())
-        .collect()
 }
 
 /// Separator line written between blocks.
@@ -448,81 +386,23 @@ mod tests {
         std::fs::remove_dir_all(&dir).ok();
     }
 
-    /// Export of only the visible rows: hidden rows are neither hits nor context.
+    /// "Rows visible in the table": the visible rows (here: only errors) are the highlighted
+    /// rows and the context comes from the whole file, whatever the severity of those rows.
     #[test]
-    fn visible_rows_view() {
-        let e: Vec<LogEntry> = (0..12).map(|i| entry(i + 1, &format!("m{i}"))).collect();
-        // Rows 3, 4 and 8 are hidden by the filter.
-        let rows: Vec<usize> = (0..12).filter(|i| ![3, 4, 8].contains(i)).collect();
-        let view = View { entries: &e, rows: Some(&rows) };
-        assert_eq!(view.len(), 9);
-
-        // Highlighted entries 2, 4 (hidden) and 10 → view positions 2 and 7.
-        let hits = view.positions_of(&[2, 4, 10]);
-        assert_eq!(hits, vec![2, 7]);
-        // ±1 visible row of context: positions 1..=3 (entries 1, 2, 5) and 6..=8 (entries 9, 10, 11).
-        let blocks = merge_ranges(&hits, 1, 1, view.len());
-        assert_eq!(blocks, vec![(1, 3), (6, 8)]);
-        assert_eq!(entry_runs(view, blocks[0]), vec![(1, 2), (5, 5)]);
-        assert_eq!(entry_runs(view, blocks[1]), vec![(9, 11)]);
-
-        // With all entries a block is one run and positions are entry indexes.
-        let all = View { entries: &e, rows: None };
-        assert_eq!(all.positions_of(&[2, 4]), vec![2, 4]);
-        assert_eq!(entry_runs(all, (3, 6)), vec![(3, 6)]);
-
-        let s = |v: &[&str]| v.iter().map(|x| x.to_string()).collect::<Vec<_>>();
-        let grouped = group_runs(vec![s(&["a", "b"]), s(&["f"]), s(&["j"])], &[2, 1]);
-        assert_eq!(grouped, vec![s(&["a", "b", "f"]), s(&["j"])]);
-    }
-
-    /// Original-lines export of only the visible rows on a real file (hidden rows inside a block).
-    #[test]
-    fn end_to_end_visible_rows_export() {
-        use crate::parser::{LogSource, PollResult, Progress};
-        let dir = std::env::temp_dir().join(format!("rustrace_export_vis_{}", std::process::id()));
-        std::fs::create_dir_all(&dir).unwrap();
-        let p = dir.join("x.log");
-        let cm = |m: &str, t: u8| {
-            format!("<![LOG[{m}]LOG]!><time=\"10:00:00.000+000\" date=\"10-23-2026\" component=\"C\" context=\"\" type=\"{t}\" thread=\"1\" file=\"\">")
-        };
-        let lines = [
-            cm("one", 1),                // line 1, entry 0
-            cm("WARN hidden", 2),        // line 2, entry 1 (hidden)
-            "<![LOG[multi".to_owned(),   // lines 3-4, entry 2
-            "line]LOG]!><time=\"10:00:00.000+000\" date=\"10-23-2026\" component=\"C\" context=\"\" type=\"1\" thread=\"1\" file=\"\">".to_owned(),
-            cm("WARN hidden", 2),        // line 5, entry 3 (hidden)
-            cm("ERR A", 3),              // line 6, entry 4 (hit)
-            cm("six", 1),                // line 7, entry 5
-            cm("seven", 1),              // line 8, entry 6
-        ];
-        std::fs::write(&p, lines.join("\r\n") + "\r\n").unwrap();
-        let mut src = LogSource::new(&p, false);
-        let PollResult::Reset { committed: entries, .. } = src.poll(&Progress::default()).unwrap()
-        else {
-            panic!()
-        };
-        assert_eq!(entries.len(), 7);
-
-        // Warnings are hidden in the table.
-        let rows: Vec<usize> = (0..entries.len())
-            .filter(|&i| entries[i].severity != Severity::Warning)
-            .collect();
-        let view = View { entries: &entries, rows: Some(&rows) };
-        let hits = view.positions_of(&[4]);
-        let blocks = merge_ranges(&hits, 2, 1, view.len());
-        assert_eq!(blocks, vec![(0, 3)]); // entries 0, 2, 4, 5
-
-        let runs = entry_runs(view, blocks[0]);
-        assert_eq!(runs, vec![(0, 0), (2, 2), (4, 5)]);
-        let ranges: Vec<_> = runs.iter().map(|&r| line_range(&entries, r)).collect();
-        assert_eq!(ranges, vec![(1, 1), (3, 4), (6, 7)]);
-        let raw = crate::parser::read_line_ranges(&p, &ranges).unwrap();
-        let grouped = group_runs(raw, &[runs.len()]);
-        let out = build_original(&[(1, 7)], &grouped, false);
-        let expected = [&lines[0..1], &lines[2..4], &lines[5..7]].concat();
-        assert_eq!(out, expected.join("\r\n") + "\r\n");
-        std::fs::remove_dir_all(&dir).ok();
+    fn visible_rows_as_highlighted_rows() {
+        let mut e: Vec<LogEntry> = (0..40).map(|i| entry(i + 1, &format!("m{i}"))).collect();
+        for i in [3, 12, 25, 33] {
+            e[i].severity = Severity::Error;
+        }
+        // The table shows only errors → these are the highlighted rows.
+        let visible: Vec<usize> = (0..e.len()).filter(|&i| e[i].severity == Severity::Error).collect();
+        let blocks = merge_ranges(&visible, 5, 5, e.len());
+        assert_eq!(blocks, vec![(0, 17), (20, 38)]); // 25 and 33 overlap → one block
+        // Only the last block (around the newest errors); context rows of any severity.
+        let last = keep_last_blocks(blocks, Some(1));
+        assert_eq!(last, vec![(20, 38)]);
+        assert_eq!(row_count(&last), 19);
+        assert!((20..=38).any(|i| e[i].severity == Severity::Info));
     }
 
     fn timed(i: usize, time: &str) -> LogEntry {
@@ -557,18 +437,11 @@ mod tests {
             .map(|i| timed(i, &format!("2026-10-23 10:00:{:02}.000", i)))
             .chain([timed(10, "")]) // a line without a timestamp
             .collect();
-        let all = View { entries: &e, rows: None };
         let since = Some("2026-10-23 10:00:05.000");
-        assert_eq!(filter_hits_since(&[2, 5, 8, 10], all, since), vec![5, 8]);
-        assert_eq!(filter_hits_since(&[2, 5], all, None), vec![2, 5]);
+        assert_eq!(filter_hits_since(&[2, 5, 8, 10], &e, since), vec![5, 8]);
+        assert_eq!(filter_hits_since(&[2, 5], &e, None), vec![2, 5]);
         // block 3..=7 is clipped to start at entry 5; block 0..=2 disappears completely
-        assert_eq!(clip_blocks_since(&[(0, 2), (3, 7), (8, 10)], all, since), vec![(5, 7), (8, 10)]);
-
-        // In a view of visible rows the positions refer to the view.
-        let rows = [1, 4, 6, 9];
-        let visible = View { entries: &e, rows: Some(&rows) };
-        assert_eq!(filter_hits_since(&[0, 1, 2, 3], visible, since), vec![2, 3]);
-        assert_eq!(clip_blocks_since(&[(0, 2)], visible, since), vec![(2, 2)]);
+        assert_eq!(clip_blocks_since(&[(0, 2), (3, 7), (8, 10)], &e, since), vec![(5, 7), (8, 10)]);
         assert_eq!(latest_timestamp(&e).unwrap(), "2026-10-23 10:00:09.000");
 
         let b = vec![(0, 1), (3, 4), (6, 7)];

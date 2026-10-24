@@ -196,7 +196,8 @@ pub struct Config {
     /// Export only the last N blocks.
     pub export_last_enabled: bool,
     pub export_last_blocks: usize,
-    /// Export only the rows visible in the table (current search filter and severity toggles).
+    /// Every row visible in the table (search filter, severity toggles) is a highlighted row;
+    /// the rules / errors / warnings / search criteria are not used. Context lines still come from the whole file.
     pub export_visible_only: bool,
 }
 
