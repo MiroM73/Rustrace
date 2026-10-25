@@ -203,7 +203,8 @@ Visual C++ Redistributable.
 - writing runs in a background thread; settings are remembered
 
 **Search**
-- text or regex, Aa = match case, number of matches
+- text or regex, Aa = match case; the number of matches (or an invalid-regex warning) and the ✖ clear
+  button are shown right after the search field
 - searches the message, the component and the extra columns of a log definition
 - Enter/F3 = next, Shift+Enter/Shift+F3 = previous
 - **Filter** (Ctrl+L) – show only matching rows
