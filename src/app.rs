@@ -1766,6 +1766,23 @@ impl App {
                 self.find(!back);
                 resp.request_focus();
             }
+            // Match count (or the regex error) and the clear button sit right next to the
+            // search field, so the result of the search is visible where the user types.
+            if let Some(err) = &self.search_err {
+                ui.colored_label(RED, format!("⚠ {}", t!("search.invalid_regex")))
+                    .on_hover_text(err);
+            } else if self.search_re.is_some() {
+                ui.label(t!("search.matches", count = self.match_count));
+            }
+            if !self.search_text.is_empty()
+                && ui
+                    .small_button("✖")
+                    .on_hover_text(t!("search.clear.tip"))
+                    .clicked()
+            {
+                self.search_text.clear();
+                changed = true;
+            }
             changed |= ui
                 .checkbox(&mut self.search_regex, "Regex")
                 .on_hover_text(t!("search.regex.tip"))
@@ -1811,21 +1828,6 @@ impl App {
             }
             if ui.button("⬇").on_hover_text(t!("search.next.tip")).clicked() {
                 self.find(true);
-            }
-            if let Some(err) = &self.search_err {
-                ui.colored_label(RED, format!("⚠ {}", t!("search.invalid_regex")))
-                    .on_hover_text(err);
-            } else if self.search_re.is_some() {
-                ui.label(t!("search.matches", count = self.match_count));
-            }
-            if !self.search_text.is_empty()
-                && ui
-                    .small_button("✖")
-                    .on_hover_text(t!("search.clear.tip"))
-                    .clicked()
-            {
-                self.search_text.clear();
-                self.recompile_search();
             }
             ui.separator();
             let (icon, name) = match self.cfg.theme.as_str() {
