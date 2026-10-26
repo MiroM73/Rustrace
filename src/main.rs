@@ -9,12 +9,15 @@ mod excerpt;
 mod export;
 mod fileassoc;
 mod i18n;
+mod icon;
 mod logdef;
 mod parser;
+mod splash;
 mod store;
 
 use std::cell::Cell;
 use std::panic::AssertUnwindSafe;
+use std::sync::Arc;
 
 use eframe::egui;
 
@@ -67,6 +70,11 @@ fn run(renderer: eframe::Renderer, path: Option<String>, created: &Cell<bool>) -
             .with_inner_size([1400.0, 850.0])
             .with_min_inner_size([700.0, 400.0])
             .with_title(app::base_title())
+            .with_icon(Arc::new(egui::IconData {
+                rgba: icon::rgba(64),
+                width: 64,
+                height: 64,
+            }))
             .with_drag_and_drop(true),
         renderer,
         // The DX12 probe only when wgpu is really used (it loads the DX12 driver).
@@ -91,6 +99,24 @@ fn run(renderer: eframe::Renderer, path: Option<String>, created: &Cell<bool>) -
 fn main() -> eframe::Result {
     // Optional: path to a log file as the first argument (e.g. .log file association).
     let path = std::env::args().nth(1);
+
+    // Start-up splash until the main window has drawn its first frame (#11), in the language and
+    // theme of the settings.
+    let (cfg, _) = config::Config::load();
+    i18n::set_language(&cfg.language);
+    let dark = match cfg.theme.as_str() {
+        "dark" => true,
+        "light" => false,
+        _ => splash::system_dark(),
+    };
+    splash::show(&app::base_title(), &t!("splash.starting"), dark);
+    let res = start(path);
+    splash::close();
+    res
+}
+
+/// Opens the main window with OpenGL, or with wgpu when OpenGL fails.
+fn start(path: Option<String>) -> eframe::Result {
 
     // OpenGL (glow) by default: with wgpu (DX12 as well as Vulkan) the AMD driver kept one CPU
     // core fully busy while the window was idle (issue #6), and OpenGL also needs less memory.

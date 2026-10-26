@@ -319,6 +319,9 @@ about.build = Sestavení
 about.settings = Soubor nastavení
 about.copy = Kopírovat informace o verzi
 about.copied = Informace o verzi jsou zkopírovány do schránky
+
+# --- Úvodní okno ---
+splash.starting = Spouští se…
 # --- Okno výchozího programu (Windows) ---
 assoc.title = Výchozí program pro soubory logů
 assoc.intro = RusTrace může otevírat soubory .log a .lo_ dvojklikem v Průzkumníkovi. Registrace se uloží jen pro váš uživatelský účet, nejsou potřeba administrátorská práva.

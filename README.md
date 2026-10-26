@@ -33,6 +33,11 @@ RusTrace\
 The programs are not code-signed, so Windows SmartScreen may ask for confirmation
 ("More info" → "Run anyway"). The `.sha256` files contain the checksums.
 
+Right after the start a small **start-up window** (the RusTrace icon, name and version, "Starting…"
+and a rotating ring of dots) shows that the program is starting, until the main window appears –
+creating the graphics context can take a moment, especially on the first start after boot. It
+follows the theme from the settings (or the Windows theme).
+
 The window title shows the version in use, e.g. `RusTrace 0.6.0 – ccmexec.log`. **Help → About
 RusTrace** shows the version, author, license, links to the project page, new versions and the
 issue tracker, the build (platform) and the settings file; "Copy version information" puts e.g.
@@ -76,7 +81,9 @@ Benchmark (loading, search, random access and memory on a big log, Windows):
 (`RUSTRACE_BENCH_MAPPED=1` = text in a temporary file)
 
 The C runtime is linked statically (`.cargo/config.toml`), so the exe runs without the
-Visual C++ Redistributable.
+Visual C++ Redistributable. `build.rs` embeds the program icon (drawn in code by `src/icon.rs`) and
+the version information into the exe; this uses the resource compiler `rc.exe` of the Windows SDK
+(installed with the Visual Studio C++ build tools).
 
 ### Making a release
 
@@ -430,6 +437,9 @@ The built-in languages live in `lang/*.lang` in the source tree and are embedded
 - `src/config.rs` – settings and rules (serde/JSON)
 - `src/app.rs` – user interface
 - `src/main.rs` – window start-up, renderer choice (OpenGL, wgpu / Direct3D 12 as the fallback)
+- `src/splash.rs` – start-up window with a rotating ring of dots (Windows, Win32 / GDI)
+- `src/icon.rs` – the program icon drawn in code (window, start-up window, `.ico` for `build.rs`)
+- `build.rs` – embeds the icon and the version information into `rustrace.exe` (Windows)
 - `lang/*.lang` – built-in translations
 - `logdef/*.def` – built-in log definitions (IIS, Exchange, DISM, CBS)
 - `scripts/package.ps1` – packs the release build into the self-extracting archive and the ZIP

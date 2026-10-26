@@ -206,6 +206,8 @@ pub struct App {
     /// Horizontal scroll offset of the table and its natural width (measured every frame).
     table_scroll_x: f32,
     table_width: f32,
+    /// Frames drawn so far (up to 2): the start-up splash closes once the window shows.
+    frames: u8,
 }
 
 /// Limits of Ctrl + mouse wheel zoom.
@@ -323,6 +325,7 @@ impl App {
             dropped: 0,
             table_scroll_x: 0.0,
             table_width: 0.0,
+            frames: 0,
         };
         app.load_defs();
         app.check_def_updates();
@@ -3826,6 +3829,16 @@ impl eframe::App for App {
         self.export_window(&ctx);
         self.def_updates_window(&ctx);
         self.check_export();
+
+        // The window becomes visible after its first frame; the splash goes with the second one.
+        if self.frames < 2 {
+            self.frames += 1;
+            if self.frames == 2 {
+                crate::splash::close();
+            } else {
+                ctx.request_repaint();
+            }
+        }
 
         // Save settings (debounced, so we do not write on every mouse move).
         let closing = ctx.input(|i| i.viewport().close_requested());

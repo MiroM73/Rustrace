@@ -333,6 +333,9 @@ about.build = Build
 about.settings = Settings file
 about.copy = Copy version information
 about.copied = Version information copied to the clipboard
+
+# --- Start-up splash ---
+splash.starting = Starting…
 # --- Default app window (Windows) ---
 assoc.title = Default app for log files
 assoc.intro = RusTrace can open .log and .lo_ files when you double-click them in Explorer. The registration is stored for your user account only, no administrator rights are needed.

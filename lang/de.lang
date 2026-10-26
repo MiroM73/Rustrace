@@ -319,6 +319,9 @@ about.build = Build
 about.settings = Einstellungsdatei
 about.copy = Versionsinformationen kopieren
 about.copied = Versionsinformationen in die Zwischenablage kopiert
+
+# --- Startfenster ---
+splash.starting = Wird gestartet…
 # --- Fenster Standard-App (Windows) ---
 assoc.title = Standard-App für Logdateien
 assoc.intro = RusTrace kann .log- und .lo_-Dateien per Doppelklick im Explorer öffnen. Die Registrierung gilt nur für Ihr Benutzerkonto, Administratorrechte sind nicht nötig.

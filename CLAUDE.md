@@ -129,7 +129,12 @@ Features (all implemented, see README for user-facing details):
 - Settings saved automatically to `%APPDATA%\RusTrace\config.json` (with migration of old settings).
 
 ## Code layout
-- `src/main.rs` – window start-up, optional log path argument.
+- `src/main.rs` – window start-up, optional log path argument, start-up splash.
+- `src/splash.rs` – start-up splash (#11, Windows): own thread + message loop, WS_POPUP window,
+  painted into a DIB (icon, anti-aliased ring of 8 dots, GDI text), per-monitor DPI aware; closed by
+  `App::ui` on the second frame (`splash::close`, safe before the window exists).
+- `src/icon.rs` – program icon drawn in code (`rgba(size)`, `ico(sizes)`); `build.rs` includes it
+  with `#[path]` and embeds the .ico + version info with `winresource` (needs `rc.exe`).
 - `src/app.rs` – the whole UI (`App`), background loading, export dialog, windows.
 - `src/parser.rs` – `LogSource::poll()` chunked incremental reading, encodings, format parsing,
   `read_line_ranges()` for original-line export. Dates stored as ISO `YYYY-MM-DD HH:MM:SS.mmm`,
@@ -162,7 +167,7 @@ Features (all implemented, see README for user-facing details):
 
 ## Commands
 - `cargo build --release` → `target\release\rustrace.exe`
-- `cargo test` (55 tests: search as you type threshold, status-bar position percentage, file association (registry in an own HKCU test key), search history, store drop_front / move to temp file, rotated parts (naming, merge on open, rotation while watching, replaced
+- `cargo test` (56 tests: icon / .ico layout, search as you type threshold, status-bar position percentage, file association (registry in an own HKCU test key), search history, store drop_front / move to temp file, rotated parts (naming, merge on open, rotation while watching, replaced
   file), export segments by file, time range bounds, column filter syntax, parsers, chunked/ANSI/UTF-16 reading, log definitions (CBS, DISM, IIS,
   Exchange connectivity / CSV separator, choice by name/content, appending across refreshes), store (32-byte record, ISO ↔ ms, push /
   truncate / append, mapped temp file growing past 64 MB, interner), export incl. end-to-end and
@@ -256,6 +261,8 @@ Features (all implemented, see README for user-facing details):
 36. #4: search as you type from `INSTANT_SEARCH_MIN_CHARS` (3) characters, the first match (from the
     top of `filtered`) is selected; shorter texts only after Enter / F3 / history / search component
     (`search_confirmed`, cleared by typing); before, every keystroke searched even 1 character.
+37. #11: start-up splash (icon, name + version, "Starting…", rotating dots) until the main window
+    shows; new program icon drawn in code, used for the window and embedded in the exe.
 
 ## Ideas not done yet (offered to the owner)
 - Merge **different** logs into one view sorted by time (like CMTrace File → Open → "Merge
