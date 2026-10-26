@@ -249,6 +249,7 @@ Features (all implemented, see README for user-facing details):
 32. Release v0.6.0 (#10, #7, #5, #9).
 33. #6 high CPU: the AMD driver spun a core with wgpu → OpenGL renderer by default with wgpu
     fallback; fewer frames per auto refresh.
+34. Release v0.6.1 (#6 high CPU fix).
 
 ## Ideas not done yet (offered to the owner)
 - Merge **different** logs into one view sorted by time (like CMTrace File → Open → "Merge
