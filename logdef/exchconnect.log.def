@@ -1,0 +1,42 @@
+# RusTrace log definition – Microsoft Exchange Server Transport Connectivity log
+# (%ExchangeInstallPath%TransportRoles\Logs\Hub\Connectivity\CONNECTLOG<date>-<n>.LOG,
+#  also ...\FrontEnd\Connectivity and ...\Mailbox\Connectivity)
+#
+# Example:
+#   #Software: Microsoft Exchange Server
+#   #Version: 15.0.0.0
+#   #Log-type: Transport Connectivity Log
+#   #Date: 2026-09-27T00:00:25.076Z
+#   #Fields: date-time,session,source,Destination,direction,description
+#   2026-09-26T23:59:49.511Z,08DF1042B9A7211F,SMTP,shadowredundancy,+,ShadowRedundancy ...
+#
+# Like the IIS (W3C) format, but the fields and the values are separated by a comma
+# (separator = ,); a value containing a comma is quoted. direction: + connect, - disconnect,
+# > send, < receive, * information. Exchange writes the time in UTC – it is shown in local time.
+
+name = Exchange Transport Connectivity log
+format = w3c
+separator = ,
+files = connectlog*.log
+detect = ^#Log-type: Transport Connectivity Log
+
+# Used until a "#Fields:" header is found (Exchange default field set).
+fields = date-time,session,source,Destination,direction,description
+
+role.datetime = date-time
+role.component = source
+role.message = description
+datetime.format = %Y-%m-%dT%H:%M:%S%.fZ
+timezone = utc
+
+# There is no severity column – the description decides.
+role.severity = description
+severity.error = \b(fail(ed|ure|s)?|error|exception)\b
+severity.warning = \b(retry(ing)?|timed? ?out|refused|throttl\w*|defer(red)?)\b
+
+columns = datetime session component direction destination message
+title.session = Session
+title.component = Source
+title.direction = Dir
+title.destination = Destination
+title.message = Description

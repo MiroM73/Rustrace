@@ -9,6 +9,7 @@
 //! | `files` | file name patterns (`*`, `?`, case-insensitive), separated by `;` – default: the file name without `.def` |
 //! | `detect` | regex; a file whose name matches no definition uses this one when one of its first lines matches |
 //! | `format` | `regex` (default) or `w3c` (column names from the `#Fields:` header, space-separated values, `-` = empty) |
+//! | `separator` | w3c: `space` (default), `tab` or one character, e.g. `,` – other than space: CSV-style values (`"…"` quoting, `""` = `"`), `-` stays a value |
 //! | `pattern` | regex for one entry (format `regex`); every **named group** is a column |
 //! | `fields` | w3c: column names used until a `#Fields:` header is found |
 //! | `skip` | regex; matching lines are ignored |
@@ -29,6 +30,7 @@
 
 use crate::parser::{keyword_sev, LogEntry, Severity};
 use regex::{Regex, RegexBuilder};
+use std::borrow::Cow;
 use std::collections::{BTreeMap, HashMap};
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
@@ -37,6 +39,7 @@ use std::sync::Arc;
 const BUILTIN: &[(&str, &str)] = &[
     ("cbs.log.def", include_str!("../logdef/cbs.log.def")),
     ("dism.log.def", include_str!("../logdef/dism.log.def")),
+    ("exchconnect.log.def", include_str!("../logdef/exchconnect.log.def")),
     ("iisweb.log.def", include_str!("../logdef/iisweb.log.def")),
 ];
 
@@ -141,7 +144,73 @@ enum Unmatched {
 #[derive(Debug)]
 enum Kind {
     Regex(Regex),
-    W3c,
+    /// W3C-like log: column names from the `#Fields:` header, `None` = space-separated
+    /// (IIS, `-` = empty), `Some(c)` = values separated by `c`, CSV-style (Exchange).
+    W3c(Option<char>),
+}
+
+/// Splits a w3c data line into its values.
+///
+/// Space-separated (IIS): `-` is an empty value. Other separators (Exchange CSV logs): a value
+/// may be quoted (`"a, b"`, `""` inside = `"`), so it can contain the separator; `-` is kept
+/// (in Exchange logs it is a real value, e.g. `direction` `-` = disconnect).
+fn split_values(line: &str, sep: Option<char>) -> Vec<Cow<'_, str>> {
+    let Some(sep) = sep else {
+        return line
+            .split(' ')
+            .map(|v| Cow::Borrowed(if v == "-" { "" } else { v }))
+            .collect();
+    };
+    let line = line.trim_end_matches(['\r', '\n']);
+    let mut out = Vec::new();
+    let mut rest = line;
+    loop {
+        if let Some(q) = rest.strip_prefix('"') {
+            // Quoted value: up to the closing quote that is not doubled.
+            let mut val = String::new();
+            let mut chars = q.char_indices().peekable();
+            let mut end = q.len();
+            while let Some((i, c)) = chars.next() {
+                if c == '"' {
+                    if chars.peek().is_some_and(|&(_, n)| n == '"') {
+                        val.push('"');
+                        chars.next();
+                    } else {
+                        end = i + 1;
+                        break;
+                    }
+                } else {
+                    val.push(c);
+                }
+            }
+            // Text between the closing quote and the next separator (malformed) is kept.
+            let after = &q[end.min(q.len())..];
+            match after.find(sep) {
+                Some(i) => {
+                    val.push_str(&after[..i]);
+                    out.push(Cow::Owned(val));
+                    rest = &after[i + sep.len_utf8()..];
+                }
+                None => {
+                    val.push_str(after);
+                    out.push(Cow::Owned(val));
+                    break;
+                }
+            }
+        } else {
+            match rest.find(sep) {
+                Some(i) => {
+                    out.push(Cow::Borrowed(&rest[..i]));
+                    rest = &rest[i + sep.len_utf8()..];
+                }
+                None => {
+                    out.push(Cow::Borrowed(rest));
+                    break;
+                }
+            }
+        }
+    }
+    out
 }
 
 /// A parsed log definition.
@@ -247,6 +316,7 @@ impl LogDef {
                     | "format"
                     | "pattern"
                     | "fields"
+                    | "separator"
                     | "skip"
                     | "unmatched"
                     | "severity.error"
@@ -260,8 +330,21 @@ impl LogDef {
         }
 
         let get = |k: &str| map.get(k).map(String::as_str).filter(|v| !v.is_empty());
+        let separator = match get("separator") {
+            None => None,
+            Some(v) if v.eq_ignore_ascii_case("space") || v == " " => None,
+            Some(v) if v.eq_ignore_ascii_case("tab") || v == "\\t" => Some('\t'),
+            Some(v) => {
+                let mut c = v.chars();
+                match (c.next(), c.next()) {
+                    (Some(ch), None) if ch != '"' => Some(ch),
+                    _ => return Err(format!("separator: \"{v}\" (space, tab or one character)")),
+                }
+            }
+        };
         let kind = match get("format").unwrap_or("regex").to_ascii_lowercase().as_str() {
-            "w3c" => Kind::W3c,
+            "w3c" => Kind::W3c(separator),
+            _ if get("separator").is_some() => return Err("separator: only for format = w3c".into()),
             "regex" => {
                 let p = get("pattern").ok_or("missing key \"pattern\"")?;
                 let re = build_regex("pattern", p, false)?;
@@ -273,7 +356,7 @@ impl LogDef {
             other => return Err(format!("format: unknown value \"{other}\" (regex, w3c)")),
         };
         // w3c lines never continue on the next line, so entries need not wait for the next one.
-        let default_unmatched = if matches!(kind, Kind::W3c) { "entry" } else { "append" };
+        let default_unmatched = if matches!(kind, Kind::W3c(_)) { "entry" } else { "append" };
         let unmatched = match get("unmatched").unwrap_or(default_unmatched).to_ascii_lowercase().as_str() {
             "append" => Unmatched::Append,
             "entry" => Unmatched::Entry,
@@ -492,7 +575,7 @@ impl DefState {
         };
         let names: Vec<String> = match &def.kind {
             Kind::Regex(re) => re.capture_names().map(|n| n.unwrap_or("").to_owned()).collect(),
-            Kind::W3c => def.default_fields.clone(),
+            Kind::W3c(_) => def.default_fields.clone(),
         };
         let map = def.mapping(&names, schema, false);
         Self {
@@ -522,9 +605,16 @@ impl DefState {
             return DefLine::Skip;
         }
         let def = self.def.clone();
-        if let Kind::W3c = def.kind {
+        if let Kind::W3c(sep) = def.kind {
             if let Some(rest) = line.strip_prefix("#Fields:") {
-                let names: Vec<String> = rest.split_whitespace().map(str::to_owned).collect();
+                let names: Vec<String> = match sep {
+                    None => rest.split_whitespace().map(str::to_owned).collect(),
+                    Some(c) => rest
+                        .split(c)
+                        .map(|n| n.trim().trim_matches('"').to_owned())
+                        .filter(|n| !n.is_empty())
+                        .collect(),
+                };
                 // The first header replaces the default fields of the definition (and their
                 // extra columns, while no entry uses them); later headers only add columns.
                 if !self.header_seen && !self.entries_parsed {
@@ -542,12 +632,10 @@ impl DefState {
             return DefLine::Skip;
         }
         match &def.kind {
-            Kind::W3c => {
+            Kind::W3c(sep) => {
                 self.entries_parsed = true;
-                let vals: Vec<&str> = line.split(' ').collect();
-                DefLine::Entry(self.build(line_no, line, kw, |i| {
-                    vals.get(i).map(|v| if *v == "-" { "" } else { *v })
-                }))
+                let vals = split_values(line, *sep);
+                DefLine::Entry(self.build(line_no, line, kw, |i| vals.get(i).map(|v| v.as_ref())))
             }
             Kind::Regex(re) => match re.captures(line) {
                 Some(c) => DefLine::Entry(self.build(line_no, line, kw, |i| c.get(i).map(|m| m.as_str()))),
@@ -914,7 +1002,7 @@ mod tests {
         let set = load_from(&[], SourceFilter::All);
         assert!(set.errors.is_empty(), "{:?}", set.errors);
         let ids: Vec<&str> = set.defs.iter().map(|d| d.id.as_str()).collect();
-        assert_eq!(ids, ["cbs.log.def", "dism.log.def", "iisweb.log.def"]);
+        assert_eq!(ids, ["cbs.log.def", "dism.log.def", "exchconnect.log.def", "iisweb.log.def"]);
     }
 
     #[test]
@@ -1021,6 +1109,69 @@ mod tests {
         assert_eq!(s.columns[0].kind, ColumnKind::Role(Role::DateTime));
     }
 
+    /// Exchange Transport Connectivity log (issue #13): comma-separated `#Fields:` and values,
+    /// one date-time field with `T` and `Z`, `-` kept as a value, quoted values with commas.
+    #[test]
+    fn exchange_connectivity_log() {
+        let def = builtin("exchconnect.log.def");
+        assert!(def.matches_file("CONNECTLOG20260927-1.LOG"));
+        let header = [
+            "#Software: Microsoft Exchange Server",
+            "#Version: 15.0.0.0",
+            "#Log-type: Transport Connectivity Log",
+            "#Date: 2026-09-27T00:00:25.076Z",
+            "#Fields: date-time,session,source,Destination,direction,description",
+        ];
+        assert!(def.detects(&header));
+        assert!(!builtin("iisweb.log.def").detects(&header));
+        let mut lines = header.to_vec();
+        lines.extend([
+            "2026-09-26T23:59:49.511Z,08DF1042B9A7211F,SMTP,shadowredundancy,+,ShadowRedundancy 00000000-0000-0000-0000-000000000000;QueueLength=<no priority counts>. ",
+            "2026-09-26T23:59:50.001Z,08DF1042B9A7211F,SMTP,shadowredundancy,-,,",
+            "2026-09-26T23:59:51.002Z,08DF1042B9A72120,SMTP,mail.contoso.com,>,\"Failed connection to 10.0.0.5:25 (TimedOut:10060, \"\"x\"\")\"",
+            "2026-09-26T23:59:52.003Z,08DF1042B9A72121,SMTP,mail.contoso.com,*,Retrying the connection",
+        ]);
+        let (e, s) = parse_lines(def, &lines);
+        assert_eq!(e.len(), 4);
+        assert_eq!(e[0].line_no, 6);
+        assert_eq!(e[0].component, "SMTP");
+        assert!(e[0].message.starts_with("ShadowRedundancy 0000"));
+        assert_eq!(extra(&e[0], &s, "session"), "08DF1042B9A7211F");
+        assert_eq!(extra(&e[0], &s, "Destination"), "shadowredundancy");
+        assert_eq!(extra(&e[0], &s, "direction"), "+");
+        // "-" is a real value here (disconnect), an empty value stays empty.
+        assert_eq!(extra(&e[1], &s, "direction"), "-");
+        assert_eq!(e[1].message, "");
+        // A quoted value keeps its commas and doubled quotes.
+        assert_eq!(e[2].message, "Failed connection to 10.0.0.5:25 (TimedOut:10060, \"x\")");
+        assert_eq!(
+            [e[0].severity, e[2].severity, e[3].severity],
+            [Severity::Info, Severity::Error, Severity::Warning]
+        );
+        // UTC with "T" and "Z" converted to local time.
+        use chrono::TimeZone;
+        let utc = chrono::NaiveDateTime::parse_from_str("2026-09-26 23:59:49.511", "%Y-%m-%d %H:%M:%S%.3f").unwrap();
+        let local = chrono::Local.from_utc_datetime(&utc).naive_local();
+        assert_eq!(e[0].datetime, local.format("%Y-%m-%d %H:%M:%S%.3f").to_string());
+        let titles: Vec<&str> = s.columns.iter().filter_map(|c| c.title.as_deref()).collect();
+        assert_eq!(titles, ["Session", "Source", "Dir", "Destination", "Description"]);
+        assert_eq!(s.columns[0].kind, ColumnKind::Role(Role::DateTime));
+    }
+
+    #[test]
+    fn separator_values() {
+        let v = |l: &str, s: Option<char>| split_values(l, s).into_iter().map(|c| c.into_owned()).collect::<Vec<_>>();
+        assert_eq!(v("a - c", None), ["a", "", "c"]);
+        assert_eq!(v("a,-,,\"b,\"\"c\"\"\",d\r", Some(',')), ["a", "-", "", "b,\"c\"", "d"]);
+        assert_eq!(v("x\ty", Some('\t')), ["x", "y"]);
+        assert_eq!(v("\"unclosed,z", Some(',')), ["unclosed,z"]);
+        let def = |extra: &str| LogDef::parse("t.def", &format!("name = T\n{extra}"), None);
+        assert!(def("format = w3c\nseparator = ;").is_ok());
+        assert!(def("format = w3c\nseparator = tab").is_ok());
+        assert!(def("format = w3c\nseparator = ab").is_err());
+        assert!(def("pattern = (?P<message>.*)\nseparator = ,").is_err());
+    }
+
     /// A second `#Fields:` header with fewer fields adds no columns but removes none either:
     /// the table shows the columns of every part of the file.
     #[test]
@@ -1085,17 +1236,30 @@ mod tests {
                 ("aaa.def", 1),
                 ("iisweb.log.def", 1),
                 ("cbs.log.def", 0),
-                ("dism.log.def", 0)
+                ("dism.log.def", 0),
+                ("exchconnect.log.def", 0)
             ]
         );
         assert!(set.defs[0].is_own() && !set.defs[0].same_as(&set.defs[3]));
         // Only the predefined or only the own definitions.
         let ids = |f| -> Vec<String> { load_from(&dirs, f).defs.iter().map(|d| d.name.clone()).collect() };
         assert_eq!(ids(SourceFilter::Own), ["own iisweb", "user zzz"]);
-        assert_eq!(ids(SourceFilter::Predefined), ["exe aaa", "next to exe", "Windows CBS log", "DISM log"]);
+        assert_eq!(ids(SourceFilter::Predefined), [
+                "exe aaa",
+                "next to exe",
+                "Windows CBS log",
+                "DISM log",
+                "Exchange Transport Connectivity log"
+            ]);
         // The texts for the notice are there whatever the filter is.
         let set = load_from(&dirs, SourceFilter::Own);
-        assert_eq!(set.predefined.keys().collect::<Vec<_>>(), ["aaa.def", "cbs.log.def", "dism.log.def", "iisweb.log.def"]);
+        assert_eq!(set.predefined.keys().collect::<Vec<_>>(), [
+                "aaa.def",
+                "cbs.log.def",
+                "dism.log.def",
+                "exchconnect.log.def",
+                "iisweb.log.def"
+            ]);
         assert_eq!(set.own.keys().collect::<Vec<_>>(), ["iisweb.log.def", "zzz.def"]);
         std::fs::remove_dir_all(&base).ok();
     }

@@ -170,6 +170,39 @@ def iis_lines(r, count, start=DAY, header=True, fields=IIS_FIELDS):
                    f"{r.randint(1, 3000)}")
 
 
+EXCH_FIELDS = "date-time,session,source,Destination,direction,description"
+
+
+def exchange_connect_lines(r, count, start=DAY):
+    """Exchange Transport Connectivity log: comma-separated W3C-like format, UTC "T...Z" times,
+    direction + - > < *, some descriptions quoted because they contain commas."""
+    yield "#Software: Microsoft Exchange Server"
+    yield "#Version: 15.0.0.0"
+    yield "#Log-type: Transport Connectivity Log"
+    yield f"#Date: {start:%Y-%m-%dT%H:%M:%S}.000Z"
+    yield f"#Fields: {EXCH_FIELDS}"
+    when = start
+    hosts = ["mail.contoso.com", "smtp.fabrikam.com", "shadowredundancy", "mx.example.org"]
+    for _ in range(count):
+        when += dt.timedelta(milliseconds=r.randint(0, 3000))
+        session = f"08DF1042B9A7{r.randint(0, 0xFFFF):04X}"
+        host = r.choice(hosts)
+        k = r.random()
+        if k < 0.05:
+            d, desc = ">", f'"Failed connection to 10.0.{r.randint(0, 3)}.{r.randint(2, 250)}:25 (TimedOut:10060, Socket error)"'
+        elif k < 0.10:
+            d, desc = "*", "Retrying the connection attempt"
+        elif k < 0.35:
+            d, desc = "+", f"{host} [10.0.0.{r.randint(2, 250)}] connecting"
+        elif k < 0.60:
+            d, desc = "-", f"Messages: {r.randint(0, 20)} Bytes: {r.randint(0, 10**6)} (Session closed)"
+        elif k < 0.80:
+            d, desc = ">", f"Established connection to 10.0.0.{r.randint(2, 250)}"
+        else:
+            d, desc = "+", "ShadowRedundancy 00000000-0000-0000-0000-000000000000;QueueLength=<no priority counts>. "
+        yield f"{when:%Y-%m-%dT%H:%M:%S}.{when.microsecond // 1000:03d}Z,{session},SMTP,{host},{d},{desc}"
+
+
 # ----------------------------------------------------------------------
 
 def small(r):
@@ -212,6 +245,8 @@ def small(r):
     write(ROOT / "iis" / "u_ex261023.log",
           list(iis_lines(r, 1500)) + list(iis_lines(r, 500, DAY + dt.timedelta(hours=2), fields=IIS_FIELDS_SHORT)))
     write(ROOT / "iis" / "webserver-access.txt", iis_lines(r, 300))  # detected by content, not by name
+    write(ROOT / "exchange" / "CONNECTLOG2026102300-1.LOG", exchange_connect_lines(r, 2000))
+    write(ROOT / "exchange" / "transport-connectivity.txt", exchange_connect_lines(r, 300))  # by content
     # Rotation: service.log + older parts (by modification time)
     rot = ROOT / "rotation"
     parts = [("service-20261023-080000.log", 180), ("service-20261023-090000.log", 120),
@@ -246,6 +281,8 @@ cbs/CBS.log                       CBS log definition (continuation lines, Info/W
 dism/dism.log                     DISM log definition (provider, PID/TID, function)
 iis/u_ex261023.log                IIS W3C, a second #Fields header with fewer columns in the middle
 iis/webserver-access.txt          IIS W3C detected by content (the name matches no definition)
+exchange/CONNECTLOG2026102300-1.LOG  Exchange Transport Connectivity log (comma-separated W3C, quoted values)
+exchange/transport-connectivity.txt  the same format detected by content
 rotation/service.log              active log; service.lo_ and service-20261023-0X0000.log are older parts
                                   (merged when service.log is opened; modification times set in order)
 big/big_cmtrace_400mb.log         400 MB CMTrace (memory / speed measurements)

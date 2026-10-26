@@ -26,7 +26,7 @@ Both create:
 RusTrace\
     rustrace.exe      the program (no installation, no Visual C++ runtime needed)
     lang\*.lang       language files – edit or add translations here
-    logdef\*.def      log definitions (IIS, DISM, CBS) – edit or add your own formats here
+    logdef\*.def      log definitions (IIS, Exchange, DISM, CBS) – edit or add your own formats here
     LICENSE           the Unlicense (public domain)
 ```
 
@@ -80,7 +80,7 @@ Visual C++ Redistributable.
 - the older SMS format `message $$<component><date time><thread=...>`
 - plain text (severity from the words error / fail / warn – can be turned off)
 - **any other layout described by a log definition** – built in: **IIS web logs** (W3C),
-  **dism.log**, **CBS.log**; your own in `logdef\*.def` (see [Log definitions](#log-definitions))
+  **Exchange Transport Connectivity logs**, **dism.log**, **CBS.log**; your own in `logdef\*.def` (see [Log definitions](#log-definitions))
 - encodings UTF-8, UTF-16 LE/BE (by BOM), ANSI (Windows-1250)
 
 **Automatic refresh**
@@ -245,8 +245,9 @@ file `<name>.def` that says how one line is split into columns (date/time, sever
 message, …). The table then shows exactly these columns; severity coloring, search, highlight rules,
 filters, the time filter and the export work as with CMTrace logs.
 
-Built in: `iisweb.log.def` (IIS web logs `u_ex*.log`, W3C format), `dism.log.def` (`dism.log`) and
-`cbs.log.def` (`CBS.log`, `CbsPersist_*.log`).
+Built in: `iisweb.log.def` (IIS web logs `u_ex*.log`, W3C format), `exchconnect.log.def` (Exchange
+Server Transport Connectivity logs `CONNECTLOG*.LOG`, comma-separated W3C-like format),
+`dism.log.def` (`dism.log`) and `cbs.log.def` (`CBS.log`, `CbsPersist_*.log`).
 
 **Choosing the format** – View → Log format:
 - **Automatic** (default for every opened file): a definition whose `files` patterns match the file
@@ -306,6 +307,7 @@ title.severity = Level
 | `format` | `regex` (default) or `w3c` – W3C extended log format (IIS): column names from the `#Fields:` header (when a later header has other fields, the table shows the columns of all headers), space-separated values, `-` = empty |
 | `pattern` | regex for one line (format `regex`); every **named group** `(?P<name>…)` is a column |
 | `fields` | `w3c`: column names used until a `#Fields:` header is found |
+| `separator` | `w3c`: what separates the `#Fields:` names and the values – `space` (default), `tab` or one character, e.g. `,` for Exchange logs. With a separator other than space the values are read CSV-style: a value in quotes may contain the separator (`"a, b"`, `""` inside = `"`), and `-` stays a value (in Exchange logs `direction` `-` means disconnect) |
 | `skip` | regex; matching lines are ignored |
 | `unmatched` | lines not matching the pattern: `append` to the previous entry (multi-line entries, default for `regex`), `entry` = own row (default for `w3c`), `skip` |
 | `role.datetime`, `role.message`, `role.component`, `role.thread` | which column(s) fill the standard columns (several are joined with a space, e.g. `role.message = cs-method cs-uri-stem cs-uri-query`); default: the column with the same name (`datetime` also `date` + `time`); without a message column the whole line is the message |
@@ -393,7 +395,7 @@ The built-in languages live in `lang/*.lang` in the source tree and are embedded
 - `src/app.rs` – user interface
 - `src/main.rs` – window start-up
 - `lang/*.lang` – built-in translations
-- `logdef/*.def` – built-in log definitions (IIS, DISM, CBS)
+- `logdef/*.def` – built-in log definitions (IIS, Exchange, DISM, CBS)
 - `scripts/package.ps1` – packs the release build into the self-extracting archive and the ZIP
 - `scripts/gen_testlogs.py` – generates the test logs in `testlogs/` (not in git)
 - `.github/workflows/release.yml` – builds and publishes releases on GitHub
