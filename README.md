@@ -206,6 +206,11 @@ Visual C++ Redistributable.
 - text or regex, Aa = match case; the number of matches (or an invalid-regex warning) and the ✖ clear
   button are shown right after the search field
 - searches the message, the component and the extra columns of a log definition
+- when a match in a long message would not be visible in the Message cell (past the right edge of
+  the column, or on a later line of a multi-line message), the cell shows the part of the message
+  around the match, starting with "…"
+- the details pane highlights the matches in the full message (and the text highlight rules) and
+  scrolls to the first match
 - Enter/F3 = next, Shift+Enter/Shift+F3 = previous
 - **Filter** (Ctrl+L) – show only matching rows
 - Info / Warnings / Errors toggles

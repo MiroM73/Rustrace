@@ -5,6 +5,7 @@ mod app;
 mod colfilter;
 mod config;
 mod errcodes;
+mod excerpt;
 mod export;
 mod i18n;
 mod logdef;

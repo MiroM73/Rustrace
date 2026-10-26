@@ -84,7 +84,11 @@ Features (all implemented, see README for user-facing details):
 - Zoom: Ctrl + mouse wheel over the log text (table, details message) → `cfg.font_size` (6–48);
   elsewhere → whole-UI `zoom_factor` (0.5–3.0, saved as `cfg.ui_zoom`, also Ctrl+plus/minus/0).
   Hover is tracked per frame in `hover_log`, applied in `handle_zoom` after the panels are drawn.
-- Search: text/regex, next/prev, filter mode, info/warning/error toggles.
+- Search: text/regex, next/prev, filter mode, info/warning/error toggles. A match that would not be
+  visible in the Message cell (later line, past `MAX_CELL_CHARS`, past the column width measured
+  with `layout_no_wrap`) → `App::message_cell_text` shows `excerpt::around` (context before the
+  match, "…"). Details pane: `TextEdit` with a layouter using `text_spans` (rules + search), scrolls
+  to the first match once per (row, `search_gen`) (`details_scrolled`).
 - Horizontal scrolling of the table (`App::table`): egui_extras tables only scroll vertically, so
   the table is laid out in a child Ui shifted left by `table_scroll_x` and clipped to the visible
   rect – its right edge with the vertical scroll bar stays in view; a separate horizontal
@@ -122,6 +126,7 @@ Features (all implemented, see README for user-facing details):
   `DefState::parse()` line → `LogEntry`, `Schema` / `Column` / `Role`.
 - `src/export.rs` – pure export logic (range merging, time filter, date input parsing, last-N, output).
 - `src/errcodes.rs` – error code detection/parsing/lookup.
+- `src/excerpt.rs` – text of the message cell: first line, or an excerpt around a search match.
 - `src/i18n.rs` – language files, `t!()` macro, fallback, external language folders.
 - `src/config.rs` – `Config`, `HighlightRule`, per-theme palettes, serde defaults/migration.
 - `lang/*.lang` – built-in translations, embedded with `include_str!`.
@@ -210,6 +215,10 @@ Features (all implemented, see README for user-facing details):
 21. Release v0.3.1 (bug fix: a rotated part opened directly was read twice).
 22. Fix: a later w3c `#Fields:` header replaced the table columns, so rows of the first part lost
     their columns; now the first header replaces the default fields, later ones only add columns.
+
+27. (2026-10-26) GitHub workflow with issues + PRs started. #2: match count right after the search
+    field. #1: a search match hidden in a long message → excerpt in the cell, highlighted and
+    scrolled to in the details pane.
 
 ## Ideas not done yet (offered to the owner)
 - Merge **different** logs into one view sorted by time (like CMTrace File → Open → "Merge
