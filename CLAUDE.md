@@ -279,6 +279,9 @@ Features (all implemented, see README for user-facing details):
     shows; new program icon drawn in code, used for the window and embedded in the exe.
 38. #15: update check (Help menu + automatic once a day, can be turned off), download + install of
     the release ZIP over the running program and restart with the same log and view.
+39. Release v0.7.0 (#11 splash + icon, #15 updates). Verified end to end on the published release:
+    0.7.0 started with RUSTRACE_UPDATE_AS_VERSION=0.6.0 updated itself and came back with the log,
+    search and selected row; `rustrace.exe.old` was deleted by the new process.
 
 ## Ideas not done yet (offered to the owner)
 - Merge **different** logs into one view sorted by time (like CMTrace File → Open → "Merge
