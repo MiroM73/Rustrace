@@ -78,6 +78,7 @@ menu.tools = Nástroje
 menu.tools.lookup = Vyhledat chybový kód…
 menu.help = Nápověda
 menu.help.shortcuts = Klávesové zkratky
+menu.help.about = O programu RusTrace
 menu.help.settings_file = Nastavení: {path}
 
 # --- Jazyk ---
@@ -295,6 +296,22 @@ help.zoom = Přiblížení celého okna
 help.zoom_wheel = Nad textem logu: velikost písma logu; jinde: přiblížení celého okna
 help.hscroll = Posun tabulky vodorovně (sloupce, které se nevejdou)
 help.open_hint = Soubor můžete otevřít i přetažením do okna nebo jako argument: rustrace.exe C:\\cesta\\soubor.log
+# --- Okno O programu ---
+about.title = O programu RusTrace
+about.version = Verze {version}
+about.description = Prohlížeč logů ve stylu CMTrace (Microsoft Configuration Manager).
+about.author = Autor
+about.created_by = Vytvořil
+about.created_by.text = Claude Opus 5.5 (Anthropic) – kód, návrh, překlady a dokumentace; autor zadal požadavky
+about.project = Stránka projektu
+about.releases = Nové verze
+about.issues = Problémy a nápady
+about.license = Licence
+about.license.text = The Unlicense (volné dílo, public domain)
+about.build = Sestavení
+about.settings = Soubor nastavení
+about.copy = Kopírovat informace o verzi
+about.copied = Informace o verzi jsou zkopírovány do schránky
 
 # --- Dialogy a chyby ---
 dialog.filter.logs = Log soubory

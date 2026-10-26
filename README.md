@@ -33,7 +33,10 @@ RusTrace\
 The programs are not code-signed, so Windows SmartScreen may ask for confirmation
 ("More info" → "Run anyway"). The `.sha256` files contain the checksums.
 
-The window title shows the version in use, e.g. `RusTrace 0.6.0 – ccmexec.log`.
+The window title shows the version in use, e.g. `RusTrace 0.6.0 – ccmexec.log`. **Help → About
+RusTrace** shows the version, author, license, links to the project page, new versions and the
+issue tracker, the build (platform) and the settings file; "Copy version information" puts e.g.
+`RusTrace 0.6.0 (windows x86_64, release)` on the clipboard for a bug report.
 
 ## Building
 

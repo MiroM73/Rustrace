@@ -78,6 +78,7 @@ menu.tools = Extras
 menu.tools.lookup = Fehlercode nachschlagen…
 menu.help = Hilfe
 menu.help.shortcuts = Tastenkürzel
+menu.help.about = Über RusTrace
 menu.help.settings_file = Einstellungen: {path}
 
 # --- Sprache ---
@@ -295,6 +296,22 @@ help.zoom = Ganzes Fenster zoomen
 help.zoom_wheel = Über dem Logtext: Schriftgröße des Logs; sonst: ganzes Fenster zoomen
 help.hscroll = Tabelle horizontal scrollen (Spalten, die nicht passen)
 help.open_hint = Eine Datei kann auch durch Ziehen ins Fenster oder als Argument geöffnet werden: rustrace.exe C:\\Pfad\\Datei.log
+# --- Fenster Über ---
+about.title = Über RusTrace
+about.version = Version {version}
+about.description = Ein Log-Viewer im Stil von CMTrace (Microsoft Configuration Manager).
+about.author = Autor
+about.created_by = Erstellt von
+about.created_by.text = Claude Opus 5.5 (Anthropic) – Code, Design, Übersetzungen und Dokumentation; der Autor hat die Anforderungen vorgegeben
+about.project = Projektseite
+about.releases = Neue Versionen
+about.issues = Probleme und Ideen
+about.license = Lizenz
+about.license.text = The Unlicense (gemeinfrei, public domain)
+about.build = Build
+about.settings = Einstellungsdatei
+about.copy = Versionsinformationen kopieren
+about.copied = Versionsinformationen in die Zwischenablage kopiert
 
 # --- Dialoge und Fehler ---
 dialog.filter.logs = Logdateien

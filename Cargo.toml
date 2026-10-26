@@ -3,6 +3,8 @@ name = "rustrace"
 version = "0.5.0"
 edition = "2024"
 license = "Unlicense"
+description = "A CMTrace-style log viewer"
+repository = "https://github.com/MiroM73/Rustrace"
 
 [dependencies]
 eframe = "0.37"
