@@ -20,6 +20,14 @@ use std::sync::atomic::Ordering;
 use std::sync::{mpsc, Arc};
 use std::time::{Duration, Instant};
 
+/// Program version from Cargo.toml (window title, About window).
+pub const VERSION: &str = env!("CARGO_PKG_VERSION");
+
+/// Window title without a file: program name and version.
+pub fn base_title() -> String {
+    format!("RusTrace {VERSION}")
+}
+
 /// Max. number of message characters shown in the table (the full message is in the details pane).
 const MAX_CELL_CHARS: usize = 2000;
 
@@ -1176,12 +1184,13 @@ impl App {
     fn update_title(&mut self, ctx: &egui::Context) {
         let t = match &self.cur_path {
             Some(p) => format!(
-                "RusTrace – {}",
+                "{} – {}",
+                base_title(),
                 p.file_name()
                     .map(|f| f.to_string_lossy().into_owned())
                     .unwrap_or_default()
             ),
-            None => "RusTrace".to_owned(),
+            None => base_title(),
         };
         if t != self.title {
             ctx.send_viewport_cmd(egui::ViewportCommand::Title(t.clone()));

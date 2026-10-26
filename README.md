@@ -33,6 +33,8 @@ RusTrace\
 The programs are not code-signed, so Windows SmartScreen may ask for confirmation
 ("More info" → "Run anyway"). The `.sha256` files contain the checksums.
 
+The window title shows the version in use, e.g. `RusTrace 0.6.0 – ccmexec.log`.
+
 ## Building
 
 1. Install Rust: https://rustup.rs (on Windows with Visual Studio Build Tools – "Desktop development with C++").

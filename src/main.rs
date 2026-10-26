@@ -64,7 +64,7 @@ fn main() -> eframe::Result {
         viewport: egui::ViewportBuilder::default()
             .with_inner_size([1400.0, 850.0])
             .with_min_inner_size([700.0, 400.0])
-            .with_title("RusTrace")
+            .with_title(app::base_title())
             .with_drag_and_drop(true),
         #[cfg(windows)]
         wgpu_options: prefer_dx12(),
