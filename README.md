@@ -38,6 +38,16 @@ RusTrace** shows the version, author, license, links to the project page, new ve
 issue tracker, the build (platform) and the settings file; "Copy version information" puts e.g.
 `RusTrace 0.6.0 (windows x86_64, release)` on the clipboard for a bug report.
 
+**Default app for `.log` / `.lo_` files** (Windows, Help → Set as default app for .log / .lo_
+files…): registers RusTrace for your user account (no administrator rights, nothing outside
+`HKEY_CURRENT_USER`) and shows which program opens each extension now. Windows does not let a
+program replace an app **you chose yourself** (e.g. Notepad for `.log`); the window then offers
+"Open the Windows default apps settings", which opens the RusTrace page of Settings → Apps →
+Default apps, where one click switches the extension to RusTrace (or right-click a `.log` file →
+Open with → Choose another app → RusTrace → Always). "Remove the registration" deletes everything
+RusTrace wrote. The registration stores the path of `rustrace.exe` – after moving the program,
+set it as the default app again (the window warns when another copy is registered).
+
 ## Building
 
 1. Install Rust: https://rustup.rs (on Windows with Visual Studio Build Tools – "Desktop development with C++").
@@ -401,6 +411,7 @@ The built-in languages live in `lang/*.lang` in the source tree and are embedded
 - `src/logdef.rs` – log definitions: `.def` file format, loading, choosing by file name / content,
   parsing lines into columns (+ tests)
 - `src/errcodes.rs` – error code detection and lookup (+ tests)
+- `src/fileassoc.rs` – Windows file association for `.log` / `.lo_` (registry, status, + tests)
 - `src/export.rs` – export around highlighted rows: range merging, date/time filter and input
   parsing, last-N blocks, output formats (+ tests)
 - `src/i18n.rs` – localization: language files, fallback, `t!()` macro (+ tests)

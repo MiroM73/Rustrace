@@ -78,6 +78,7 @@ menu.tools = Extras
 menu.tools.lookup = Fehlercode nachschlagen…
 menu.help = Hilfe
 menu.help.shortcuts = Tastenkürzel
+menu.help.default_app = Als Standard-App für .log- / .lo_-Dateien festlegen…
 menu.help.about = Über RusTrace
 menu.help.settings_file = Einstellungen: {path}
 
@@ -315,6 +316,22 @@ about.build = Build
 about.settings = Einstellungsdatei
 about.copy = Versionsinformationen kopieren
 about.copied = Versionsinformationen in die Zwischenablage kopiert
+# --- Fenster Standard-App (Windows) ---
+assoc.title = Standard-App für Logdateien
+assoc.intro = RusTrace kann .log- und .lo_-Dateien per Doppelklick im Explorer öffnen. Die Registrierung gilt nur für Ihr Benutzerkonto, Administratorrechte sind nicht nötig.
+assoc.ext.rustrace = ✔ wird mit RusTrace geöffnet
+assoc.ext.other = wird mit einem anderen Programm geöffnet ({prog})
+assoc.ext.none = kein Programm festgelegt
+assoc.other_copy = ⚠ Registriert ist eine andere Kopie von RusTrace: {command}
+assoc.register = RusTrace als Standard-App festlegen
+assoc.unregister = Registrierung entfernen
+assoc.registered = RusTrace ist für .log- und .lo_-Dateien registriert
+assoc.unregistered = Die Registrierung von RusTrace wurde entfernt
+assoc.failed = Die Registrierung ist fehlgeschlagen: {error}
+assoc.choice_hint = Windows erlaubt Programmen nicht, ein selbst gewähltes Programm zu ersetzen. Wählen Sie RusTrace in den Windows-Einstellungen (Standard-Apps → RusTrace) oder klicken Sie mit der rechten Maustaste auf eine .log-Datei → Öffnen mit → Andere App auswählen → RusTrace → Immer.
+assoc.open_settings = Windows-Einstellungen für Standard-Apps öffnen
+assoc.move_hint = Wenn Sie rustrace.exe in einen anderen Ordner verschieben, legen Sie es erneut als Standard-App fest.
+assoc.type_name = Logdatei
 
 # --- Dialoge und Fehler ---
 dialog.filter.logs = Logdateien

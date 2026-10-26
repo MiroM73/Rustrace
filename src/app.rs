@@ -3,6 +3,8 @@ use crate::colfilter::ColumnFilter;
 use crate::errcodes::{self, CodeInfo};
 use crate::export::{self, ExportFormat, ReadableRow};
 use crate::excerpt;
+#[cfg(windows)]
+use crate::fileassoc::{self, ExtStatus};
 use crate::i18n;
 use crate::logdef::{self, Column as LogColumn, ColumnKind, LogDef, Role, Schema};
 use crate::parser::{FormatChoice, LogSource, PollResult, Progress, Severity, SourceFile};
@@ -129,6 +131,9 @@ pub struct App {
     show_colors: bool,
     show_help: bool,
     show_about: bool,
+    /// Default app window (Windows); the state is read when the window opens.
+    #[cfg(windows)]
+    assoc: Option<fileassoc::Info>,
     /// New / changed predefined log definitions since the version the user has seen.
     def_updates: Vec<logdef::DefUpdate>,
     show_def_updates: bool,
@@ -270,6 +275,8 @@ impl App {
             show_colors: false,
             show_help: false,
             show_about: false,
+            #[cfg(windows)]
+            assoc: None,
             def_updates: Vec::new(),
             show_def_updates: false,
             predefined_defs: Default::default(),
@@ -1398,6 +1405,11 @@ impl App {
                 if ui.button(t!("menu.help.shortcuts")).clicked() {
                     ui.close();
                     self.show_help = true;
+                }
+                #[cfg(windows)]
+                if ui.button(format!("🔗 {}", t!("menu.help.default_app"))).clicked() {
+                    ui.close();
+                    self.assoc = Some(fileassoc::info());
                 }
                 if ui.button(format!("ℹ {}", t!("menu.help.about"))).clicked() {
                     ui.close();
@@ -3614,6 +3626,100 @@ impl App {
     }
 }
 
+#[cfg(windows)]
+impl App {
+    /// Help → Set as default app: registers RusTrace for .log / .lo_ files (per user).
+    fn assoc_window(&mut self, ctx: &egui::Context) {
+        let Some(info) = &self.assoc else {
+            return;
+        };
+        let mut open = true;
+        let mut action = None;
+        let mut settings_err = None;
+        egui::Window::new(t!("assoc.title"))
+            .id(egui::Id::unique("assoc_window"))
+            .open(&mut open)
+            .resizable(false)
+            .collapsible(false)
+            .default_width(520.0)
+            .show(ctx, |ui| {
+                ui.add(egui::Label::new(t!("assoc.intro")).wrap());
+                ui.add_space(6.0);
+                egui::Grid::new("assoc_grid").spacing([20.0, 4.0]).show(ui, |ui| {
+                    for (ext, status) in &info.exts {
+                        ui.monospace(*ext);
+                        match status {
+                            ExtStatus::RusTrace => {
+                                ui.colored_label(Color32::from_rgb(60, 170, 80), t!("assoc.ext.rustrace"))
+                            }
+                            ExtStatus::Other(prog) => {
+                                ui.colored_label(ORANGE, t!("assoc.ext.other", prog = prog))
+                            }
+                            ExtStatus::None => ui.label(t!("assoc.ext.none")),
+                        };
+                        ui.end_row();
+                    }
+                });
+                if let Some(cmd) = &info.command
+                    && !info.this_exe
+                {
+                    ui.add_space(4.0);
+                    ui.colored_label(ORANGE, t!("assoc.other_copy", command = cmd));
+                }
+                ui.add_space(6.0);
+                ui.horizontal(|ui| {
+                    if ui.button(format!("✔ {}", t!("assoc.register"))).clicked() {
+                        action = Some(true);
+                    }
+                    if ui
+                        .add_enabled(info.command.is_some(), egui::Button::new(t!("assoc.unregister")))
+                        .clicked()
+                    {
+                        action = Some(false);
+                    }
+                });
+                if info.exts.iter().any(|(_, s)| matches!(s, ExtStatus::Other(_))) {
+                    ui.add_space(6.0);
+                    ui.add(egui::Label::new(t!("assoc.choice_hint")).wrap());
+                    if ui.button(format!("⚙ {}", t!("assoc.open_settings"))).clicked()
+                        && let Err(e) = fileassoc::open_default_apps_settings()
+                    {
+                        settings_err = Some(e.to_string());
+                    }
+                }
+                ui.add_space(4.0);
+                ui.weak(t!("assoc.move_hint"));
+            });
+        match action {
+            Some(true) => {
+                let res = fileassoc::register(&t!("assoc.type_name"));
+                self.info(match res {
+                    Ok(()) => t!("assoc.registered"),
+                    Err(e) => t!("assoc.failed", error = e),
+                });
+            }
+            Some(false) => {
+                let res = fileassoc::unregister();
+                self.info(match res {
+                    Ok(()) => t!("assoc.unregistered"),
+                    Err(e) => t!("assoc.failed", error = e),
+                });
+            }
+            None => {}
+        }
+        if let Some(e) = settings_err {
+            self.info(e);
+        }
+        self.assoc = if !open {
+            None
+        } else if action.is_some() {
+            Some(fileassoc::info())
+        } else {
+            self.assoc.take()
+        };
+    }
+}
+
 /// Target platform and build profile, e.g. "windows x86_64, release".
 fn build_info() -> String {
     let profile = if cfg!(debug_assertions) { "debug" } else { "release" };
@@ -3651,6 +3757,8 @@ impl eframe::App for App {
         self.colors_window(&ctx);
         self.help_window(&ctx);
         self.about_window(&ctx);
+        #[cfg(windows)]
+        self.assoc_window(&ctx);
         self.lookup_window(&ctx);
         self.export_window(&ctx);
         self.def_updates_window(&ctx);

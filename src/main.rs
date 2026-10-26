@@ -7,6 +7,7 @@ mod config;
 mod errcodes;
 mod excerpt;
 mod export;
+mod fileassoc;
 mod i18n;
 mod logdef;
 mod parser;

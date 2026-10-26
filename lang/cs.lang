@@ -78,6 +78,7 @@ menu.tools = Nástroje
 menu.tools.lookup = Vyhledat chybový kód…
 menu.help = Nápověda
 menu.help.shortcuts = Klávesové zkratky
+menu.help.default_app = Nastavit jako výchozí program pro soubory .log / .lo_…
 menu.help.about = O programu RusTrace
 menu.help.settings_file = Nastavení: {path}
 
@@ -315,6 +316,22 @@ about.build = Sestavení
 about.settings = Soubor nastavení
 about.copy = Kopírovat informace o verzi
 about.copied = Informace o verzi jsou zkopírovány do schránky
+# --- Okno výchozího programu (Windows) ---
+assoc.title = Výchozí program pro soubory logů
+assoc.intro = RusTrace může otevírat soubory .log a .lo_ dvojklikem v Průzkumníkovi. Registrace se uloží jen pro váš uživatelský účet, nejsou potřeba administrátorská práva.
+assoc.ext.rustrace = ✔ otevírá RusTrace
+assoc.ext.other = otevírá jiný program ({prog})
+assoc.ext.none = není nastaven žádný program
+assoc.other_copy = ⚠ Registrována je jiná kopie RusTrace: {command}
+assoc.register = Nastavit RusTrace jako výchozí program
+assoc.unregister = Odstranit registraci
+assoc.registered = RusTrace je zaregistrován pro soubory .log a .lo_
+assoc.unregistered = Registrace RusTrace byla odstraněna
+assoc.failed = Registrace selhala: {error}
+assoc.choice_hint = Windows nedovolí programům nahradit program, který jste si vybrali sami. Vyberte RusTrace v nastavení Windows (Výchozí aplikace → RusTrace) nebo klikněte pravým tlačítkem na soubor .log → Otevřít v programu → Zvolit jinou aplikaci → RusTrace → Vždy.
+assoc.open_settings = Otevřít nastavení výchozích aplikací Windows
+assoc.move_hint = Když přesunete rustrace.exe do jiné složky, nastavte ho jako výchozí program znovu.
+assoc.type_name = Soubor logu
 
 # --- Dialogy a chyby ---
 dialog.filter.logs = Log soubory

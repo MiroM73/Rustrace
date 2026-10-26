@@ -128,6 +128,10 @@ Features (all implemented, see README for user-facing details):
   `DefState::parse()` line → `LogEntry`, `Schema` / `Column` / `Role`.
 - `src/export.rs` – pure export logic (range merging, time filter, date input parsing, last-N, output).
 - `src/errcodes.rs` – error code detection/parsing/lookup.
+- `src/fileassoc.rs` – Windows file association (.log / .lo_, HKCU only, raw advapi32 FFI):
+  ProgID `RusTrace.LogFile`, `RegisteredApplications` → Settings page; `status()` reads
+  `UserChoiceLatest\ProgId` / `UserChoiceLatest` / `UserChoice` (a user choice cannot be set by a
+  program), names via `AssocQueryStringW`. Test `register_and_unregister` uses its own HKCU key.
 - `src/excerpt.rs` – text of the message cell: first line, or an excerpt around a search match.
 - `src/i18n.rs` – language files, `t!()` macro, fallback, external language folders.
 - `src/config.rs` – `Config`, `HighlightRule`, per-theme palettes, serde defaults/migration.

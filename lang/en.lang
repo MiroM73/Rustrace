@@ -92,6 +92,7 @@ menu.tools = Tools
 menu.tools.lookup = Error code lookup…
 menu.help = Help
 menu.help.shortcuts = Keyboard shortcuts
+menu.help.default_app = Set as default app for .log / .lo_ files…
 menu.help.about = About RusTrace
 menu.help.settings_file = Settings: {path}
 
@@ -329,6 +330,22 @@ about.build = Build
 about.settings = Settings file
 about.copy = Copy version information
 about.copied = Version information copied to the clipboard
+# --- Default app window (Windows) ---
+assoc.title = Default app for log files
+assoc.intro = RusTrace can open .log and .lo_ files when you double-click them in Explorer. The registration is stored for your user account only, no administrator rights are needed.
+assoc.ext.rustrace = ✔ opened by RusTrace
+assoc.ext.other = opened by another program ({prog})
+assoc.ext.none = no program set
+assoc.other_copy = ⚠ Registered for another copy of RusTrace: {command}
+assoc.register = Set RusTrace as the default app
+assoc.unregister = Remove the registration
+assoc.registered = RusTrace is registered for .log and .lo_ files
+assoc.unregistered = The registration of RusTrace was removed
+assoc.failed = The registration failed: {error}
+assoc.choice_hint = Windows does not let programs replace a program you chose yourself. Choose RusTrace in the Windows settings (Default apps → RusTrace), or right-click a .log file → Open with → Choose another app → RusTrace → Always.
+assoc.open_settings = Open the Windows default apps settings
+assoc.move_hint = When you move rustrace.exe to another folder, set it as the default app again.
+assoc.type_name = Log file
 
 # --- Dialogs and errors ---
 dialog.filter.logs = Log files
