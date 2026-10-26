@@ -150,7 +150,7 @@ Features (all implemented, see README for user-facing details):
 
 ## Commands
 - `cargo build --release` → `target\release\rustrace.exe`
-- `cargo test` (49 tests: store drop_front / move to temp file, rotated parts (naming, merge on open, rotation while watching, replaced
+- `cargo test` (53 tests: file association (registry in an own HKCU test key), search history, store drop_front / move to temp file, rotated parts (naming, merge on open, rotation while watching, replaced
   file), export segments by file, time range bounds, column filter syntax, parsers, chunked/ANSI/UTF-16 reading, log definitions (CBS, DISM, IIS,
   Exchange connectivity / CSV separator, choice by name/content, appending across refreshes), store (32-byte record, ISO ↔ ms, push /
   truncate / append, mapped temp file growing past 64 MB, interner), export incl. end-to-end and
@@ -232,6 +232,10 @@ Features (all implemented, see README for user-facing details):
     (comma-separated `#Fields:` and values, CSV quoting, `-` kept as a value).
 29. Release v0.5.0 (#2 search match count, #1 search match in long messages, #13 Exchange
     Transport Connectivity log definition + w3c `separator`).
+30. `scripts/release.ps1` – the owner makes releases himself (checks, version, tests, tag, publish).
+31. #10 version in the window title, #7 Help → About, #5 search history (🕘 next to the search
+    field, `cfg.search_history`, max 30), #9 default app for .log / .lo_ (`src/fileassoc.rs`).
+32. Release v0.6.0 (#10, #7, #5, #9).
 
 ## Ideas not done yet (offered to the owner)
 - Merge **different** logs into one view sorted by time (like CMTrace File → Open → "Merge
