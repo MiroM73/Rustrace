@@ -140,6 +140,7 @@ search.prev.tip = Previous (Shift+F3)
 search.next.tip = Next (F3 / Enter)
 search.invalid_regex = Invalid regex
 search.matches = Matches: {count}
+search.short = Enter = search (automatically from {count} characters)
 search.clear.tip = Clear search
 search.history.tip = Search history – earlier search texts
 search.history.none = (no searches yet)

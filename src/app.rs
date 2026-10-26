@@ -34,6 +34,8 @@ pub fn base_title() -> String {
 
 /// Max. number of message characters shown in the table (the full message is in the details pane).
 const MAX_CELL_CHARS: usize = 2000;
+/// A typed search text is searched right away from this many characters on (shorter: Enter).
+const INSTANT_SEARCH_MIN_CHARS: usize = 3;
 
 const RED: Color32 = Color32::from_rgb(220, 60, 60);
 const ORANGE: Color32 = Color32::from_rgb(230, 140, 0);
@@ -114,6 +116,9 @@ pub struct App {
     status_info: Option<(String, Instant)>,
 
     search_text: String,
+    /// A search text shorter than `INSTANT_SEARCH_MIN_CHARS` was searched explicitly (Enter, F3,
+    /// history, …); typing clears it.
+    search_confirmed: bool,
     search_regex: bool,
     search_case: bool,
     filter_mode: bool,
@@ -261,6 +266,7 @@ impl App {
             status_error: None,
             status_info: None,
             search_text: String::new(),
+            search_confirmed: false,
             search_regex: false,
             search_case: false,
             filter_mode: false,
@@ -422,13 +428,26 @@ impl App {
         self.search_gen += 1;
         self.search_err = None;
         self.search_re = None;
-        if !self.search_text.is_empty() {
+        if self.search_active() {
             match compile_pattern(&self.search_text, self.search_regex, self.search_case) {
                 Ok(re) => self.search_re = Some(re),
                 Err(e) => self.search_err = Some(e),
             }
         }
         self.refilter_from(0);
+    }
+
+    /// The search text is searched: typed texts from `INSTANT_SEARCH_MIN_CHARS` characters on,
+    /// shorter ones only after an explicit search (#4).
+    fn search_active(&self) -> bool {
+        search_active(&self.search_text, self.search_confirmed)
+    }
+
+    /// Selects the first displayed row that matches the search (search as you type).
+    fn select_first_match(&mut self) {
+        if let Some(pos) = self.filtered.iter().position(|&i| self.is_match.get(i) == Some(&true)) {
+            self.select_row(pos);
+        }
     }
 
     fn entry_matches(re: &Regex, e: &EntryRef) -> bool {
@@ -1036,6 +1055,11 @@ impl App {
 
     fn find(&mut self, forward: bool) {
         self.remember_search();
+        // A short text typed without searching yet is searched now.
+        if self.search_re.is_none() && self.search_err.is_none() && !self.search_text.is_empty() {
+            self.search_confirmed = true;
+            self.recompile_search();
+        }
         let Some(re) = self.search_re.clone() else {
             self.focus_search = true;
             return;
@@ -1811,6 +1835,11 @@ impl App {
                 self.focus_search = false;
             }
             let mut changed = resp.changed();
+            // Search as you type (#4): the first match is selected right away.
+            let typed = changed;
+            if typed {
+                self.search_confirmed = false;
+            }
             if resp.lost_focus() && ui.input(|i| i.key_pressed(Key::Enter)) {
                 let back = ui.input(|i| i.modifiers.shift);
                 self.find(!back);
@@ -1844,6 +1873,7 @@ impl App {
             .on_hover_text(t!("search.history.tip"));
             if let Some(text) = picked {
                 self.search_text = text;
+                self.search_confirmed = true;
                 self.remember_search();
                 changed = true;
             }
@@ -1854,6 +1884,8 @@ impl App {
                     .on_hover_text(err);
             } else if self.search_re.is_some() {
                 ui.label(t!("search.matches", count = self.match_count));
+            } else if !self.search_text.is_empty() {
+                ui.weak(t!("search.short", count = INSTANT_SEARCH_MIN_CHARS));
             }
             if !self.search_text.is_empty()
                 && ui
@@ -1878,6 +1910,9 @@ impl App {
                 .changed();
             if changed {
                 self.recompile_search();
+                if typed && self.search_re.is_some() {
+                    self.select_first_match();
+                }
             }
             let active = self.col_filters.len();
             let label = if active > 0 {
@@ -2646,6 +2681,7 @@ impl App {
                 }
                 RowAction::SearchComponent(i) => {
                     self.search_text = self.entries.at(i).component.to_owned();
+                    self.search_confirmed = true;
                     self.search_regex = false;
                     self.recompile_search();
                 }
@@ -3948,9 +3984,27 @@ fn position_percent(row: usize, total: usize) -> u64 {
     row.min(total) as u64 * 100 / total as u64
 }
 
+/// A search text is searched: non-empty and either long enough to search as you type or
+/// searched explicitly.
+fn search_active(text: &str, confirmed: bool) -> bool {
+    !text.is_empty() && (confirmed || text.chars().count() >= INSTANT_SEARCH_MIN_CHARS)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn search_starts_from_three_characters() {
+        assert!(!search_active("", false));
+        assert!(!search_active("", true));
+        assert!(!search_active("ab", false));
+        assert!(search_active("ab", true));
+        assert!(search_active("abc", false));
+        // Characters, not bytes.
+        assert!(!search_active("čš", false));
+        assert!(search_active("čšž", false));
+    }
 
     #[test]
     fn position_percent_of_rows() {

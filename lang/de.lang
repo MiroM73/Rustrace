@@ -126,6 +126,7 @@ search.prev.tip = Vorheriger (Umschalt+F3)
 search.next.tip = Nächster (F3 / Eingabe)
 search.invalid_regex = Ungültiger Regex
 search.matches = Treffer: {count}
+search.short = Enter = suchen (automatisch ab {count} Zeichen)
 search.clear.tip = Suche löschen
 search.history.tip = Suchverlauf – frühere Suchtexte
 search.history.none = (noch keine Suche)

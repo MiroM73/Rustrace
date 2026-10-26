@@ -126,6 +126,7 @@ search.prev.tip = Predchádzajúci (Shift+F3)
 search.next.tip = Ďalší (F3 / Enter)
 search.invalid_regex = Neplatný regex
 search.matches = Zhody: {count}
+search.short = Enter = hľadať (automaticky od {count} znakov)
 search.clear.tip = Zrušiť hľadanie
 search.history.tip = História hľadania – predtým hľadané texty
 search.history.none = (zatiaľ nič)

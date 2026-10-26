@@ -230,6 +230,9 @@ Visual C++ Redistributable.
 **Search**
 - text or regex, Aa = match case; the number of matches (or an invalid-regex warning) and the ✖ clear
   button are shown right after the search field
+- **search as you type**: from 3 characters on the search runs while typing and the first matching
+  row (from the top of the table) is selected and scrolled to; a shorter text is searched with
+  Enter / F3 (the field then shows "Enter = search (automatically from 3 characters)")
 - **search history** (🕘 next to the search field): the last 30 search texts, newest first, kept
   between sessions; a text is remembered when you search with Enter / F3 / the arrows or leave the
   field; picking one searches it again; "Clear search history" empties the list
