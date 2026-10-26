@@ -2,6 +2,7 @@ use crate::config::{Config, HighlightRule, HighlightScope, IntervalUnit};
 use crate::colfilter::ColumnFilter;
 use crate::errcodes::{self, CodeInfo};
 use crate::export::{self, ExportFormat, ReadableRow};
+use crate::excerpt;
 use crate::i18n;
 use crate::logdef::{self, Column as LogColumn, ColumnKind, LogDef, Role, Schema};
 use crate::parser::{FormatChoice, LogSource, PollResult, Progress, Severity, SourceFile};
@@ -92,6 +93,8 @@ pub struct App {
     /// For every entry: does it match the search?
     is_match: Vec<bool>,
     match_count: usize,
+    /// (entry, search generation) the details pane was last scrolled to the first match for.
+    details_scrolled: Option<(usize, u64)>,
 
     last_refresh: Option<Instant>,
     last_refresh_wall: Option<chrono::DateTime<chrono::Local>>,
@@ -236,6 +239,7 @@ impl App {
             filtered: Vec::new(),
             is_match: Vec::new(),
             match_count: 0,
+            details_scrolled: None,
             last_refresh: None,
             last_refresh_wall: None,
             status_error: None,
@@ -2116,17 +2120,41 @@ impl App {
         }
         ui.separator();
         let font = FontId::monospace(self.cfg.font_size);
+        let idx = self.selected.unwrap_or_default();
+        let hit = self.is_match.get(idx).copied().unwrap_or(false);
+        // Scroll to the first search match once per selected row and search.
+        let scroll_key = (idx, self.search_gen);
+        let first_match = (hit && self.details_scrolled != Some(scroll_key))
+            .then(|| self.search_re.as_ref().and_then(|re| re.find(e.message)))
+            .flatten()
+            .map(|m| e.message[..m.start()].chars().count());
+        let fg = ui.visuals().text_color();
         let out = egui::ScrollArea::vertical()
             .auto_shrink([false, false])
             .show(ui, |ui| {
+                // Same highlighting as in the table (text rules + search matches), so a match
+                // that does not fit in the table cell is visible here.
+                let mut layouter = |ui: &egui::Ui, buf: &dyn egui::TextBuffer, wrap: f32| {
+                    let text = buf.as_str();
+                    let mut job = build_job(text, &self.text_spans(text, hit), fg, &font);
+                    job.wrap.max_width = wrap;
+                    ui.painter().layout_job(job)
+                };
                 let mut s = e.message;
-                ui.add(
-                    egui::TextEdit::multiline(&mut s)
-                        .desired_width(f32::INFINITY)
-                        .font(font),
-                );
+                let te = egui::TextEdit::multiline(&mut s)
+                    .desired_width(f32::INFINITY)
+                    .font(font.clone())
+                    .layouter(&mut layouter)
+                    .show(ui);
+                if let Some(c) = first_match {
+                    let r = te.galley.pos_from_cursor(egui::text::CCursor::new(c));
+                    ui.scroll_to_rect(r.translate(te.galley_pos.to_vec2()), Some(Align::Center));
+                }
             });
         self.hover_log |= ui.rect_contains_pointer(out.inner_rect);
+        if hit {
+            self.details_scrolled = Some(scroll_key);
+        }
         if open_code.is_some() {
             self.open_lookup(open_code);
         }
@@ -2158,6 +2186,41 @@ impl App {
             }
         }
         (None, None)
+    }
+
+    /// Text of the message cell. Normally the beginning of the first line; when the row matches
+    /// the search but the first match in the message would not be visible there (a later line,
+    /// past the length cut or past the right edge of the column), an excerpt starting shortly
+    /// before the match is shown instead, so the highlighted match is in view.
+    fn message_cell_text(&self, ui: &egui::Ui, message: &str, hit: bool, font: &FontId) -> String {
+        let text = excerpt::first_line(message, MAX_CELL_CHARS);
+        let Some(m) = hit
+            .then_some(self.search_re.as_ref())
+            .flatten()
+            .and_then(|re| re.find(message))
+        else {
+            // No search, or the row matches only in another column.
+            return text;
+        };
+        let width = ui.available_width();
+        let fits = |s: &str| {
+            ui.painter()
+                .layout_no_wrap(s.to_owned(), font.clone(), Color32::WHITE)
+                .size()
+                .x
+                <= width
+        };
+        let first = message.lines().next().unwrap_or("");
+        if m.end() <= first.len().min(MAX_CELL_CHARS) && fits(&first[..m.end()]) {
+            return text;
+        }
+        let len = m.end() - m.start();
+        let (ex, pos) = excerpt::around(message, m.start(), excerpt::CONTEXT_CHARS, MAX_CELL_CHARS);
+        if fits(&ex[..(pos + len).min(ex.len())]) {
+            return ex;
+        }
+        // Narrow column: start right at the match.
+        excerpt::around(message, m.start(), 0, MAX_CELL_CHARS).0
     }
 
     fn text_spans(&self, text: &str, search_hit: bool) -> Vec<Span> {
@@ -2370,20 +2433,8 @@ impl App {
                         ColumnKind::Role(Role::Message) => {
                             row.col(|ui| {
                                 paint_bg(ui);
-                                let first = e.message.lines().next().unwrap_or("");
-                                let mut text: String = if first.len() > MAX_CELL_CHARS {
-                                    let mut end = MAX_CELL_CHARS;
-                                    while !first.is_char_boundary(end) {
-                                        end -= 1;
-                                    }
-                                    format!("{}…", &first[..end])
-                                } else {
-                                    first.to_owned()
-                                };
-                                if e.message.contains('\n') {
-                                    text.push_str("  ↵");
-                                }
                                 let hit = self.is_match.get(idx).copied().unwrap_or(false);
+                                let text = self.message_cell_text(ui, e.message, hit, &font);
                                 let spans = self.text_spans(&text, hit);
                                 let job = build_job(&text, &spans, fg_col, &font);
                                 ui.add(egui::Label::new(job).truncate().selectable(false));
