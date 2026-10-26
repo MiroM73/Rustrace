@@ -223,6 +223,8 @@ Features (all implemented, see README for user-facing details):
     scrolled to in the details pane.
 28. #13: Exchange Server Transport Connectivity log definition; w3c definitions got `separator`
     (comma-separated `#Fields:` and values, CSV quoting, `-` kept as a value).
+29. Release v0.5.0 (#2 search match count, #1 search match in long messages, #13 Exchange
+    Transport Connectivity log definition + w3c `separator`).
 
 ## Ideas not done yet (offered to the owner)
 - Merge **different** logs into one view sorted by time (like CMTrace File → Open → "Merge
