@@ -145,6 +145,9 @@ pub struct Palette {
     pub search: ([u8; 4], [u8; 4]),
 }
 
+/// How many search texts the search history keeps.
+pub const SEARCH_HISTORY_MAX: usize = 30;
+
 #[derive(Clone, Serialize, Deserialize, Debug)]
 #[serde(default)]
 pub struct Config {
@@ -171,6 +174,8 @@ pub struct Config {
     pub search_fg_dark: [u8; 4],
     pub search_bg_dark: [u8; 4],
     pub recent_files: Vec<String>,
+    /// Previously used search texts, newest first.
+    pub search_history: Vec<String>,
     pub show_details: bool,
     /// Show the filter row under the column headers.
     pub show_column_filters: bool,
@@ -249,6 +254,7 @@ impl Default for Config {
             search_fg_dark: [0, 0, 0, 255],
             search_bg_dark: [240, 150, 30, 255],
             recent_files: Vec::new(),
+            search_history: Vec::new(),
             show_details: true,
             show_column_filters: false,
             show_time_range: false,
@@ -412,6 +418,18 @@ impl Config {
         self.recent_files.insert(0, path.to_owned());
         self.recent_files.truncate(12);
     }
+
+    /// Puts a search text at the top of the search history (no duplicates, at most
+    /// `SEARCH_HISTORY_MAX` texts). Returns false when nothing changed.
+    pub fn push_search(&mut self, text: &str) -> bool {
+        if text.trim().is_empty() || self.search_history.first().is_some_and(|t| t == text) {
+            return false;
+        }
+        self.search_history.retain(|t| t != text);
+        self.search_history.insert(0, text.to_owned());
+        self.search_history.truncate(SEARCH_HISTORY_MAX);
+        true
+    }
 }
 
 #[cfg(test)]
@@ -427,6 +445,26 @@ mod tests {
         assert_eq!(cfg.rules[0].colors(true), ([1, 2, 3, 255], [4, 5, 6, 255]));
         // Missing severity colors come from the defaults.
         assert_eq!(cfg.error_bg_dark, Config::default().error_bg_dark);
+    }
+
+    #[test]
+    fn search_history() {
+        let mut cfg = Config::default();
+        assert!(!cfg.push_search("  "));
+        assert!(cfg.push_search("error"));
+        assert!(cfg.push_search("0x8007"));
+        assert!(!cfg.push_search("0x8007"));
+        // A used text moves to the top instead of being added twice.
+        assert!(cfg.push_search("error"));
+        assert_eq!(cfg.search_history, ["error", "0x8007"]);
+        for i in 0..100 {
+            cfg.push_search(&format!("text {i}"));
+        }
+        assert_eq!(cfg.search_history.len(), SEARCH_HISTORY_MAX);
+        assert_eq!(cfg.search_history[0], "text 99");
+        // Old settings files without the history still load.
+        let cfg: Config = serde_json::from_str("{}").unwrap();
+        assert!(cfg.search_history.is_empty());
     }
 
     #[test]

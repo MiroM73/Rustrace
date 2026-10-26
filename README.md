@@ -215,6 +215,9 @@ Visual C++ Redistributable.
 **Search**
 - text or regex, Aa = match case; the number of matches (or an invalid-regex warning) and the ✖ clear
   button are shown right after the search field
+- **search history** (🕘 next to the search field): the last 30 search texts, newest first, kept
+  between sessions; a text is remembered when you search with Enter / F3 / the arrows or leave the
+  field; picking one searches it again; "Clear search history" empties the list
 - searches the message, the component and the extra columns of a log definition
 - when a match in a long message would not be visible in the Message cell (past the right edge of
   the column, or on a later line of a multi-line message), the cell shows the part of the message

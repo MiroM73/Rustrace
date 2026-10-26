@@ -1012,7 +1012,16 @@ impl App {
         self.start_poll();
     }
 
+    /// Adds the current search text to the search history.
+    fn remember_search(&mut self) {
+        let text = self.search_text.clone();
+        if self.cfg.push_search(&text) {
+            self.cfg_dirty = true;
+        }
+    }
+
     fn find(&mut self, forward: bool) {
+        self.remember_search();
         let Some(re) = self.search_re.clone() else {
             self.focus_search = true;
             return;
@@ -1787,6 +1796,37 @@ impl App {
                 let back = ui.input(|i| i.modifiers.shift);
                 self.find(!back);
                 resp.request_focus();
+            } else if resp.lost_focus() {
+                self.remember_search();
+            }
+            // Search history: earlier search texts, newest first.
+            let mut picked = None;
+            ui.menu_button("🕘", |ui| {
+                if self.cfg.search_history.is_empty() {
+                    ui.weak(t!("search.history.none"));
+                }
+                for text in &self.cfg.search_history {
+                    let btn = egui::Button::new(RichText::new(text).monospace()).truncate();
+                    if ui.add(btn).on_hover_text(text).clicked() {
+                        picked = Some(text.clone());
+                        ui.close();
+                    }
+                }
+                if !self.cfg.search_history.is_empty() {
+                    ui.separator();
+                    if ui.button(format!("🗑 {}", t!("search.history.clear"))).clicked() {
+                        self.cfg.search_history.clear();
+                        self.cfg_dirty = true;
+                        ui.close();
+                    }
+                }
+            })
+            .response
+            .on_hover_text(t!("search.history.tip"));
+            if let Some(text) = picked {
+                self.search_text = text;
+                self.remember_search();
+                changed = true;
             }
             // Match count (or the regex error) and the clear button sit right next to the
             // search field, so the result of the search is visible where the user types.
