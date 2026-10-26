@@ -141,9 +141,14 @@ Visual C++ Redistributable.
     oldest records are removed from memory and from the view, in one go down to three quarters of
     the limit; the status bar shows ✂ with the number of removed records, Ctrl+F5 reads the file
     again; the file on disk is not changed. Removed records are no longer exported.
-- on Windows the window is drawn with Direct3D 12 when available (the graphics drivers alone take
-  ~190 MB less than with the default choice); `WGPU_BACKEND=vulkan|gl` overrides it
-- measured with a 400 MB CMTrace log (1.8 million lines), private bytes of the whole program:
+- the window is drawn with **OpenGL**: an idle window takes practically no CPU (with Direct3D 12 /
+  Vulkan through wgpu, the AMD graphics driver kept one CPU core fully busy, issue #6) and the empty
+  window takes ~284 MB private bytes instead of ~325 MB. When OpenGL cannot start (e.g. a remote
+  desktop or a virtual machine with only the software OpenGL 1.1), the program uses wgpu instead,
+  with Direct3D 12 when available. The environment variable `RUSTRACE_RENDERER=wgpu` (or `glow`)
+  forces one of them; `WGPU_BACKEND=dx12|vulkan|gl` chooses the wgpu backend
+- measured with a 400 MB CMTrace log (1.8 million lines) with the earlier Direct3D 12 drawing,
+  private bytes of the whole program:
 
   | | private bytes | working set |
   |---|---|---|
@@ -417,7 +422,7 @@ The built-in languages live in `lang/*.lang` in the source tree and are embedded
 - `src/i18n.rs` – localization: language files, fallback, `t!()` macro (+ tests)
 - `src/config.rs` – settings and rules (serde/JSON)
 - `src/app.rs` – user interface
-- `src/main.rs` – window start-up
+- `src/main.rs` – window start-up, renderer choice (OpenGL, wgpu / Direct3D 12 as the fallback)
 - `lang/*.lang` – built-in translations
 - `logdef/*.def` – built-in log definitions (IIS, Exchange, DISM, CBS)
 - `scripts/package.ps1` – packs the release build into the self-extracting archive and the ZIP

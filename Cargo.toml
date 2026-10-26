@@ -7,7 +7,7 @@ description = "A CMTrace-style log viewer"
 repository = "https://github.com/MiroM73/Rustrace"
 
 [dependencies]
-eframe = "0.37"
+eframe = { version = "0.37", features = ["glow"] }
 egui_extras = "0.37"
 regex = "1"
 serde = { version = "1", features = ["derive"] }

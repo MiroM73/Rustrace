@@ -74,9 +74,20 @@ Features (all implemented, see README for user-facing details):
   `FILE_FLAG_DELETE_ON_CLOSE`, share mode 0, grows by doubling from 64 MB, falls back to memory on
   error) for reads ≥ `cfg.temp_file_threshold_mb` (default 100, `cfg.temp_file_enabled`). Never map
   the original log (blocks the writer from truncating / rotating it on Windows).
-- **DX12 on Windows** (`main.rs::prefer_dx12`): wgpu instance limited to DX12 when a non-CPU DX12
-  adapter exists (probe before start), unless `WGPU_BACKEND` is set. Default wgpu loads Vulkan +
-  DX12 + GL drivers: empty window 516 MB private vs 325 MB with DX12 only (AMD RX 9060 XT).
+- **Renderer** (`main.rs`, issue #6): **OpenGL (glow) by default** – with wgpu (DX12 and Vulkan
+  alike) a thread of the AMD driver (`amdxc64.dll` / `amdvlk64.dll`) spun at 100 % of a core while
+  the window was idle (it only stopped after ~2.5 s of continuous rendering; present mode / frame
+  latency did not help). Glow: idle ~0 %, empty window 284 MB private vs 323 MB DX12. If glow fails
+  before the app is created (error **or panic**, caught with `catch_unwind`; e.g. RDP / VM with GL
+  1.1) → wgpu on the reused event loop. `RUSTRACE_RENDERER=wgpu|glow` forces one (no fallback).
+  wgpu fallback (`prefer_dx12`): instance limited to DX12 when a non-CPU DX12 adapter exists,
+  unless `WGPU_BACKEND` is set (default wgpu loads Vulkan + DX12 + GL drivers: 516 MB vs 325 MB).
+  Idle CPU is measured from `Process.TotalProcessorTime` over a few seconds; per-thread start
+  address (`NtQueryInformationThread` class 9) → module found the driver thread.
+- Auto refresh frames: the reader thread requests a repaint only when the result is not
+  `Unchanged`; `last_refresh` = start of the read (otherwise the delayed pick-up would double the
+  interval); the status-bar separator belongs to the progress (a widget appearing for a moment
+  costs an extra frame, egui `theme/mod.rs` repaint for unknown widget ids).
 - Measured (400 MB CMTrace, GUI private bytes): v0.2.0 1231 MB → 421 MB (temp file) / 582 MB (memory);
   benchmark without GUI: 695 → 76 / 239 MB, load same, search 157 → 138 ms.
 - Auto refresh: interval in ms / s / min, pause/resume (Ctrl+P), presets, "follow end".
@@ -236,6 +247,8 @@ Features (all implemented, see README for user-facing details):
 31. #10 version in the window title, #7 Help → About, #5 search history (🕘 next to the search
     field, `cfg.search_history`, max 30), #9 default app for .log / .lo_ (`src/fileassoc.rs`).
 32. Release v0.6.0 (#10, #7, #5, #9).
+33. #6 high CPU: the AMD driver spun a core with wgpu → OpenGL renderer by default with wgpu
+    fallback; fewer frames per auto refresh.
 
 ## Ideas not done yet (offered to the owner)
 - Merge **different** logs into one view sorted by time (like CMTrace File → Open → "Merge

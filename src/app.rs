@@ -870,9 +870,13 @@ impl App {
             .name("rustrace-reader".into())
             .spawn(move || {
                 let res = src.poll(&prog);
+                // Nothing new: no extra frame, the next scheduled refresh picks the result up.
+                let changed = !matches!(res, Ok(PollResult::Unchanged));
                 // If the UI no longer waits for the result (other file, cancelled), send fails – that's fine.
                 let _ = tx.send((src, res));
-                ctx.request_repaint();
+                if changed {
+                    ctx.request_repaint();
+                }
             });
         match spawned {
             Ok(_) => {
@@ -892,6 +896,7 @@ impl App {
     /// Takes over the result from the background thread when it is ready.
     fn check_loading(&mut self) {
         let Some(l) = &self.loading else { return };
+        let started = l.started;
         match l.rx.try_recv() {
             Ok((src, res)) => {
                 self.loading = None;
@@ -912,7 +917,9 @@ impl App {
                 self.source = Some(src);
                 self.apply_result(res);
                 self.enforce_memory_limits();
-                self.last_refresh = Some(Instant::now());
+                // The interval counts from the start of the read: an unchanged result is only picked
+                // up by the next scheduled frame, which must already start the next read.
+                self.last_refresh = Some(started);
             }
             Err(mpsc::TryRecvError::Empty) => {}
             Err(mpsc::TryRecvError::Disconnected) => {
@@ -2076,7 +2083,6 @@ impl App {
             }
             // During the first load the progress is in the middle of the window; here only for later refreshes.
             if self.loading.is_some() && !self.entries.is_empty() {
-                ui.separator();
                 self.progress_ui(ui, false);
             }
             if let Some(e) = &self.status_error {
@@ -2947,6 +2953,9 @@ impl App {
             ui.add_space(8.0);
             ui.button(t!("progress.cancel")).clicked()
         } else {
+            // The separator only with the progress: a widget that appears for a moment on every
+            // refresh would cost an extra frame each time.
+            ui.separator();
             ui.spinner();
             ui.add(egui::ProgressBar::new(frac).text(text).desired_width(260.0));
             ui.small_button(t!("progress.cancel")).clicked()
