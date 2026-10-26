@@ -227,6 +227,13 @@ pub struct Config {
     /// The predefined log definitions the user has seen (file name → text): after an update of
     /// RusTrace the new / changed ones are reported against these.
     pub known_logdefs: BTreeMap<String, String>,
+
+    /// Look for a new version on GitHub at start-up (at most once a day).
+    pub update_check: bool,
+    /// Time of the last automatic check (Unix seconds).
+    pub update_last_check: i64,
+    /// A version the user chose to skip (no notice for it at start-up).
+    pub update_skipped: String,
 }
 
 impl Default for Config {
@@ -282,6 +289,9 @@ impl Default for Config {
             max_log_mb: 1000,
             logdef_sources: "all".into(),
             known_logdefs: BTreeMap::new(),
+            update_check: true,
+            update_last_check: 0,
+            update_skipped: String::new(),
         }
     }
 }

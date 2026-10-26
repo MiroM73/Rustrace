@@ -43,6 +43,21 @@ RusTrace** shows the version, author, license, links to the project page, new ve
 issue tracker, the build (platform) and the settings file; "Copy version information" puts e.g.
 `RusTrace 0.6.0 (windows x86_64, release)` on the clipboard for a bug report.
 
+**Updates** (Help → Check for updates…): RusTrace asks GitHub for the latest release and shows
+whether it is newer than the installed version, together with its release notes. **Download and
+install** downloads the release ZIP, verifies it against the published SHA-256 checksum, replaces
+`rustrace.exe` and the files from the archive (`lang\`, `logdef\`, `LICENSE`; other files in those
+folders are kept, the old program is renamed to `rustrace.exe.old` and deleted by the next start) and
+**restarts the program with the same state**: the open log, log format, search, filter, severity
+toggles, column filters, time range, selected row and the window position and size. If the program
+folder is not writable (e.g. under Program Files), nothing is changed and the window points to the
+release page for a manual download. Other buttons: open the release page, skip this version, later.
+With "Check for a new version automatically at start-up (once a day)" (on by default, can be turned
+off in the same window) a newer version opens this window at start-up and a green `⬆ <version>`
+button appears in the status bar. The check uses the Windows HTTP stack (WinHTTP), so the system
+proxy and certificates apply; only `api.github.com` / GitHub downloads are contacted, nothing is sent
+except the request itself (user agent `RusTrace/<version>`).
+
 **Default app for `.log` / `.lo_` files** (Windows, Help → Set as default app for .log / .lo_
 files…): registers RusTrace for your user account (no administrator rights, nothing outside
 `HKEY_CURRENT_USER`) and shows which program opens each extension now. Windows does not let a
@@ -437,6 +452,9 @@ The built-in languages live in `lang/*.lang` in the source tree and are embedded
 - `src/config.rs` – settings and rules (serde/JSON)
 - `src/app.rs` – user interface
 - `src/main.rs` – window start-up, renderer choice (OpenGL, wgpu / Direct3D 12 as the fallback)
+- `src/update.rs` – new versions: GitHub release, version comparison, ZIP extraction, SHA-256 check,
+  installation over the running program, state for the restart (+ tests)
+- `src/http.rs` – HTTPS download via WinHTTP (system proxy and certificates)
 - `src/splash.rs` – start-up window with a rotating ring of dots (Windows, Win32 / GDI)
 - `src/icon.rs` – the program icon drawn in code (window, start-up window, `.ico` for `build.rs`)
 - `build.rs` – embeds the icon and the version information into `rustrace.exe` (Windows)

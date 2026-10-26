@@ -51,7 +51,7 @@ const DEFAULT_DT_FORMATS: &[&str] = &[
 ];
 
 /// Standard columns every log has (filled by the CMTrace parser or by a definition's roles).
-#[derive(Clone, Copy, PartialEq, Eq, Debug, Hash)]
+#[derive(Clone, Copy, PartialEq, Eq, Debug, Hash, serde::Serialize, serde::Deserialize)]
 pub enum Role {
     Message,
     Component,
@@ -76,7 +76,7 @@ impl Role {
     }
 }
 
-#[derive(Clone, Copy, PartialEq, Eq, Debug, Hash)]
+#[derive(Clone, Copy, PartialEq, Eq, Debug, Hash, serde::Serialize, serde::Deserialize)]
 pub enum ColumnKind {
     Role(Role),
     /// Index into `LogEntry::extra` / `Schema::extra_names`.

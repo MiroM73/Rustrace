@@ -124,6 +124,19 @@ Features (all implemented, see README for user-facing details):
   context always from the whole file – the owner's expectation, an earlier variant that also took
   context only from visible rows was rejected). Order: hits → time filter → merge → clip older
   context → last N.
+- **Updates** (#15, `src/update.rs`, `src/http.rs`): Help → Check for updates; GitHub API
+  `releases/latest` via WinHTTP FFI (system proxy / certs, follows redirects); `is_newer` on
+  major.minor.patch; auto check at start-up when `cfg.update_check` and `cfg.update_last_check` is
+  ≥ 24 h old (silent: window only for a newer, not `cfg.update_skipped` version; errors ignored);
+  status-bar `⬆ <version>` button. Install: ZIP asset `*-windows-x64.zip` + its `.sha256`, own ZIP
+  reader (stored / deflate via flate2, CRC check, no `..`), write probe first, running exe renamed to
+  `rustrace.exe.old` (`update::cleanup_old` at start), files written next to it, then
+  `rustrace.exe --restore <temp json>` (`SessionState`: path, format, selection, search, filters,
+  time range, window pos/size × `zoom_factor`) and the old window closes. Restore: search/format at
+  start, selection + column filters after the first read (`pending_restore`).
+  `RUSTRACE_UPDATE_AS_VERSION=0.5.0` pretends an older version (testing the update);
+  `cargo test fetch_latest_release -- --ignored` downloads + installs the real latest release into temp.
+  The release notes of the GitHub release are shown in the window – write them for users.
 - Localization: built-in en / sk / cs / de; external `<code>.lang` files load **without recompiling**
   from `lang\` next to the exe or `%APPDATA%\RusTrace\lang`; fallback to English.
 - Settings saved automatically to `%APPDATA%\RusTrace\config.json` (with migration of old settings).
@@ -149,6 +162,7 @@ Features (all implemented, see README for user-facing details):
   ProgID `RusTrace.LogFile`, `RegisteredApplications` → Settings page; `status()` reads
   `UserChoiceLatest\ProgId` / `UserChoiceLatest` / `UserChoice` (a user choice cannot be set by a
   program), names via `AssocQueryStringW`. Test `register_and_unregister` uses its own HKCU key.
+- `src/update.rs` – update check / download / install / restart state; `src/http.rs` – WinHTTP GET.
 - `src/excerpt.rs` – text of the message cell: first line, or an excerpt around a search match.
 - `src/i18n.rs` – language files, `t!()` macro, fallback, external language folders.
 - `src/config.rs` – `Config`, `HighlightRule`, per-theme palettes, serde defaults/migration.
@@ -167,7 +181,7 @@ Features (all implemented, see README for user-facing details):
 
 ## Commands
 - `cargo build --release` → `target\release\rustrace.exe`
-- `cargo test` (56 tests: icon / .ico layout, search as you type threshold, status-bar position percentage, file association (registry in an own HKCU test key), search history, store drop_front / move to temp file, rotated parts (naming, merge on open, rotation while watching, replaced
+- `cargo test` (65 tests: updates (versions, release JSON, notes, sha256 file, ZIP, install, restore state), icon / .ico layout, search as you type threshold, status-bar position percentage, file association (registry in an own HKCU test key), search history, store drop_front / move to temp file, rotated parts (naming, merge on open, rotation while watching, replaced
   file), export segments by file, time range bounds, column filter syntax, parsers, chunked/ANSI/UTF-16 reading, log definitions (CBS, DISM, IIS,
   Exchange connectivity / CSV separator, choice by name/content, appending across refreshes), store (32-byte record, ISO ↔ ms, push /
   truncate / append, mapped temp file growing past 64 MB, interner), export incl. end-to-end and
@@ -263,6 +277,8 @@ Features (all implemented, see README for user-facing details):
     (`search_confirmed`, cleared by typing); before, every keystroke searched even 1 character.
 37. #11: start-up splash (icon, name + version, "Starting…", rotating dots) until the main window
     shows; new program icon drawn in code, used for the window and embedded in the exe.
+38. #15: update check (Help menu + automatic once a day, can be turned off), download + install of
+    the release ZIP over the running program and restart with the same log and view.
 
 ## Ideas not done yet (offered to the owner)
 - Merge **different** logs into one view sorted by time (like CMTrace File → Open → "Merge

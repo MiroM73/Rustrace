@@ -80,6 +80,7 @@ menu.help = Nápověda
 menu.help.shortcuts = Klávesové zkratky
 menu.help.default_app = Nastavit jako výchozí program pro soubory .log / .lo_…
 menu.help.about = O programu RusTrace
+menu.help.updates = Zkontrolovat aktualizace…
 menu.help.settings_file = Nastavení: {path}
 
 # --- Jazyk ---
@@ -322,6 +323,28 @@ about.copied = Informace o verzi jsou zkopírovány do schránky
 
 # --- Úvodní okno ---
 splash.starting = Spouští se…
+
+# --- Aktualizace (Nápověda → Zkontrolovat aktualizace) ---
+update.title = Aktualizace
+update.current = Nainstalovaná verze: {version}
+update.checking = Hledá se nová verze na GitHubu…
+update.check_failed = Kontrola selhala: {error}
+update.check_again = Zkontrolovat znovu
+update.up_to_date = Máte nejnovější verzi ({version}).
+update.new_version = Je k dispozici nová verze {version}.
+update.install_hint = „Stáhnout a nainstalovat“ stáhne vydání z GitHubu, ověří jeho kontrolní součet SHA-256, nahradí program v {dir} a spustí ho znovu se stejným logem, hledáním, filtry a vybraným řádkem.
+update.no_package = Toto vydání nemá balíček pro automatickou instalaci – stáhněte ho ze stránky vydání.
+update.install = Stáhnout a nainstalovat
+update.release_page = Stránka vydání
+update.skip = Přeskočit tuto verzi
+update.later = Později
+update.downloading = Stahuje se a instaluje verze {version}…
+update.cancel = Zrušit
+update.install_failed = Aktualizace selhala: {error}
+update.install_failed_hint = Pokud do složky programu nelze zapisovat (např. Program Files), stáhněte novou verzi ze stránky vydání a nahraďte soubory sami.
+update.restart_failed = nová verze je nainstalovaná, ale nepodařilo se ji spustit ({error}) – spusťte RusTrace znovu
+update.auto = Automaticky hledat novou verzi při spuštění (jednou denně)
+update.available = Je k dispozici verze {version} – klikněte pro novinky a aktualizaci
 # --- Okno výchozího programu (Windows) ---
 assoc.title = Výchozí program pro soubory logů
 assoc.intro = RusTrace může otevírat soubory .log a .lo_ dvojklikem v Průzkumníkovi. Registrace se uloží jen pro váš uživatelský účet, nejsou potřeba administrátorská práva.

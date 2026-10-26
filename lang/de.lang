@@ -80,6 +80,7 @@ menu.help = Hilfe
 menu.help.shortcuts = Tastenkürzel
 menu.help.default_app = Als Standard-App für .log- / .lo_-Dateien festlegen…
 menu.help.about = Über RusTrace
+menu.help.updates = Nach Updates suchen…
 menu.help.settings_file = Einstellungen: {path}
 
 # --- Sprache ---
@@ -322,6 +323,28 @@ about.copied = Versionsinformationen in die Zwischenablage kopiert
 
 # --- Startfenster ---
 splash.starting = Wird gestartet…
+
+# --- Updates (Hilfe → Nach Updates suchen) ---
+update.title = Updates
+update.current = Installierte Version: {version}
+update.checking = Neue Version wird auf GitHub gesucht…
+update.check_failed = Die Prüfung ist fehlgeschlagen: {error}
+update.check_again = Erneut prüfen
+update.up_to_date = Sie haben die neueste Version ({version}).
+update.new_version = Eine neue Version {version} ist verfügbar.
+update.install_hint = „Herunterladen und installieren“ lädt das Release von GitHub herunter, prüft seine SHA-256-Prüfsumme, ersetzt das Programm in {dir} und startet es mit demselben Log, derselben Suche, denselben Filtern und derselben ausgewählten Zeile neu.
+update.no_package = Dieses Release hat kein Paket für die automatische Installation – laden Sie es von der Release-Seite herunter.
+update.install = Herunterladen und installieren
+update.release_page = Release-Seite
+update.skip = Diese Version überspringen
+update.later = Später
+update.downloading = Version {version} wird heruntergeladen und installiert…
+update.cancel = Abbrechen
+update.install_failed = Das Update ist fehlgeschlagen: {error}
+update.install_failed_hint = Wenn der Programmordner nicht beschreibbar ist (z. B. Program Files), laden Sie die neue Version von der Release-Seite herunter und ersetzen Sie die Dateien selbst.
+update.restart_failed = die neue Version ist installiert, konnte aber nicht gestartet werden ({error}) – starten Sie RusTrace erneut
+update.auto = Beim Start automatisch nach einer neuen Version suchen (einmal täglich)
+update.available = Version {version} ist verfügbar – klicken für Neuerungen und Update
 # --- Fenster Standard-App (Windows) ---
 assoc.title = Standard-App für Logdateien
 assoc.intro = RusTrace kann .log- und .lo_-Dateien per Doppelklick im Explorer öffnen. Die Registrierung gilt nur für Ihr Benutzerkonto, Administratorrechte sind nicht nötig.

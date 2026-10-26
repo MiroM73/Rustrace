@@ -94,6 +94,7 @@ menu.help = Help
 menu.help.shortcuts = Keyboard shortcuts
 menu.help.default_app = Set as default app for .log / .lo_ files…
 menu.help.about = About RusTrace
+menu.help.updates = Check for updates…
 menu.help.settings_file = Settings: {path}
 
 # --- Language menu ---
@@ -336,6 +337,28 @@ about.copied = Version information copied to the clipboard
 
 # --- Start-up splash ---
 splash.starting = Starting…
+
+# --- Updates (Help → Check for updates) ---
+update.title = Updates
+update.current = Installed version: {version}
+update.checking = Looking for a new version on GitHub…
+update.check_failed = The check failed: {error}
+update.check_again = Check again
+update.up_to_date = You have the latest version ({version}).
+update.new_version = A new version {version} is available.
+update.install_hint = "Download and install" downloads the release from GitHub, verifies its SHA-256 checksum, replaces the program in {dir} and restarts it with the same log, search, filters and selected row.
+update.no_package = This release has no package for automatic installation – download it from the release page.
+update.install = Download and install
+update.release_page = Release page
+update.skip = Skip this version
+update.later = Later
+update.downloading = Downloading and installing version {version}…
+update.cancel = Cancel
+update.install_failed = The update failed: {error}
+update.install_failed_hint = If the program folder is not writable (e.g. Program Files), download the new version from the release page and replace the files yourself.
+update.restart_failed = the new version is installed but could not be started ({error}) – start RusTrace again
+update.auto = Check for a new version automatically at start-up (once a day)
+update.available = Version {version} is available – click to see what's new and update
 # --- Default app window (Windows) ---
 assoc.title = Default app for log files
 assoc.intro = RusTrace can open .log and .lo_ files when you double-click them in Explorer. The registration is stored for your user account only, no administrator rights are needed.

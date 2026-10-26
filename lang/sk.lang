@@ -80,6 +80,7 @@ menu.help = Pomoc
 menu.help.shortcuts = Klávesové skratky
 menu.help.default_app = Nastaviť ako predvolený program pre súbory .log / .lo_…
 menu.help.about = O programe RusTrace
+menu.help.updates = Skontrolovať aktualizácie…
 menu.help.settings_file = Nastavenia: {path}
 
 # --- Jazyk ---
@@ -322,6 +323,28 @@ about.copied = Informácie o verzii sú skopírované do schránky
 
 # --- Úvodné okno ---
 splash.starting = Spúšťa sa…
+
+# --- Aktualizácie (Pomocník → Skontrolovať aktualizácie) ---
+update.title = Aktualizácie
+update.current = Nainštalovaná verzia: {version}
+update.checking = Hľadá sa nová verzia na GitHube…
+update.check_failed = Kontrola zlyhala: {error}
+update.check_again = Skontrolovať znova
+update.up_to_date = Máš najnovšiu verziu ({version}).
+update.new_version = Je k dispozícii nová verzia {version}.
+update.install_hint = „Stiahnuť a nainštalovať“ stiahne vydanie z GitHubu, overí jeho kontrolný súčet SHA-256, nahradí program v {dir} a spustí ho znova s rovnakým logom, hľadaním, filtrami a vybraným riadkom.
+update.no_package = Toto vydanie nemá balík na automatickú inštaláciu – stiahni ho zo stránky vydania.
+update.install = Stiahnuť a nainštalovať
+update.release_page = Stránka vydania
+update.skip = Preskočiť túto verziu
+update.later = Neskôr
+update.downloading = Sťahuje sa a inštaluje verzia {version}…
+update.cancel = Zrušiť
+update.install_failed = Aktualizácia zlyhala: {error}
+update.install_failed_hint = Ak sa do priečinka programu nedá zapisovať (napr. Program Files), stiahni novú verziu zo stránky vydania a nahraď súbory sám.
+update.restart_failed = nová verzia je nainštalovaná, ale nepodarilo sa ju spustiť ({error}) – spusti RusTrace znova
+update.auto = Automaticky hľadať novú verziu pri spustení (raz denne)
+update.available = Je k dispozícii verzia {version} – klikni pre novinky a aktualizáciu
 # --- Okno predvoleného programu (Windows) ---
 assoc.title = Predvolený program pre súbory logov
 assoc.intro = RusTrace môže otvárať súbory .log a .lo_ dvojklikom v Prieskumníkovi. Registrácia sa uloží len pre tvoj používateľský účet, netreba administrátorské práva.
