@@ -22,7 +22,9 @@ Features (all implemented, see README for user-facing details):
   old SMS format `msg $$<comp><date time><thread=..>`, plain text. Severity from `type` (1/2/3) or
   optional keywords error/fail/warn.
 - **Log definitions** (`logdef\*.def`, `src/logdef.rs`): regex with named groups or W3C (`#Fields:`)
-  describe other layouts; built-in `iisweb.log.def`, `dism.log.def`, `cbs.log.def`, external files
+  describe other layouts (w3c `separator`: space = IIS with `-` = empty, other = CSV-style values
+  with quotes, `-` kept – Exchange); built-in `iisweb.log.def`, `exchconnect.log.def`,
+  `dism.log.def`, `cbs.log.def`, external files
   from `logdef\` next to the exe or `%APPDATA%\RusTrace\logdef` (same name overrides built-in).
   Roles fill the standard columns (message/component/datetime/thread), `role.severity` + regexes give
   the severity, other groups are extra columns (`LogEntry::extra`, `Schema::extra_names`). The table
@@ -144,15 +146,15 @@ Features (all implemented, see README for user-facing details):
 
 ## Commands
 - `cargo build --release` → `target\release\rustrace.exe`
-- `cargo test` (38 tests: store drop_front / move to temp file, rotated parts (naming, merge on open, rotation while watching, replaced
+- `cargo test` (49 tests: store drop_front / move to temp file, rotated parts (naming, merge on open, rotation while watching, replaced
   file), export segments by file, time range bounds, column filter syntax, parsers, chunked/ANSI/UTF-16 reading, log definitions (CBS, DISM, IIS,
-  choice by name/content, appending across refreshes), store (32-byte record, ISO ↔ ms, push /
+  Exchange connectivity / CSV separator, choice by name/content, appending across refreshes), store (32-byte record, ISO ↔ ms, push /
   truncate / append, mapped temp file growing past 64 MB, interner), export incl. end-to-end and
   visible rows as highlighted rows, error codes, i18n completeness, config migration)
 - **Test logs**: `python scripts/gen_testlogs.py [--small-only]` creates `testlogs/` (in `.gitignore`,
   ~650 MB with the big ones, ~1 min) – CMTrace (UTF-8, UTF-8 BOM, UTF-16 LE, multi-line, unfinished
   last line), SMS format, plain ANSI 1250 / without timestamps, CBS, DISM, IIS (two `#Fields` sets,
-  detection by content), a rotation set with set modification times, big CMTrace 400 MB / CBS
+  detection by content), Exchange Transport Connectivity (by name and by content), a rotation set with set modification times, big CMTrace 400 MB / CBS
   100 MB / IIS 100 MB; list in `testlogs/README.txt`. Use these for manual / GUI checks.
   `cargo test --release testlogs_overview -- --ignored --nocapture` loads all of them and prints
   format, encoding, files, entries, errors/warnings, dated entries and time.
@@ -219,6 +221,8 @@ Features (all implemented, see README for user-facing details):
 27. (2026-10-26) GitHub workflow with issues + PRs started. #2: match count right after the search
     field. #1: a search match hidden in a long message → excerpt in the cell, highlighted and
     scrolled to in the details pane.
+28. #13: Exchange Server Transport Connectivity log definition; w3c definitions got `separator`
+    (comma-separated `#Fields:` and values, CSV quoting, `-` kept as a value).
 
 ## Ideas not done yet (offered to the owner)
 - Merge **different** logs into one view sorted by time (like CMTrace File → Open → "Merge
