@@ -153,6 +153,8 @@ search.not_found = Nenalezeno
 # --- Stavový řádek ---
 status.entries = Záznamy: {count}
 status.shown = Zobrazeno {shown} z {total}
+status.position = Řádek {row} / {total} ({percent} %)
+status.position.tip = Pozice vybraného řádku mezi řádky zobrazenými v tabulce. Řádek v souboru: {line}
 status.refresh_every = každých {value} {unit}
 status.paused = Obnovování pozastaveno
 status.last_change = Poslední změna: {time}

@@ -263,6 +263,10 @@ Visual C++ Redistributable.
     button shows "(on)" while a range is active, also when the row is hidden
 - the "rows visible in the table" export uses the column filters and the time range too
 
+**Position in the log** – the status bar shows where the selected row is among the rows shown in
+the table: `📍 Row 25 / 100 (25 %)`; with a filter active the numbers count only the visible rows,
+the tooltip shows the line number in the file.
+
 Settings and rules are saved automatically to `%APPDATA%\RusTrace\config.json`
 (Linux: `~/.config/RusTrace/config.json`).
 

@@ -2062,6 +2062,24 @@ impl App {
                     ));
                 }
                 ui.separator();
+                // Position of the selected row among the displayed rows (#3).
+                if let Some(sel) = self.selected
+                    && let Ok(pos) = self.filtered.binary_search(&sel)
+                {
+                    let total = self.filtered.len();
+                    let line = self.entries.get(sel).map_or(0, |e| e.line_no);
+                    ui.label(format!(
+                        "📍 {}",
+                        t!(
+                            "status.position",
+                            row = pos + 1,
+                            total = total,
+                            percent = position_percent(pos + 1, total)
+                        )
+                    ))
+                    .on_hover_text(t!("status.position.tip", line = line));
+                    ui.separator();
+                }
                 if self.cfg.auto_refresh {
                     ui.label(format!(
                         "🔄 {}",
@@ -3920,4 +3938,27 @@ fn format_size(b: u64) -> String {
 fn trim_num(v: f64) -> String {
     let s = format!("{v:.2}");
     s.trim_end_matches('0').trim_end_matches('.').to_owned()
+}
+
+/// Percentage of `row` (1-based) out of `total` rows, rounded down; the last row is 100 %.
+fn position_percent(row: usize, total: usize) -> u64 {
+    if total == 0 {
+        return 0;
+    }
+    row.min(total) as u64 * 100 / total as u64
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn position_percent_of_rows() {
+        assert_eq!(position_percent(25, 100), 25);
+        assert_eq!(position_percent(1, 3), 33);
+        assert_eq!(position_percent(3, 3), 100);
+        assert_eq!(position_percent(1, 1), 100);
+        assert_eq!(position_percent(0, 0), 0);
+        assert_eq!(position_percent(1, 1_800_000), 0);
+    }
 }

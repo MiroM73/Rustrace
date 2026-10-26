@@ -161,7 +161,7 @@ Features (all implemented, see README for user-facing details):
 
 ## Commands
 - `cargo build --release` → `target\release\rustrace.exe`
-- `cargo test` (53 tests: file association (registry in an own HKCU test key), search history, store drop_front / move to temp file, rotated parts (naming, merge on open, rotation while watching, replaced
+- `cargo test` (54 tests: status-bar position percentage, file association (registry in an own HKCU test key), search history, store drop_front / move to temp file, rotated parts (naming, merge on open, rotation while watching, replaced
   file), export segments by file, time range bounds, column filter syntax, parsers, chunked/ANSI/UTF-16 reading, log definitions (CBS, DISM, IIS,
   Exchange connectivity / CSV separator, choice by name/content, appending across refreshes), store (32-byte record, ISO ↔ ms, push /
   truncate / append, mapped temp file growing past 64 MB, interner), export incl. end-to-end and
@@ -250,6 +250,8 @@ Features (all implemented, see README for user-facing details):
 33. #6 high CPU: the AMD driver spun a core with wgpu → OpenGL renderer by default with wgpu
     fallback; fewer frames per auto refresh.
 34. Release v0.6.1 (#6 high CPU fix).
+35. #3: position of the selected row in the status bar (`📍 Row 25 / 100 (25 %)`, counted among
+    the displayed rows `filtered`, tooltip = line in the file; `position_percent` rounds down).
 
 ## Ideas not done yet (offered to the owner)
 - Merge **different** logs into one view sorted by time (like CMTrace File → Open → "Merge

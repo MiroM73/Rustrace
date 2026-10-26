@@ -153,6 +153,8 @@ search.not_found = Nicht gefunden
 # --- Statusleiste ---
 status.entries = Einträge: {count}
 status.shown = {shown} von {total} angezeigt
+status.position = Zeile {row} / {total} ({percent} %)
+status.position.tip = Position der ausgewählten Zeile unter den in der Tabelle angezeigten Zeilen. Zeile in der Datei: {line}
 status.refresh_every = alle {value} {unit}
 status.paused = Aktualisierung pausiert
 status.last_change = Letzte Änderung: {time}
