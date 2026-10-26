@@ -67,7 +67,12 @@ Visual C++ Redistributable.
 
 - Locally: `cargo build --release`, then `scripts\package.ps1` (needs 7-Zip) →
   `dist\RusTrace-v<version>-windows-x64.exe` and `.zip`, each with a `.sha256`.
-- On GitHub: bump `version` in `Cargo.toml`, commit, then push a tag, e.g.
+- On GitHub, in one step: `scripts\release.ps1 0.6.0` (add `-Publish` to publish right after the
+  build, `-DryRun` to only run the checks and tests). It checks the repository (master, clean, not
+  behind, tag not used yet), sets the version in `Cargo.toml`, runs the tests (backing up
+  `%APPDATA%\RusTrace\config.json`), asks for confirmation, commits, pushes, tags, waits for the
+  workflow and shows the draft. Run `Get-Help scripts\release.ps1 -Full` for the details.
+- On GitHub by hand: bump `version` in `Cargo.toml`, commit, then push a tag, e.g.
   `git tag v0.1.0 && git push origin v0.1.0`. The workflow `.github/workflows/release.yml` runs the
   tests, builds, packages and creates a **draft** release with the archive attached; review it and
   publish. A manual run of the workflow (Actions → Release → Run workflow) only builds the archive as
@@ -397,6 +402,7 @@ The built-in languages live in `lang/*.lang` in the source tree and are embedded
 - `lang/*.lang` – built-in translations
 - `logdef/*.def` – built-in log definitions (IIS, Exchange, DISM, CBS)
 - `scripts/package.ps1` – packs the release build into the self-extracting archive and the ZIP
+- `scripts/release.ps1` – the whole GitHub release (checks, version, tests, commit, tag, build, publish)
 - `scripts/gen_testlogs.py` – generates the test logs in `testlogs/` (not in git)
 - `.github/workflows/release.yml` – builds and publishes releases on GitHub
 

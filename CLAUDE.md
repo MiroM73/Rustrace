@@ -168,6 +168,9 @@ Features (all implemented, see README for user-facing details):
   `RusTrace\` with `rustrace.exe` + `lang\` + `logdef\` + `LICENSE`. Needs 7-Zip.
 - Releases: push tag `v<version>` (matching `Cargo.toml`) → GitHub Actions `release.yml` tests,
   builds, packages and creates a **draft** release; then publish it. Manual workflow run = artifact only.
+  `scripts\release.ps1 <version> [-Publish] [-DryRun] [-NoWatch] [-Yes]` does all of it (checks,
+  version bump, tests with config backup, commit, push, tag, wait, publish); the owner runs it
+  himself to save tokens.
 - Rust (rustup, stable MSVC) is installed on the owner's PC since 2026-10-24 (VS 2019 C++ tools);
   `cargo` is in `%USERPROFILE%\.cargo\bin` – add it to PATH in shells started before that.
 - Do not leave test runs touching `%APPDATA%\RusTrace\config.json`: back it up and restore it
