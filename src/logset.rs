@@ -140,6 +140,38 @@ pub struct Vars {
     pub systemdrive: String,
     /// Other `%NAME%` variables come from the environment (only on this computer).
     pub env: bool,
+    /// A remote computer: paths with a drive letter (`D:\x`) go to its admin share (`\\pc\d$\x`).
+    pub remote: Option<String>,
+}
+
+/// How long the shares of a remote computer may take to answer (#27).
+pub const REMOTE_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(10);
+
+/// A computer name or IP address as typed (`pc01`, `\\pc01`, ` 10.0.0.5 `) → the name, or `None`
+/// when it cannot be one.
+pub fn computer_name(input: &str) -> Option<String> {
+    let name = input
+        .trim()
+        .trim_start_matches(['\\', '/'])
+        .trim_end_matches(['\\', '/']);
+    let bad = |c: char| c.is_whitespace() || r#"\/$%*?"<>|"#.contains(c);
+    (!name.is_empty() && !name.chars().any(bad)).then(|| name.to_owned())
+}
+
+/// Variables of a remote computer, reached over its administrative shares with the current
+/// Windows user: `%WINDIR%` = `\\pc\admin$` (the Windows folder wherever it is installed),
+/// `%CCMLOGS%` = `\\pc\admin$\CCM\Logs` (the default client log folder – the registry of the
+/// remote computer is not read), `%SYSTEMDRIVE%` = `\\pc\c$`, `%PROGRAMDATA%` =
+/// `\\pc\c$\ProgramData`; no other variables.
+pub fn remote_vars(pc: &str) -> Vars {
+    Vars {
+        windir: format!(r"\\{pc}\admin$"),
+        ccmlogs: format!(r"\\{pc}\admin$\CCM\Logs"),
+        programdata: format!(r"\\{pc}\c$\ProgramData"),
+        systemdrive: format!(r"\\{pc}\c$"),
+        env: false,
+        remote: Some(pc.to_owned()),
+    }
 }
 
 /// Variables of this computer: the environment, `%CCMLOGS%` = the log folder of the ConfigMgr
@@ -162,6 +194,7 @@ pub fn local_vars(ccm_log_dir: Option<String>) -> Vars {
         systemdrive: trim(env(&["SystemDrive"], "C:")),
         windir: trim(windir),
         env: true,
+        remote: None,
     }
 }
 
@@ -193,7 +226,45 @@ pub fn resolve(file: &str, vars: &Vars) -> Result<String, String> {
         rest = &after[end + 1..];
     }
     out.push_str(rest);
+    // A drive letter on a remote computer → its administrative share.
+    if let Some(pc) = &vars.remote {
+        let b = out.as_bytes();
+        if b.len() >= 2 && b[0].is_ascii_alphabetic() && b[1] == b':' {
+            let drive = (b[0] as char).to_ascii_lowercase();
+            let rest = out[2..].trim_start_matches(['\\', '/']);
+            out = format!(r"\\{pc}\{drive}$\{rest}");
+        }
+    }
     Ok(out)
+}
+
+/// The share of a UNC path: `\\pc\c$\Windows\x.log` → `\\pc\c$`.
+pub fn share_root(path: &str) -> Option<String> {
+    let rest = path
+        .strip_prefix(r"\\")
+        .or_else(|| path.strip_prefix("//"))?;
+    let mut parts = rest.split(['\\', '/']).filter(|p| !p.is_empty());
+    let (host, share) = (parts.next()?, parts.next()?);
+    // \\?\C:\… and \\.\… are local device paths, not shares.
+    (host != "?" && host != ".").then(|| format!(r"\\{host}\{share}"))
+}
+
+/// The computer of a share: `\\pc\c$` → `pc`.
+pub fn share_host(share: &str) -> &str {
+    share
+        .trim_start_matches(['\\', '/'])
+        .split(['\\', '/'])
+        .next()
+        .unwrap_or(share)
+}
+
+/// Checks that a share answers (`Ok`) or why not (`Unreachable`, `NoShare`, `AccessDenied`, …).
+/// Can block for a long time – call it in a background thread.
+pub fn check_share(share: &str) -> Result<(), FileState> {
+    match std::fs::read_dir(format!(r"{share}\")) {
+        Ok(_) => Ok(()),
+        Err(e) => Err(io_state(&e)),
+    }
 }
 
 // ----------------------------------------------------------------------
@@ -214,6 +285,12 @@ pub enum FileState {
     AccessDenied,
     /// Not a file (a folder).
     NotAFile,
+    /// The computer does not answer (offline, wrong name, firewall).
+    Unreachable,
+    /// The share does not exist (administrative shares turned off).
+    NoShare,
+    /// No answer within `REMOTE_TIMEOUT`.
+    TimedOut,
     Error(String),
 }
 
@@ -247,6 +324,23 @@ pub fn check_file(path: &Path, rotated: bool) -> FileState {
 
 /// The state for an I/O error.
 pub fn io_state(e: &std::io::Error) -> FileState {
+    // Windows error codes of network paths first (several of them have a generic kind).
+    match e.raw_os_error().filter(|_| cfg!(windows)) {
+        // ERROR_FILE_NOT_FOUND, ERROR_PATH_NOT_FOUND
+        Some(2 | 3) => return FileState::NotFound,
+        // ERROR_ACCESS_DENIED, ERROR_INVALID_PASSWORD, ERROR_SESSION_CREDENTIAL_CONFLICT,
+        // ERROR_LOGON_FAILURE, ERROR_LOGON_TYPE_NOT_GRANTED, ERROR_SMB_GUEST_LOGON_BLOCKED
+        Some(5 | 86 | 1219 | 1326 | 1385 | 1272) => return FileState::AccessDenied,
+        // ERROR_BAD_NET_NAME – the share does not exist
+        Some(67) => return FileState::NoShare,
+        // ERROR_REM_NOT_LIST, ERROR_BAD_NETPATH, ERROR_UNEXP_NET_ERR, ERROR_NETNAME_DELETED,
+        // ERROR_SEM_TIMEOUT, ERROR_NO_NET_OR_BAD_PATH, ERROR_NO_NETWORK,
+        // ERROR_NETWORK_UNREACHABLE, ERROR_HOST_UNREACHABLE, ERROR_PORT_UNREACHABLE
+        Some(51 | 53 | 59 | 64 | 121 | 1203 | 1222 | 1231 | 1232 | 1234) => {
+            return FileState::Unreachable;
+        }
+        _ => {}
+    }
     match e.kind() {
         std::io::ErrorKind::NotFound => FileState::NotFound,
         std::io::ErrorKind::PermissionDenied => FileState::AccessDenied,
@@ -363,6 +457,7 @@ mod tests {
             ccmlogs: r"E:\CCMLogs".into(),
             systemdrive: "D:".into(),
             env: false,
+            remote: None,
         }
     }
 
@@ -497,5 +592,77 @@ mod tests {
         );
         assert_eq!(check_file(&base, true), FileState::NotAFile);
         let _ = std::fs::remove_dir_all(&base);
+    }
+
+    #[test]
+    fn remote_computer() {
+        assert_eq!(computer_name("  pc01 ").as_deref(), Some("pc01"));
+        assert_eq!(computer_name(r"\\PC01\").as_deref(), Some("PC01"));
+        assert_eq!(computer_name("10.0.0.5").as_deref(), Some("10.0.0.5"));
+        assert_eq!(
+            computer_name("pc.domain.local").as_deref(),
+            Some("pc.domain.local")
+        );
+        for bad in ["", "  ", r"\\", "pc 01", r"pc\c$", "pc/x", "a*b"] {
+            assert_eq!(computer_name(bad), None, "{bad}");
+        }
+
+        let v = remote_vars("pc01");
+        let r = |f: &str| resolve(f, &v);
+        assert_eq!(
+            r(r"%CCMLOGS%\AppEnforce.log").unwrap(),
+            r"\\pc01\admin$\CCM\Logs\AppEnforce.log"
+        );
+        assert_eq!(
+            r(r"%WINDIR%\ccmsetup\Logs\ccmsetup.log").unwrap(),
+            r"\\pc01\admin$\ccmsetup\Logs\ccmsetup.log"
+        );
+        assert_eq!(
+            r(r"%PROGRAMDATA%\Microsoft\IntuneManagementExtension\Logs\AgentExecutor.log").unwrap(),
+            r"\\pc01\c$\ProgramData\Microsoft\IntuneManagementExtension\Logs\AgentExecutor.log"
+        );
+        assert_eq!(
+            r(r"%SystemDrive%\Temp\a.log").unwrap(),
+            r"\\pc01\c$\Temp\a.log"
+        );
+        // Drive letters go to the admin share of that drive, UNC paths stay.
+        assert_eq!(r(r"D:\Logs\app.log").unwrap(), r"\\pc01\d$\Logs\app.log");
+        assert_eq!(r(r"\\server\share\x.log").unwrap(), r"\\server\share\x.log");
+        // No environment variables of this computer on a remote one.
+        assert_eq!(r(r"%TEMP%\a.log").unwrap_err(), "%TEMP%");
+        // Every built-in set resolves on a remote computer.
+        for (id, text) in BUILTIN {
+            for f in LogSetDef::parse(id, text, None).unwrap().files {
+                assert!(r(&f).unwrap().starts_with(r"\\pc01\"), "{id}: {f}");
+            }
+        }
+
+        assert_eq!(
+            share_root(r"\\pc01\admin$\CCM\Logs\a.log").as_deref(),
+            Some(r"\\pc01\admin$")
+        );
+        assert_eq!(share_root("//pc/c$/x").as_deref(), Some(r"\\pc\c$"));
+        assert_eq!(share_root(r"\\pc01").as_deref(), None);
+        assert_eq!(share_root(r"C:\Windows\a.log"), None);
+        assert_eq!(share_root(r"\\?\C:\a.log"), None);
+        assert_eq!(share_host(r"\\pc01\admin$"), "pc01");
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn network_errors() {
+        let st = |code| io_state(&std::io::Error::from_raw_os_error(code));
+        assert_eq!(st(53), FileState::Unreachable);
+        assert_eq!(st(1231), FileState::Unreachable);
+        assert_eq!(st(67), FileState::NoShare);
+        assert_eq!(st(5), FileState::AccessDenied);
+        assert_eq!(st(1326), FileState::AccessDenied);
+        assert_eq!(st(3), FileState::NotFound);
+        assert!(matches!(st(87), FileState::Error(_)));
+        // A computer that does not exist (name resolution fails within a few seconds).
+        assert!(matches!(
+            check_share(r"\\rustrace-no-such-pc-xyz.invalid\admin$"),
+            Err(FileState::Unreachable | FileState::NotFound)
+        ));
     }
 }

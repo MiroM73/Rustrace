@@ -174,6 +174,10 @@ the version information into the exe; this uses the resource compiler `rc.exe` o
   `AppEnforce.log`, `AppIntentEval.log`, `CAS.log`, `ContentTransferManager.log`,
   `DataTransferService.log`), see which of its logs exist (✔ / ✖ with size and last write time,
   rotated older parts), untick the ones you do not need and **Open** them as one view merged by time
+- **on this computer or on a remote one** (name or IP address → its administrative shares
+  `\\<computer>\admin$` / `\\<computer>\c$`, with your Windows account; recently used computers
+  are remembered); an offline computer or missing rights give a clear message within seconds,
+  the window never freezes
 - built in: application deployment, software updates, client installation, policy, Intune /
   co-management; your own sets are small text files
 
@@ -532,8 +536,8 @@ with "Also component", and appended to the readable export.
 ## Log sets
 
 A **log set** is a named group of logs for one troubleshooting scenario. **File → Open log set…**
-opens a window: choose the set (the last one is remembered), and the window checks in the
-background which of its logs exist on this computer – ✔ *Found* with the size, the last write time
+opens a window: choose the set (the last one is remembered) and the computer, and the window checks
+in the background which of its logs exist – ✔ *Found* with the size, the last write time
 and the number of rotated older parts that are opened with it (`AppEnforce.lo_`,
 `AppEnforce-20261027-101500.log`), ✖ *Not found*, 🔒 *Access denied*. Found logs are ticked; untick
 the ones you do not need and press **Open** – the logs are opened as **one view merged by time**
@@ -549,6 +553,33 @@ Built-in sets (`%CCMLOGS%` = the log folder of the ConfigMgr client, see below):
 | Client installation | `%WINDIR%\ccmsetup\Logs\` `ccmsetup.log`, `client.msi.log`; `%CCMLOGS%\` `ClientIDManagerStartup.log`, `LocationServices.log` |
 | Policy | `%CCMLOGS%\` `PolicyAgent.log`, `PolicyEvaluator.log`, `ClientLocation.log` |
 | Intune / co-management | `%PROGRAMDATA%\Microsoft\IntuneManagementExtension\Logs\` `IntuneManagementExtension.log`, `AppWorkload.log`, `AppActionProcessor.log`, `AgentExecutor.log`; `%CCMLOGS%\CoManagementHandler.log` |
+
+**Remote computer**: choose *Remote computer*, type its name or IP address (`pc01`,
+`pc01.contoso.com`, `10.0.0.5`; a leading `\\` is fine) and press **Check** or Enter; 🕘 lists the
+recently used computers (the last 15, remembered when a set is opened). The logs are read over the
+**administrative shares** with **your current Windows account** – it needs administrator rights on
+that computer (RusTrace never asks for or stores credentials; to use another account, connect
+first, e.g. `net use \\pc01\admin$ /user:DOMAIN\admin`). The variables point to the remote
+computer:
+
+| Variable | This computer | Remote computer `pc01` |
+|---|---|---|
+| `%WINDIR%` | `C:\Windows` | `\\pc01\admin$` (its Windows folder, wherever it is installed) |
+| `%CCMLOGS%` | client `LogDirectory` from the registry, else `%WINDIR%\CCM\Logs` | `\\pc01\admin$\CCM\Logs` (the default; its registry is not read) |
+| `%PROGRAMDATA%` | `C:\ProgramData` | `\\pc01\c$\ProgramData` |
+| `%SYSTEMDRIVE%` | `C:` | `\\pc01\c$` |
+| a path `D:\Logs\x.log` | `D:\Logs\x.log` | `\\pc01\d$\Logs\x.log` |
+| other `%NAME%` | environment variable | ✖ *Unknown variable* |
+
+Every share is checked first and must answer within **10 seconds**; the window stays usable all
+the time. Messages: *pc01 cannot be reached* (offline, wrong name, firewall blocks SMB), *No answer
+from pc01 within 10 s*, *Access to* `\\pc01\admin$` *denied* (no administrator rights),
+*The share* `\\pc01\c$` *does not exist* (administrative shares turned off); the rows show *Not reachable*,
+*No answer*, *Access denied*, *Share missing*. The opened remote logs are refreshed automatically
+like local ones, including rotation (`AppEnforce.log` → `AppEnforce.lo_`) – every refresh opens the
+file again and reads only the new part, so the network carries only what was added. When the
+computer goes offline while the logs are watched, the status bar shows the read error and the
+view keeps what was read.
 
 `%WINDIR%\WindowsUpdate.log` is not in the software updates set: since Windows 10 it only says to
 run `Get-WindowsUpdateLog`.

@@ -116,6 +116,11 @@ Notes for Claude, linked from `CLAUDE.md`.
     check in a background thread, Open = merged view. Paths of the issue checked: ccmsetup logs
     in `%WINDIR%\ccmsetup\Logs`, IME logs in `%PROGRAMDATA%\Microsoft\IntuneManagementExtension\Logs`
     (+ `AppWorkload.log`, `AppActionProcessor.log`), `WindowsUpdate.log` left out (ETL since Win 10).
+55. #27 (part 2) log sets on a remote computer: name / IP → admin shares (`%WINDIR%` =
+    `\\pc\admin$`, `%PROGRAMDATA%` = `\\pc\c$\ProgramData`, drive letters → `\\pc\x$`), shares
+    checked first with a 10 s timeout, translated messages (unreachable / no answer / access denied /
+    share missing), recently used computers in the settings, UNC watching + rotation tested over
+    `\\localhost\c$`. Not tested on a real remote ConfigMgr client.
 
 ## Ideas not done yet (offered by the owner)
 - `--set "<name>"` command-line option for log sets (#27): would need the set loading, the file

@@ -87,6 +87,30 @@ User-facing descriptions are in `README.md`.
   over a channel + repaint; a newer check replaces the receiver (the old result is dropped). Found
   rows are ticked; Open → `App::open_files(ticked found paths)` = the merged view of #21 (one path =
   a normal single log).
+- Remote computer (#27 part 2): `logset::computer_name` (trim, leading `\\` dropped; whitespace,
+  `\ / $ % * ? " < > |` rejected) → `remote_vars(pc)`: `%WINDIR%` = `\\pc\admin$` (follows the
+  real Windows folder), `%CCMLOGS%` = `\\pc\admin$\CCM\Logs` (default only – no remote registry),
+  `%PROGRAMDATA%` = `\\pc\c$\ProgramData`, `%SYSTEMDRIVE%` = `\\pc\c$`, no environment;
+  `resolve` maps a drive path `D:\x` to `\\pc\d$\x`. Check thread: distinct `share_root`s of the
+  paths → `check_share` (`read_dir` of `\\pc\share\`) → `CheckMsg::Shares`, then
+  `CheckMsg::Files` (rows of a failed share get its state without touching the files).
+  `LogSetDialog::poll_check`: while `shares_pending`, `REMOTE_TIMEOUT` (10 s) from `started`
+  (`request_repaint_after` the rest) → rows `TimedOut`, receiver dropped (the thread may hang in
+  the SMB call and ends later; its sends fail). `io_state` maps Windows codes first (only
+  `cfg!(windows)`): 2/3 not found, 5/86/1219/1326/1385/1272 access denied, 67 `NoShare`,
+  51/53/59/64/121/1203/1222/1231/1232/1234 `Unreachable`; banner text per state
+  (`share_problem_text`). `cfg.log_set_remote`, `cfg.remote_computers` (newest first, max
+  `REMOTE_COMPUTERS_MAX` 15, `Config::push_computer` on Open). Measured: unknown name ≈ 2.5 s →
+  *cannot be reached*; `10.255.255.1` → timeout after 10 s; `\\localhost\c$` / `admin$` work.
+- UNC paths and the reader: `LogSource::poll` opens the file again for every read
+  (`File::open` + `metadata()` on the handle – the size comes from the server, not from the SMB
+  client's metadata cache of `std::fs::metadata(path)`), reads from the stored offset; rotation
+  detection compares the first 4 KB and the size; `rotated_parts` lists the folder over SMB. Std's
+  default share mode (read | write | delete) does not block the ConfigMgr client from appending /
+  renaming. Tested over `\\localhost\c$`: appends every 250 ms and a rename to `.lo_` while
+  watching – every entry once, the File column shows both parts. Known limit: the raw line of the
+  details pane (`parser::read_raw`) is read on the UI thread – on a remote log that went offline
+  it can wait for the SMB timeout.
 
 ## Rotated logs
 - **Rotated logs merged** (`cfg.merge_rotated`, default on; `parser::rotated_parts`): opening
@@ -347,7 +371,7 @@ User-facing descriptions are in `README.md`.
   program), names via `AssocQueryStringW`. Test `register_and_unregister` uses its own HKCU key.
 
 ## Tests and benchmarks
-- `cargo test` (100 tests: log sets (set file parsing / translations / built-in sets, variables, loading priorities, file checks), HTTP status lookup / class fallback / lookup input parsing and ambiguity / cell values, status column keys of log definitions, command-line parsing (file association, all options, errors, `--restore`, language / time / regex checks, help text), overview buckets incremental = full / pixel runs, readable export with Δ, durations, match bits set / iterate, bookmark file id remap, update releases list / missed versions / check setting migration, merged logs (order by time, appended older rows, formats + rotated parts + re-read, single log unchanged, interleave), store copy_entry / split_off, raw lines of entries (all formats / encodings), filter (parallel = sequential, match bits), date column filter = text filter, updates (versions, release JSON, notes, sha256 file, ZIP, install, restore state), icon / .ico layout, search as you type threshold, status-bar position percentage, file association (registry in an own HKCU test key), search history, store drop_front / move to temp file, rotated parts (naming, merge on open, rotation while watching, replaced
+- `cargo test` (103 tests: log sets (set file parsing / translations / built-in sets, variables, loading priorities, file checks, remote computer names / variables / drive letters / share roots, network error codes, recent computers), HTTP status lookup / class fallback / lookup input parsing and ambiguity / cell values, status column keys of log definitions, command-line parsing (file association, all options, errors, `--restore`, language / time / regex checks, help text), overview buckets incremental = full / pixel runs, readable export with Δ, durations, match bits set / iterate, bookmark file id remap, update releases list / missed versions / check setting migration, merged logs (order by time, appended older rows, formats + rotated parts + re-read, single log unchanged, interleave), store copy_entry / split_off, raw lines of entries (all formats / encodings), filter (parallel = sequential, match bits), date column filter = text filter, updates (versions, release JSON, notes, sha256 file, ZIP, install, restore state), icon / .ico layout, search as you type threshold, status-bar position percentage, file association (registry in an own HKCU test key), search history, store drop_front / move to temp file, rotated parts (naming, merge on open, rotation while watching, replaced
   file), export segments by file, time range bounds, column filter syntax, parsers, chunked/ANSI/UTF-16 reading, log definitions (CBS, DISM, IIS,
   Exchange connectivity / CSV separator, choice by name/content, appending across refreshes), store (32-byte record, ISO ↔ ms, push /
   truncate / append, mapped temp file growing past 64 MB, interner), export incl. end-to-end and

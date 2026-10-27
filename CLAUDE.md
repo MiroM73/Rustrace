@@ -27,7 +27,7 @@ Feature index (file → section of `docs/architecture.md`):
 - Formats, encodings, chunked background reading – `src/parser.rs` → Formats, Reading
 - Log definitions (`.def`, W3C, groups, update notice) – `src/logdef.rs`, `app/logdefs.rs` → Log definitions
 - Several logs merged by time – `src/merge.rs` → Merged logs
-- Log sets (File → Open log set, `.set` files, variables) – `src/logset.rs`, `dialogs/logsets.rs` → Log sets
+- Log sets (File → Open log set, `.set` files, variables, remote computer) – `src/logset.rs`, `dialogs/logsets.rs` → Log sets
 - Rotated parts, rotation while watching – `src/parser.rs` → Rotated logs
 - Compact store, temp file, memory limit – `src/store.rs`, `app/loading.rs` → Compact storage, Memory limits
 - Details pane message / raw line – `app/details.rs` → Raw line
@@ -63,7 +63,7 @@ Feature index (file → section of `docs/architecture.md`):
 - `src/store.rs` – `LogStore` / `EntryRef` (compact entries, text arena, interner, ISO ↔ ms).
 - `src/merge.rs` – `LogSet`, `interleave`, `apply_appended`.
 - `src/logdef.rs` – log definitions, `Schema` / `Column` / `ColumnKind` / `Role`.
-- `src/logset.rs` – log sets: `.set` parsing / loading, path variables, file checks.
+- `src/logset.rs` – log sets: `.set` parsing / loading, path variables (local / remote), share and file checks.
 - `src/filter.rs` – `FilterSpec` / `CellFilter` / `MatchBits`; `src/colfilter.rs` – column filter syntax.
 - `src/export.rs` – pure export logic; `src/overview.rs` – overview strip buckets;
   `src/timefmt.rs` – durations; `src/excerpt.rs` – message cell text; `src/errcodes.rs` – error codes;
@@ -84,7 +84,7 @@ Feature index (file → section of `docs/architecture.md`):
   `egui::MenuBar::new().ui(..)`, `ui.close()`, `egui::Id::unique(..)` (not `Id::new`).
 
 ## Commands
-- `cargo build --release` → `target\release\rustrace.exe`; `cargo test` (96 tests; what they
+- `cargo build --release` → `target\release\rustrace.exe`; `cargo test` (103 tests; what they
   cover: `docs/architecture.md` → Tests and benchmarks).
 - `cargo fmt` + `cargo clippy --all-targets --locked -- -D warnings` – the code is rustfmt-clean and
   clippy-clean; CI (`.github/workflows/ci.yml`) fails otherwise. Formatting-only commits go into

@@ -1,5 +1,7 @@
-//! File → Open log set (#27): a predefined group of logs for a troubleshooting scenario, opened
-//! as one view merged by time. Which files exist is checked in a background thread.
+//! File → Open log set (#27): a predefined group of logs for a troubleshooting scenario, on this
+//! computer or on a remote one (over its administrative shares), opened as one view merged by
+//! time. Which files exist is checked in a background thread; the shares of a remote computer
+//! must answer within `logset::REMOTE_TIMEOUT`, so an offline computer never blocks the window.
 
 use crate::app::*;
 use crate::logset::{self, FileState, LogSetDef};
@@ -9,9 +11,26 @@ pub(in crate::app) struct LogSetDialog {
     sets: Vec<LogSetDef>,
     errors: Vec<String>,
     chosen: usize,
+    /// A remote computer is chosen and its name as typed.
+    remote: bool,
+    computer: String,
+    /// The computer the rows belong to (`None` = this computer).
+    checked_pc: Option<String>,
     rows: Vec<SetRow>,
-    /// Results of the running check (one per row with a resolved path, in row order).
-    check: Option<mpsc::Receiver<Vec<FileState>>>,
+    /// The running check, when it started and whether the shares have answered.
+    check: Option<mpsc::Receiver<CheckMsg>>,
+    started: Instant,
+    shares_pending: bool,
+    /// The first share that could not be used: (share, why).
+    share_problem: Option<(String, FileState)>,
+}
+
+/// Results of the background check.
+enum CheckMsg {
+    /// Every share of the paths and whether it answers (sent first).
+    Shares(Vec<(String, Result<(), FileState>)>),
+    /// One state per row with a resolved path, in row order.
+    Files(Vec<FileState>),
 }
 
 /// One log of the chosen set.
@@ -29,16 +48,70 @@ impl LogSetDialog {
     fn set(&self) -> Option<&LogSetDef> {
         self.sets.get(self.chosen)
     }
+
+    /// Takes over the results of the background check; the shares that do not answer in time
+    /// mark the rows as timed out.
+    fn poll_check(&mut self, ctx: &egui::Context) {
+        while let Some(msg) = self.check.as_ref().and_then(|rx| rx.try_recv().ok()) {
+            match msg {
+                CheckMsg::Shares(shares) => {
+                    self.shares_pending = false;
+                    self.share_problem = shares
+                        .into_iter()
+                        .find_map(|(share, r)| r.err().map(|e| (share, e)));
+                }
+                CheckMsg::Files(states) => {
+                    let mut states = states.into_iter();
+                    for row in self.rows.iter_mut().filter(|r| r.path.is_ok()) {
+                        row.state = states.next();
+                        row.ticked = row.state.as_ref().is_some_and(FileState::exists);
+                    }
+                    self.check = None;
+                }
+            }
+        }
+        if self.check.is_some() && self.shares_pending {
+            let left = logset::REMOTE_TIMEOUT.saturating_sub(self.started.elapsed());
+            if left.is_zero() {
+                // The thread may still hang in the network call; its result is dropped.
+                self.check = None;
+                self.shares_pending = false;
+                for row in self.rows.iter_mut().filter(|r| r.path.is_ok()) {
+                    row.state = Some(FileState::TimedOut);
+                }
+                let pc = self.checked_pc.clone().unwrap_or_default();
+                self.share_problem = Some((format!(r"\\{pc}"), FileState::TimedOut));
+            } else {
+                ctx.request_repaint_after(left);
+            }
+        }
+    }
 }
 
 /// The variables of this computer (`%CCMLOGS%` from the registry of the ConfigMgr client).
-fn vars() -> logset::Vars {
+fn local_vars() -> logset::Vars {
     #[cfg(windows)]
     let ccm =
         crate::fileassoc::hklm_string(r"SOFTWARE\Microsoft\CCM\Logging\@Global", "LogDirectory");
     #[cfg(not(windows))]
     let ccm = None;
     logset::local_vars(ccm)
+}
+
+/// The text above the buttons when a share of the computer cannot be used.
+fn share_problem_text(share: &str, state: &FileState) -> String {
+    let pc = logset::share_host(share);
+    match state {
+        FileState::TimedOut => t!(
+            "logset.remote.timeout",
+            pc = pc,
+            seconds = logset::REMOTE_TIMEOUT.as_secs()
+        ),
+        FileState::AccessDenied => t!("logset.remote.access_denied", share = share),
+        FileState::NoShare => t!("logset.remote.no_share", share = share),
+        FileState::Error(e) => t!("logset.remote.error", share = share, error = e),
+        _ => t!("logset.remote.unreachable", pc = pc),
+    }
 }
 
 impl App {
@@ -57,16 +130,43 @@ impl App {
             sets,
             errors: list.errors,
             chosen,
+            remote: self.cfg.log_set_remote,
+            computer: self
+                .cfg
+                .remote_computers
+                .first()
+                .cloned()
+                .unwrap_or_default(),
+            checked_pc: None,
             rows: Vec::new(),
             check: None,
+            started: Instant::now(),
+            shares_pending: false,
+            share_problem: None,
         };
         self.start_set_check(&mut dlg);
         self.log_sets = Some(dlg);
     }
 
-    /// Resolves the files of the chosen set and checks them in a background thread.
+    /// Resolves the files of the chosen set for the chosen computer and checks them in a
+    /// background thread: first the shares of the paths, then every file.
     fn start_set_check(&self, dlg: &mut LogSetDialog) {
-        let vars = vars();
+        dlg.check = None;
+        dlg.share_problem = None;
+        dlg.shares_pending = false;
+        let vars = if dlg.remote {
+            match logset::computer_name(&dlg.computer) {
+                Some(pc) => logset::remote_vars(&pc),
+                None => {
+                    dlg.rows.clear();
+                    dlg.checked_pc = None;
+                    return;
+                }
+            }
+        } else {
+            local_vars()
+        };
+        dlg.checked_pc = vars.remote.clone();
         dlg.rows = dlg.set().map_or_else(Vec::new, |s| {
             s.files
                 .iter()
@@ -83,17 +183,47 @@ impl App {
             .iter()
             .filter_map(|r| r.path.clone().ok())
             .collect();
+        let mut shares: Vec<String> = Vec::new();
+        for p in &paths {
+            if let Some(s) = logset::share_root(&p.to_string_lossy())
+                && !shares.iter().any(|x| x.eq_ignore_ascii_case(&s))
+            {
+                shares.push(s);
+            }
+        }
+        dlg.shares_pending = !shares.is_empty();
+        dlg.started = Instant::now();
         let rotated = self.cfg.merge_rotated;
         let (tx, rx) = mpsc::channel();
         let ctx = self.ctx.clone();
         let spawned = std::thread::Builder::new()
             .name("rustrace-logset".into())
             .spawn(move || {
+                let answers: Vec<(String, Result<(), FileState>)> = shares
+                    .into_iter()
+                    .map(|s| {
+                        let r = logset::check_share(&s);
+                        (s, r)
+                    })
+                    .collect();
+                if tx.send(CheckMsg::Shares(answers.clone())).is_err() {
+                    return;
+                }
+                ctx.request_repaint();
                 let states = paths
                     .iter()
-                    .map(|p| logset::check_file(p, rotated))
+                    .map(|p| {
+                        let share = logset::share_root(&p.to_string_lossy());
+                        let failed = answers.iter().find_map(|(s, r)| {
+                            share
+                                .as_ref()
+                                .filter(|x| x.eq_ignore_ascii_case(s))
+                                .and_then(|_| r.clone().err())
+                        });
+                        failed.unwrap_or_else(|| logset::check_file(p, rotated))
+                    })
                     .collect();
-                let _ = tx.send(states);
+                let _ = tx.send(CheckMsg::Files(states));
                 ctx.request_repaint();
             });
         dlg.check = spawned.is_ok().then_some(rx);
@@ -103,20 +233,12 @@ impl App {
         let Some(mut dlg) = self.log_sets.take() else {
             return;
         };
-        if let Some(rx) = &dlg.check
-            && let Ok(states) = rx.try_recv()
-        {
-            let mut states = states.into_iter();
-            for row in dlg.rows.iter_mut().filter(|r| r.path.is_ok()) {
-                row.state = states.next();
-                row.ticked = row.state.as_ref().is_some_and(FileState::exists);
-            }
-            dlg.check = None;
-        }
+        dlg.poll_check(ctx);
         let mut open = true;
         let (mut chosen, mut recheck, mut open_logs, mut close, mut own_folder) =
             (None, false, false, false, false);
         let lang = self.lang_code.clone();
+        let recent = self.cfg.remote_computers.clone();
         egui::Window::new(format!("📑 {}", t!("logset.title")))
             .id(egui::Id::unique("logset_window"))
             .open(&mut open)
@@ -151,15 +273,27 @@ impl App {
                         ui.weak(t!("logset.source", path = p.display()));
                     }
                 }
+                recheck |= computer_row(ui, &mut dlg, &recent);
                 ui.separator();
-                self.set_rows(ui, &mut dlg);
+                if dlg.remote && dlg.checked_pc.is_none() {
+                    let text = if dlg.computer.trim().is_empty() {
+                        t!("logset.remote.enter")
+                    } else {
+                        t!("logset.remote.invalid", name = dlg.computer.trim())
+                    };
+                    ui.colored_label(ORANGE, text);
+                } else {
+                    self.set_rows(ui, &mut dlg);
+                }
                 ui.separator();
                 let count = dlg
                     .rows
                     .iter()
                     .filter(|r| r.ticked && r.state.as_ref().is_some_and(FileState::exists))
                     .count();
-                if dlg.check.is_none()
+                if let Some((share, state)) = &dlg.share_problem {
+                    ui.colored_label(RED, share_problem_text(share, state));
+                } else if dlg.check.is_none()
                     && !dlg.rows.is_empty()
                     && !dlg
                         .rows
@@ -222,6 +356,10 @@ impl App {
             }
             recheck = true;
         }
+        if self.cfg.log_set_remote != dlg.remote {
+            self.cfg.log_set_remote = dlg.remote;
+            self.cfg_dirty = true;
+        }
         if recheck {
             self.start_set_check(&mut dlg);
         }
@@ -234,8 +372,11 @@ impl App {
                 .collect();
             if let Some(s) = dlg.set() {
                 self.cfg.last_log_set = s.key();
-                self.cfg_dirty = true;
             }
+            if let Some(pc) = &dlg.checked_pc {
+                self.cfg.push_computer(pc);
+            }
+            self.cfg_dirty = true;
             self.open_files(paths);
             return;
         }
@@ -343,10 +484,68 @@ fn state_text(s: &FileState, green: Color32) -> (String, Color32, Option<String>
         FileState::NotFound => (format!("✖ {}", t!("logset.not_found")), RED, None),
         FileState::AccessDenied => (format!("🔒 {}", t!("logset.access_denied")), RED, None),
         FileState::NotAFile => (format!("✖ {}", t!("logset.not_a_file")), RED, None),
+        FileState::Unreachable => (format!("✖ {}", t!("logset.unreachable")), RED, None),
+        FileState::NoShare => (format!("✖ {}", t!("logset.no_share")), RED, None),
+        FileState::TimedOut => (format!("⏱ {}", t!("logset.timed_out")), RED, None),
         FileState::Error(e) => (
             format!("✖ {}", t!("logset.error.short")),
             RED,
             Some(t!("logset.error", error = e)),
         ),
     }
+}
+
+/// "Computer: (•) This computer ( ) Remote computer [name] [🕘] [Check]"; true = check again.
+fn computer_row(ui: &mut egui::Ui, dlg: &mut LogSetDialog, recent: &[String]) -> bool {
+    let mut recheck = false;
+    ui.horizontal(|ui| {
+        ui.label(t!("logset.computer"));
+        if ui.radio(!dlg.remote, t!("logset.local")).clicked() && dlg.remote {
+            dlg.remote = false;
+            recheck = true;
+        }
+        if ui
+            .radio(dlg.remote, t!("logset.remote"))
+            .on_hover_text(t!("logset.remote.tip"))
+            .clicked()
+            && !dlg.remote
+        {
+            dlg.remote = true;
+            recheck = true;
+        }
+        if !dlg.remote {
+            return;
+        }
+        let r = ui.add(
+            egui::TextEdit::singleline(&mut dlg.computer)
+                .hint_text(t!("logset.remote.hint"))
+                .desired_width(220.0),
+        );
+        if r.lost_focus() && ui.input(|i| i.key_pressed(Key::Enter)) {
+            recheck = true;
+        }
+        ui.add_enabled_ui(!recent.is_empty(), |ui| {
+            ui.menu_button("🕘", |ui| {
+                for c in recent {
+                    if ui.button(c).clicked() {
+                        dlg.computer = c.clone();
+                        recheck = true;
+                        ui.close();
+                    }
+                }
+            })
+            .response
+            .on_hover_text(t!("logset.remote.recent"));
+        });
+        if ui
+            .add_enabled(
+                dlg.check.is_none(),
+                egui::Button::new(format!("🔍 {}", t!("logset.remote.check"))),
+            )
+            .clicked()
+        {
+            recheck = true;
+        }
+    });
+    recheck
 }

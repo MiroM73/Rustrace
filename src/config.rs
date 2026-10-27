@@ -244,6 +244,8 @@ impl Palette {
 
 /// How many search texts the search history keeps.
 pub const SEARCH_HISTORY_MAX: usize = 30;
+/// How many remote computer names the log sets window remembers.
+pub const REMOTE_COMPUTERS_MAX: usize = 15;
 
 #[derive(Clone, Serialize, Deserialize, Debug)]
 #[serde(default)]
@@ -346,6 +348,9 @@ pub struct Config {
     pub known_logdefs: BTreeMap<String, String>,
     /// The log set chosen last in File → Open log set (`LogSetDef::key`, #27).
     pub last_log_set: String,
+    /// Open log set on a remote computer (#27) and the recently used computer names, newest first.
+    pub log_set_remote: bool,
+    pub remote_computers: Vec<String>,
 
     /// When to look for a new version on GitHub at start-up.
     pub update_when: UpdateCheck,
@@ -429,6 +434,8 @@ impl Default for Config {
             logdef_sources: "all".into(),
             known_logdefs: BTreeMap::new(),
             last_log_set: String::new(),
+            log_set_remote: false,
+            remote_computers: Vec::new(),
             update_when: UpdateCheck::Start,
             update_check_old: None,
             update_last_check: 0,
@@ -628,11 +635,35 @@ impl Config {
         self.search_history.truncate(SEARCH_HISTORY_MAX);
         true
     }
+
+    /// Remembers a remote computer name (newest first, the same name in other case only once).
+    pub fn push_computer(&mut self, name: &str) {
+        self.remote_computers
+            .retain(|c| !c.eq_ignore_ascii_case(name));
+        self.remote_computers.insert(0, name.to_owned());
+        self.remote_computers.truncate(REMOTE_COMPUTERS_MAX);
+    }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn remote_computers_newest_first() {
+        let mut cfg = Config::default();
+        for i in 0..20 {
+            cfg.push_computer(&format!("pc{i}"));
+        }
+        cfg.push_computer("PC5");
+        assert_eq!(cfg.remote_computers.len(), REMOTE_COMPUTERS_MAX);
+        assert_eq!(cfg.remote_computers[0], "PC5");
+        assert_eq!(cfg.remote_computers[1], "pc19");
+        assert!(!cfg.remote_computers[1..].iter().any(|c| c == "pc5"));
+        // Old settings files without the new keys still load.
+        let old: Config = serde_json::from_str("{}").unwrap();
+        assert!(!old.log_set_remote && old.remote_computers.is_empty());
+    }
 
     /// Settings from an older version (no dark colors) get the light colors for the dark theme.
     #[test]
