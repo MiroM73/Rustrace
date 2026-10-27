@@ -22,6 +22,7 @@ menu.file.export = Exportovat zvýrazněné řádky s okolím…
 menu.file.exit = Konec
 menu.view = Zobrazit
 menu.view.details = Panel podrobností
+menu.view.details_shows = Panel podrobností zobrazuje:
 menu.view.follow = Sledovat konec souboru
 menu.view.theme = Motiv:
 menu.view.theme.system = Podle systému
@@ -191,6 +192,13 @@ details.component = Komponenta: {component}
 details.time = Čas: {time}
 details.thread = Vlákno: {thread}
 details.code.open_tip = Otevřít ve vyhledávání kódů (Ctrl+E)
+details.view.message = Zprávu
+details.view.message.tip = Zobrazit zpracovanou zprávu záznamu
+details.view.raw = Původní řádek
+details.view.raw.tip = Zobrazit řádek(y) záznamu přesně tak, jak jsou v souboru logu
+details.raw.unavailable = Původní řádek není k dispozici: {reason}
+details.raw.overwritten = část souboru přepsala pozdější rotace
+details.raw.unknown = poloha záznamu v souboru není známa
 
 # --- Pravidla zvýrazňování ---
 rules.title = Pravidla zvýrazňování

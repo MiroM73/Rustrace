@@ -747,6 +747,7 @@ impl DefState {
             severity,
             message,
             extra,
+            raw: (0, 0),
         }
     }
 }

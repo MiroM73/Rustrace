@@ -3,8 +3,9 @@
 //! Instead of a `Vec<LogEntry>` with four `String`s per entry (four heap allocations,
 //! ~130 bytes of overhead per entry), the entries are kept as:
 //!
-//! * a 32-byte record per entry (`Rec`): start of the message in the text arena, date/time as
-//!   milliseconds (`i64`), line number, interned component and thread, severity,
+//! * a 40-byte record per entry (`Rec`): start of the message in the text arena, date/time as
+//!   milliseconds (`i64`), position of the entry in its file, line number, interned component
+//!   and thread, severity,
 //! * one text arena with all messages, in entry order (a message ends where the next one starts),
 //! * an interner for values that repeat (components, threads, unparsed dates, extra columns),
 //! * the extra columns of a log definition column by column as interned ids.
@@ -403,13 +404,29 @@ impl TextArena {
 // The store
 // ----------------------------------------------------------------------
 
-/// One entry – 32 bytes.
+/// Bits of `Rec::raw` for the length of the entry in its file (the rest is the offset).
+const RAW_LEN_BITS: u32 = 24;
+const RAW_LEN_MAX: u64 = (1 << RAW_LEN_BITS) - 1;
+const RAW_OFFSET_MAX: u64 = (1 << (64 - RAW_LEN_BITS)) - 1;
+
+/// Packs the bytes of an entry in its file: offset (up to 1 TB) and length (longer entries
+/// are cut to 16 MB); 0 = unknown.
+fn pack_raw((start, end): (u64, u64)) -> u64 {
+    if end <= start || start > RAW_OFFSET_MAX {
+        return 0;
+    }
+    start << RAW_LEN_BITS | (end - start).min(RAW_LEN_MAX)
+}
+
+/// One entry – 40 bytes.
 #[derive(Clone, Copy)]
 struct Rec {
     /// Start of the message in the text arena (it ends where the next message starts).
     start: u64,
     /// Milliseconds since 1970, `TS_NONE`, or `TS_RAW + id` for a date that is not ISO.
     ts: i64,
+    /// Bytes of the entry in its file (`pack_raw`).
+    raw: u64,
     line: u32,
     component: u32,
     thread: u32,
@@ -461,6 +478,11 @@ impl<'a> EntryRef<'a> {
     /// Value of an extra column ("" when missing).
     pub fn extra(&self, col: usize) -> &'a str {
         self.store.extra(self.idx, col)
+    }
+
+    /// Bytes of the entry in its file (start, end), `None` when unknown.
+    pub fn raw_range(&self) -> Option<(u64, u64)> {
+        self.store.raw_range(self.idx)
     }
 
     /// Values of all extra columns.
@@ -527,6 +549,7 @@ impl LogStore {
         self.recs.push(Rec {
             start,
             ts,
+            raw: pack_raw(e.raw),
             line: e.line_no.min(u32::MAX as usize) as u32,
             component: self.strings.intern(&e.component),
             thread: self.strings.intern(&e.thread),
@@ -719,6 +742,13 @@ impl LogStore {
         self.extra.get(col).map_or("", |c| self.strings.get(c[i]))
     }
 
+    /// Bytes of entry `i` in its file (start, end), `None` when unknown.
+    pub fn raw_range(&self, i: usize) -> Option<(u64, u64)> {
+        let raw = self.recs[i].raw;
+        let start = raw >> RAW_LEN_BITS;
+        (raw != 0).then(|| (start, start + (raw & RAW_LEN_MAX)))
+    }
+
     /// Builds a store from entries (tests).
     #[cfg(test)]
     pub fn from_entries(entries: impl IntoIterator<Item = LogEntry>) -> Self {
@@ -743,12 +773,49 @@ mod tests {
             thread: "7 (0x0007)".to_owned(),
             severity: Severity::Warning,
             extra: extra.iter().map(|s| (*s).to_owned()).collect(),
+            raw: (0, 0),
         }
     }
 
     #[test]
-    fn record_is_32_bytes() {
-        assert_eq!(std::mem::size_of::<Rec>(), 32);
+    fn record_is_40_bytes() {
+        assert_eq!(std::mem::size_of::<Rec>(), 40);
+    }
+
+    #[test]
+    fn raw_range_packing() {
+        let mut s = LogStore::new();
+        for raw in [
+            (0, 0),
+            (0, 10),
+            (5_000_000_000, 5_000_000_120),
+            (7, 7 + (20 << 20)),
+        ] {
+            s.push(
+                LogEntry {
+                    raw,
+                    ..entry(1, "m", "", "", &[])
+                },
+                0,
+            );
+        }
+        assert_eq!(s.raw_range(0), None);
+        assert_eq!(s.raw_range(1), Some((0, 10)));
+        assert_eq!(s.raw_range(2), Some((5_000_000_000, 5_000_000_120)));
+        // Longer than 16 MB: cut.
+        assert_eq!(s.raw_range(3), Some((7, 7 + RAW_LEN_MAX)));
+        // Kept by append / drop_front.
+        let mut t = LogStore::new();
+        t.push(
+            LogEntry {
+                raw: (1, 2),
+                ..entry(1, "x", "", "", &[])
+            },
+            0,
+        );
+        t.append(s);
+        t.drop_front(3);
+        assert_eq!(t.at(0).raw_range(), Some((5_000_000_000, 5_000_000_120)));
     }
 
     #[test]

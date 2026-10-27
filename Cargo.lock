@@ -3121,6 +3121,7 @@ dependencies = [
  "egui_extras",
  "encoding_rs",
  "flate2",
+ "memchr",
  "memmap2",
  "open",
  "regex",

@@ -1,5 +1,5 @@
 use crate::colfilter::{ColumnFilter, DateFilter, DateLayout};
-use crate::config::{Config, HighlightRule, HighlightScope, IntervalUnit};
+use crate::config::{Config, DetailsView, HighlightRule, HighlightScope, IntervalUnit};
 use crate::errcodes::{self, CodeInfo};
 use crate::excerpt;
 use crate::export::{self, ExportFormat, ReadableRow};
@@ -180,8 +180,8 @@ pub struct App {
     after_filter: AfterFilter,
     /// A cancelled re-filter has to start again from the beginning.
     filter_restart: bool,
-    /// (entry, search generation) the details pane was last scrolled to the first match for.
-    details_scrolled: Option<(usize, u64)>,
+    /// (entry, search generation, view) the details pane was last scrolled to the first match for.
+    details_scrolled: Option<(usize, u64, DetailsView)>,
 
     last_refresh: Option<Instant>,
     last_refresh_wall: Option<chrono::DateTime<chrono::Local>>,
@@ -223,6 +223,9 @@ pub struct App {
 
     /// Error codes found in the selected row (entry index, codes).
     code_cache: Option<(usize, Vec<CodeInfo>)>,
+    /// Raw line(s) of the selected row read from the file: (entry, data generation, text or
+    /// why it is not available).
+    raw_cache: Option<(usize, u64, Result<Arc<str>, String>)>,
     show_lookup: bool,
     lookup_input: String,
     lookup_focus: bool,
@@ -379,6 +382,7 @@ impl App {
             focus_search: false,
             title: String::new(),
             code_cache: None,
+            raw_cache: None,
             show_lookup: false,
             lookup_input: String::new(),
             lookup_focus: false,

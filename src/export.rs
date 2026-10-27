@@ -365,6 +365,7 @@ mod tests {
             thread: String::new(),
             severity: Severity::Info,
             extra: Vec::new(),
+            raw: (0, 0),
         }
     }
 
@@ -587,6 +588,7 @@ mod tests {
             thread: String::new(),
             severity: Severity::Info,
             extra: Vec::new(),
+            raw: (0, 0),
         }
     }
 

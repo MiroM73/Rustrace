@@ -43,10 +43,14 @@ pub struct LogEntry {
     pub severity: Severity,
     /// Values of the extra columns of a log definition (`Schema::extra_names`); empty otherwise.
     pub extra: Vec<String>,
+    /// Bytes of the entry in its file: start, end (after the line break of its last line);
+    /// `(0, 0)` = unknown.
+    pub raw: (u64, u64),
 }
 
+/// Text encoding of a log file.
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
-enum Encoding {
+pub enum Encoding {
     Utf8,
     Ansi,
     Utf16Le,
@@ -71,8 +75,8 @@ pub enum PollResult {
 
 #[derive(Clone)]
 struct ParserState {
-    /// Unfinished multi-line CMTrace entry (line, text).
-    pending: Option<(usize, String)>,
+    /// Unfinished multi-line CMTrace entry (line, text, its bytes in the file so far).
+    pending: Option<(usize, String, (u64, u64))>,
     /// Number of the next line.
     next_line: usize,
     /// Columns of the log.
@@ -131,6 +135,8 @@ pub struct SourceFile {
     pub name: String,
     /// Where the lines of this file are now (`None` = overwritten by a later rotation).
     pub path: Option<PathBuf>,
+    /// Encoding the file was read with (to read the raw lines of an entry again).
+    pub encoding: Encoding,
 }
 
 impl SourceFile {
@@ -141,6 +147,7 @@ impl SourceFile {
                 .map(|n| n.to_string_lossy().into_owned())
                 .unwrap_or_default(),
             path: Some(path.to_path_buf()),
+            encoding: Encoding::Utf8,
         }
     }
 }
@@ -439,6 +446,7 @@ impl LogSource {
         }
         let id = self.active_id();
         self.read_to_end(&mut f, id, &mut committed, progress, &mut reserved)?;
+        self.files[id as usize].encoding = self.encoding;
         self.file_size = self
             .files
             .iter()
@@ -448,6 +456,7 @@ impl LogSource {
 
         // Provisional entries: incomplete last line + unfinished multi-line entry.
         // The parser state is not changed – the next refresh replaces them with real ones.
+        let tail_raw = self.leftover_range();
         let tail = (!self.leftover.is_empty()).then(|| decode(&self.leftover, self.encoding));
         let tail = tail
             .as_deref()
@@ -459,7 +468,7 @@ impl LogSource {
         let mut tmp = self.state.clone();
         let mut provisional = Vec::new();
         if let Some(tail) = tail
-            && let Some(e) = parse_line(&mut tmp, tail, self.keyword_severity)
+            && let Some(e) = parse_line(&mut tmp, tail, self.keyword_severity, tail_raw)
         {
             provisional.push(e);
         }
@@ -482,18 +491,25 @@ impl LogSource {
 
     /// End of a complete (older) file: its last line and an unfinished entry are final.
     fn finish_file(&mut self, committed: &mut LogStore, id: u16) {
+        let raw = self.leftover_range();
         let tail = decode(&self.leftover, self.encoding);
         let tail = tail.trim_end_matches(['\r', '\n']);
         if !tail.is_empty() {
             self.decide_format(Some(tail));
-            if let Some(e) = parse_line(&mut self.state, tail, self.keyword_severity) {
+            if let Some(e) = parse_line(&mut self.state, tail, self.keyword_severity, raw) {
                 committed.push(e, id);
             }
         }
         if let Some(e) = flush_pending(&mut self.state, self.keyword_severity) {
             committed.push(e, id);
         }
+        self.files[id as usize].encoding = self.encoding;
         self.start_file();
+    }
+
+    /// Bytes of the file held in `leftover` (they end at `offset`).
+    fn leftover_range(&self) -> (u64, u64) {
+        (self.offset - self.leftover.len() as u64, self.offset)
     }
 
     /// Reads `f` from `self.offset` to its current end into `committed` (entries of file `id`).
@@ -547,16 +563,22 @@ impl LogSource {
             if cut == 0 {
                 continue;
             }
+            let base = self.leftover_range().0;
             let complete: Vec<u8> = self.leftover.drain(..cut).collect();
             if self.encoding == Encoding::Utf8 && std::str::from_utf8(&complete).is_err() {
                 // Not valid UTF-8 → read as ANSI (Windows-1250) from now on.
                 self.encoding = Encoding::Ansi;
             }
             let text = decode(&complete, self.encoding);
+            // Bytes of every line (the decoded text has other lengths for ANSI / UTF-16).
+            let ends = line_ends(&complete, self.encoding);
             drop(complete);
             self.decide_format(Some(&text));
-            for line in split_complete_lines(&text) {
-                if let Some(e) = parse_line(&mut self.state, line, self.keyword_severity) {
+            let mut start = 0;
+            for (line, end) in split_complete_lines(&text).zip(ends) {
+                let raw = (base + start as u64, base + end as u64);
+                start = end;
+                if let Some(e) = parse_line(&mut self.state, line, self.keyword_severity, raw) {
                     committed.push(e, id);
                 }
             }
@@ -600,6 +622,55 @@ impl LogSource {
             }
         }
     }
+}
+
+/// Byte index just after every line break of `bytes` (whole lines in encoding `enc`).
+fn line_ends(bytes: &[u8], enc: Encoding) -> Vec<usize> {
+    match enc {
+        Encoding::Utf8 | Encoding::Ansi => {
+            memchr::memchr_iter(b'\n', bytes).map(|i| i + 1).collect()
+        }
+        Encoding::Utf16Le | Encoding::Utf16Be => {
+            let nl: [u8; 2] = if enc == Encoding::Utf16Le {
+                [0x0A, 0x00]
+            } else {
+                [0x00, 0x0A]
+            };
+            bytes
+                .as_chunks::<2>()
+                .0
+                .iter()
+                .enumerate()
+                .filter(|(_, u)| **u == nl)
+                .map(|(i, _)| i * 2 + 2)
+                .collect()
+        }
+    }
+}
+
+/// Reads bytes `start..end` of a log file and decodes them like the file was read; the line
+/// break at the end is removed. Shows the raw lines of an entry.
+pub fn read_raw(path: &Path, (start, end): (u64, u64), enc: Encoding) -> std::io::Result<String> {
+    let mut f = File::open(path)?;
+    if f.metadata()?.len() < end {
+        return Err(std::io::Error::new(
+            std::io::ErrorKind::UnexpectedEof,
+            "the file is shorter than when it was read",
+        ));
+    }
+    f.seek(SeekFrom::Start(start))?;
+    let mut buf = vec![0u8; (end - start) as usize];
+    f.read_exact(&mut buf)?;
+    // The first line of a file that changed to ANSI later was read as UTF-8.
+    let enc = if enc == Encoding::Utf8 && std::str::from_utf8(&buf).is_err() {
+        Encoding::Ansi
+    } else {
+        enc
+    };
+    let mut text = decode(&buf, enc);
+    let len = text.trim_end_matches(['\r', '\n']).len();
+    text.truncate(len);
+    Ok(text)
 }
 
 fn decode(bytes: &[u8], enc: Encoding) -> String {
@@ -668,50 +739,54 @@ fn split_complete_lines(text: &str) -> impl Iterator<Item = &str> {
 const CM_START: &str = "<![LOG[";
 const CM_END: &str = "]LOG]!>";
 
-fn parse_line(st: &mut ParserState, line: &str, kw: bool) -> Option<LogEntry> {
+/// Parses one line; `raw` = its bytes in the file (incl. the line break).
+fn parse_line(st: &mut ParserState, line: &str, kw: bool, raw: (u64, u64)) -> Option<LogEntry> {
     if st.def.is_some() {
-        return parse_def_line(st, line, kw);
+        return parse_def_line(st, line, kw, raw);
     }
     let line_no = st.next_line;
     st.next_line += 1;
 
-    if let Some((start_no, mut buf)) = st.pending.take() {
+    if let Some((start_no, mut buf, (raw_start, _))) = st.pending.take() {
         buf.push('\n');
         buf.push_str(line);
+        let raw = (raw_start, raw.1);
         if buf.contains(CM_END) {
-            return Some(parse_cmtrace(start_no, &buf, kw));
+            return Some(LogEntry {
+                raw,
+                ..parse_cmtrace(start_no, &buf, kw)
+            });
         }
-        st.pending = Some((start_no, buf));
+        st.pending = Some((start_no, buf, raw));
         return None;
     }
 
     let trimmed = line.trim_start();
-    if trimmed.starts_with(CM_START) {
-        if trimmed.contains(CM_END) {
-            return Some(parse_cmtrace(line_no, trimmed, kw));
+    let e = if trimmed.starts_with(CM_START) {
+        if !trimmed.contains(CM_END) {
+            st.pending = Some((line_no, trimmed.to_owned(), raw));
+            return None;
         }
-        st.pending = Some((line_no, trimmed.to_owned()));
-        return None;
-    }
-
-    if let Some(pos) = line.find("$$<") {
-        return Some(parse_sms(line_no, line, pos, kw));
-    }
-
-    Some(plain_entry(line_no, line, kw))
+        parse_cmtrace(line_no, trimmed, kw)
+    } else if let Some(pos) = line.find("$$<") {
+        parse_sms(line_no, line, pos, kw)
+    } else {
+        plain_entry(line_no, line, kw)
+    };
+    Some(LogEntry { raw, ..e })
 }
 
 /// One line of a log described by a definition. With `unmatched = append` an entry is
 /// returned only when the next entry starts (or by `flush_pending` at the end of the data).
-fn parse_def_line(st: &mut ParserState, line: &str, kw: bool) -> Option<LogEntry> {
+fn parse_def_line(st: &mut ParserState, line: &str, kw: bool, raw: (u64, u64)) -> Option<LogEntry> {
     let line_no = st.next_line;
     st.next_line += 1;
     let ds = st.def.as_mut()?;
     let append = ds.appends_unmatched();
     match ds.parse(line, line_no, kw, &mut st.schema) {
         DefLine::Skip => None,
-        DefLine::Entry(e) if append => st.pending_entry.replace(e),
-        DefLine::Entry(e) => Some(e),
+        DefLine::Entry(e) if append => st.pending_entry.replace(LogEntry { raw, ..e }),
+        DefLine::Entry(e) => Some(LogEntry { raw, ..e }),
         DefLine::Unmatched => {
             if ds.skips_unmatched() {
                 return None;
@@ -719,9 +794,13 @@ fn parse_def_line(st: &mut ParserState, line: &str, kw: bool) -> Option<LogEntry
             if append && let Some(p) = st.pending_entry.as_mut() {
                 p.message.push('\n');
                 p.message.push_str(line);
+                p.raw.1 = raw.1;
                 return None;
             }
-            Some(plain_entry(line_no, line, kw))
+            Some(LogEntry {
+                raw,
+                ..plain_entry(line_no, line, kw)
+            })
         }
     }
 }
@@ -735,6 +814,7 @@ fn plain_entry(line_no: usize, line: &str, kw: bool) -> LogEntry {
         thread: String::new(),
         severity: keyword_sev(line, kw),
         extra: Vec::new(),
+        raw: (0, 0),
     }
 }
 
@@ -742,7 +822,7 @@ fn flush_pending(st: &mut ParserState, kw: bool) -> Option<LogEntry> {
     if let Some(e) = st.pending_entry.take() {
         return Some(e);
     }
-    let (no, buf) = st.pending.take()?;
+    let (no, buf, raw) = st.pending.take()?;
     let msg = buf.strip_prefix(CM_START).unwrap_or(&buf).to_owned();
     Some(LogEntry {
         line_no: no,
@@ -752,6 +832,7 @@ fn flush_pending(st: &mut ParserState, kw: bool) -> Option<LogEntry> {
         datetime: String::new(),
         thread: String::new(),
         extra: Vec::new(),
+        raw,
     })
 }
 
@@ -801,6 +882,7 @@ fn parse_cmtrace(line_no: usize, s: &str, kw: bool) -> LogEntry {
         thread,
         severity,
         extra: Vec::new(),
+        raw: (0, 0),
     }
 }
 
@@ -834,6 +916,7 @@ fn parse_sms(line_no: usize, line: &str, pos: usize, kw: bool) -> LogEntry {
         datetime,
         thread,
         extra: Vec::new(),
+        raw: (0, 0),
     }
 }
 
@@ -893,7 +976,7 @@ mod tests {
     fn parse_all(text: &str) -> Vec<LogEntry> {
         let mut st = ParserState::new();
         split_complete_lines(text)
-            .filter_map(|l| parse_line(&mut st, l, true))
+            .filter_map(|l| parse_line(&mut st, l, true, (0, 0)))
             .collect()
     }
 
@@ -1216,6 +1299,110 @@ mod tests {
             s.poll(&Progress::default()).unwrap(),
             PollResult::Unchanged
         ));
+        std::fs::remove_dir_all(&dir).ok();
+    }
+
+    /// Raw lines of every entry read back from the file: CMTrace (incl. multi-line), SMS,
+    /// plain text and a log definition with appended lines, in UTF-8 (BOM), ANSI and UTF-16,
+    /// also across refreshes and for the provisional last line.
+    #[test]
+    fn raw_lines_of_entries() {
+        let dir = test_dir("raw");
+        let defs = Arc::new(logdef::load_from(&[], logdef::SourceFilter::All).defs);
+        let cm1 = "<![LOG[Hello ž]LOG]!><time=\"13:22:01.123-120\" date=\"10-23-2026\" component=\"C\" context=\"\" type=\"1\" thread=\"1\" file=\"\">";
+        let cm2 = "<![LOG[Line one\r\nline two]LOG]!><time=\"13:22:02.000+000\" date=\"10-23-2026\" component=\"C\" context=\"\" type=\"3\" thread=\"5\" file=\"\">";
+        let sms = "Some failure  $$<SMS_EXEC><10-23-2026 13:22:01.123-120><thread=4420 (0x1144)>";
+        let cbs1 = "2026-10-23 10:00:01, Error                 CBS    two\r\n   detail";
+        let cbs2 = "2026-10-23 10:00:02, Info                  CBS    three";
+        let cases: [(&str, Vec<&str>, &str); 4] = [
+            ("a.log", vec![cm1, cm2, sms, "plain žltá", ""], "\r\n"),
+            ("b.log", vec![cm1, "tail without newline"], "\n"),
+            ("CBS.log", vec![cbs1, cbs2], "\r\n"),
+            ("c.log", vec!["x", cm2, "y"], "\n"),
+        ];
+        type Encode = fn(&str) -> Vec<u8>;
+        let encodings: [(&str, Encode); 4] = [
+            ("utf8", |s| s.as_bytes().to_vec()),
+            ("utf8bom", |s| [&[0xEF, 0xBB, 0xBF], s.as_bytes()].concat()),
+            ("ansi", |s| {
+                encoding_rs::WINDOWS_1250.encode(s).0.into_owned()
+            }),
+            ("utf16", |s| {
+                let mut b = vec![0xFF, 0xFE];
+                for u in s.encode_utf16() {
+                    b.extend_from_slice(&u.to_le_bytes());
+                }
+                b
+            }),
+        ];
+        for (enc_name, encode) in encodings {
+            for (name, lines, nl) in &cases {
+                let p = dir.join(format!("{enc_name}-{name}"));
+                let p = if *name == "CBS.log" {
+                    std::fs::create_dir_all(dir.join(enc_name)).unwrap();
+                    dir.join(enc_name).join(name)
+                } else {
+                    p
+                };
+                // The last entry of b.log has no line break: provisional.
+                let last = lines.len() - 1;
+                let text: String = lines
+                    .iter()
+                    .enumerate()
+                    .map(|(i, l)| {
+                        if *name == "b.log" && i == last {
+                            (*l).to_owned()
+                        } else {
+                            format!("{l}{nl}")
+                        }
+                    })
+                    .collect();
+                // Written in two steps: the second one is an append (offsets continue).
+                let bytes = encode(&text.replace("\r\n", "\n").replace('\n', nl));
+                let half = if enc_name == "utf16" {
+                    bytes.len() / 4 * 2
+                } else {
+                    bytes.len() / 2
+                };
+                std::fs::write(&p, &bytes[..half]).unwrap();
+                let mut s = LogSource::new(&p, true);
+                s.defs = defs.clone();
+                let mut store = LogStore::new();
+                let mut committed_len = 0;
+                for step in 0..2 {
+                    if step == 1 {
+                        std::fs::write(&p, &bytes).unwrap();
+                    }
+                    let (committed, provisional) = match s.poll(&Progress::default()).unwrap() {
+                        PollResult::Reset {
+                            committed,
+                            provisional,
+                        }
+                        | PollResult::Appended {
+                            committed,
+                            provisional,
+                        } => (committed, provisional),
+                        PollResult::Unchanged => panic!(),
+                    };
+                    store.truncate(committed_len);
+                    store.append(committed);
+                    committed_len = store.len();
+                    for e in provisional {
+                        store.push(e, 0);
+                    }
+                }
+                let enc = s.files()[0].encoding;
+                let raws: Vec<String> = (0..store.len())
+                    .map(|i| read_raw(&p, store.raw_range(i).unwrap(), enc).unwrap())
+                    .collect();
+                let want: Vec<String> = lines
+                    .iter()
+                    .filter(|l| !(l.is_empty() && *name != "a.log"))
+                    .map(|l| l.replace("\r\n", "\n").replace('\n', nl))
+                    .collect();
+                assert_eq!(raws, want, "{enc_name} {name}");
+            }
+        }
         std::fs::remove_dir_all(&dir).ok();
     }
 

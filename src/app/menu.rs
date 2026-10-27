@@ -77,6 +77,19 @@ impl App {
                 {
                     self.cfg_dirty = true;
                 }
+                ui.horizontal(|ui| {
+                    ui.add_space(24.0);
+                    ui.label(t!("menu.view.details_shows"));
+                    for (v, key) in [
+                        (DetailsView::Message, "details.view.message"),
+                        (DetailsView::Raw, "details.view.raw"),
+                    ] {
+                        if ui.radio(self.cfg.details_view == v, t!(key)).clicked() {
+                            self.cfg.details_view = v;
+                            self.cfg_dirty = true;
+                        }
+                    }
+                });
                 if ui
                     .checkbox(&mut self.cfg.auto_scroll, t!("menu.view.follow"))
                     .changed()

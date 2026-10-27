@@ -328,6 +328,7 @@ mod tests {
             thread: (i % 4).to_string(),
             severity: [Severity::Info, Severity::Warning, Severity::Error][i % 7 % 3],
             extra: Vec::new(),
+            raw: (0, 0),
         }))
     }
 

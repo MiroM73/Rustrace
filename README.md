@@ -135,6 +135,20 @@ the version information into the exe; this uses the resource compiler `rc.exe` o
   **Exchange Transport Connectivity logs**, **dism.log**, **CBS.log**; your own in `logdef\*.def` (see [Log definitions](#log-definitions))
 - encodings UTF-8, UTF-16 LE/BE (by BOM), ANSI (Windows-1250)
 
+**Details pane: message or raw line**
+- the details pane under the table shows the selected entry: its line number, severity, the other
+  columns and the full message
+- **Message | Raw line** switch in the details pane header (also View → "Details pane shows:"),
+  remembered between sessions: *Message* = the parsed message, *Raw line* = the line(s) of the
+  entry exactly as they are in the log file (CMTrace markup with all attributes, every W3C field,
+  multi-line entries complete), decoded with the file's encoding and nothing else
+- switching is instant and keeps the selection and the table position, also while the log is
+  followed; search matches and text highlight rules are highlighted in both views and the pane
+  scrolls to the first match
+- the raw line is read from the file only for the selected entry (a few bytes from its remembered
+  position, no re-parsing). When the file part is no longer there (overwritten by a later rotation,
+  truncated, deleted), the pane says "Raw line not available"
+
 **Automatic refresh**
 - interval in **ms, s or min** (value + unit; the value is converted when the unit changes), quick presets via ⏱
 - **Pause / Resume** (Ctrl+P), manual refresh F5, full reload Ctrl+F5
@@ -156,8 +170,10 @@ the version information into the exe; this uses the resource compiler `rc.exe` o
 - "Follow end" – sticks to the last line; turns off when you scroll/navigate manually, End turns it on again
 
 **Memory**
-- entries are stored compactly: 32 bytes per entry plus the message text; components, threads
-  and other repeating values are stored only once, date/time as a number
+- entries are stored compactly: 40 bytes per entry plus the message text; components, threads
+  and other repeating values are stored only once, date/time as a number; the 40 bytes include
+  the position of the entry in its file (for the raw line in the details pane, +8 bytes per entry:
+  400 MB / 1.9 million lines: 223 → 237 MB, loading ~2 % slower)
 - **log text in a temporary file** (View → "Log text in a temporary file from … MB", default on,
   from 100 MB): the message text of big logs is kept in a memory-mapped temporary file in `%TEMP%`
   that only RusTrace can open and that Windows deletes when the program ends. While memory is free
@@ -462,7 +478,7 @@ The built-in languages live in `lang/*.lang` in the source tree and are embedded
   (+ tests)
 - `src/filter.rs` – which entries are displayed / match the search: the filter run (sequential
   and parallel in chunks), match bits with a running count (+ tests)
-- `src/store.rs` – compact entry storage: 32-byte records, text arena in memory or in a
+- `src/store.rs` – compact entry storage: 40-byte records, text arena in memory or in a
   memory-mapped temporary file, string interner, date/time as milliseconds (+ tests)
 - `src/logdef.rs` – log definitions: `.def` file format, loading, choosing by file name / content,
   parsing lines into columns (+ tests)
@@ -481,7 +497,7 @@ The built-in languages live in `lang/*.lang` in the source tree and are embedded
   - `input.rs` – keyboard shortcuts, drag & drop
   - `menu.rs`, `toolbar.rs`, `statusbar.rs` (+ tests) – menu bar, toolbar and time range row, status bar
   - `table.rs` – the log table, row colors, highlighted text, context menu
-  - `details.rs` – details pane, error code explanation
+  - `details.rs` – details pane (message / raw line), error code explanation
   - `widgets.rs` – small shared UI helpers (color button, theme switch, …)
   - `dialogs/` – highlight rules, colors, error code lookup, export, help / about,
     default app (Windows), new versions

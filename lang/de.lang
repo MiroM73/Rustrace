@@ -22,6 +22,7 @@ menu.file.export = Hervorgehobene Zeilen mit Kontext exportieren…
 menu.file.exit = Beenden
 menu.view = Ansicht
 menu.view.details = Detailbereich
+menu.view.details_shows = Detailbereich zeigt:
 menu.view.follow = Dateiende folgen
 menu.view.theme = Design:
 menu.view.theme.system = System
@@ -191,6 +192,13 @@ details.component = Komponente: {component}
 details.time = Zeit: {time}
 details.thread = Thread: {thread}
 details.code.open_tip = In der Fehlercode-Suche öffnen (Strg+E)
+details.view.message = Meldung
+details.view.message.tip = Die ausgewertete Meldung des Eintrags anzeigen
+details.view.raw = Rohzeile
+details.view.raw.tip = Die Zeile(n) des Eintrags genau so anzeigen, wie sie in der Logdatei stehen
+details.raw.unavailable = Rohzeile nicht verfügbar: {reason}
+details.raw.overwritten = der Dateiteil wurde durch eine spätere Rotation überschrieben
+details.raw.unknown = die Position des Eintrags in der Datei ist unbekannt
 
 # --- Hervorhebungsregeln ---
 rules.title = Hervorhebungsregeln

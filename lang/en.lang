@@ -36,6 +36,7 @@ menu.file.export = Export highlighted rows with context…
 menu.file.exit = Exit
 menu.view = View
 menu.view.details = Details pane
+menu.view.details_shows = Details pane shows:
 menu.view.follow = Follow end of file
 menu.view.theme = Theme:
 menu.view.theme.system = System
@@ -205,6 +206,13 @@ details.component = Component: {component}
 details.time = Time: {time}
 details.thread = Thread: {thread}
 details.code.open_tip = Open in error code lookup (Ctrl+E)
+details.view.message = Message
+details.view.message.tip = Show the parsed message of the entry
+details.view.raw = Raw line
+details.view.raw.tip = Show the line(s) of the entry exactly as they are in the log file
+details.raw.unavailable = Raw line not available: {reason}
+details.raw.overwritten = the file part was overwritten by a later rotation
+details.raw.unknown = the position of the entry in the file is not known
 
 # --- Highlight rules ---
 rules.title = Highlight rules

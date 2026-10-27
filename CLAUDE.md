@@ -64,9 +64,17 @@ Features (all implemented, see README for user-facing details):
   the limit (never provisional rows), interner rebuilt; App shifts `filtered`, `is_match`,
   `selected`, `committed_len` by k, bumps `data_gen`, counts `dropped` (✂ in the status bar, reset
   by a full read). Known limit: the first read of a huge file still loads it whole before trimming.
+- **Raw line in the details pane** (#29): `cfg.details_view` (`DetailsView::Message | Raw`),
+  toggle in the details header + View menu. `LogEntry::raw` = byte range of the entry in its file
+  (start of the first line .. after the line break of the last; set by `parse_line` /
+  `parse_def_line`, extended for multi-line CMTrace and `unmatched = append`, line positions from
+  the raw bytes by `line_ends` – memchr for UTF-8/ANSI, 2-byte units for UTF-16), packed into
+  `Rec::raw` (40-bit offset, 24-bit length, 0 = unknown). `SourceFile::encoding` per file;
+  `parser::read_raw` reads + decodes the range; `App::raw_cache` (entry, `data_gen`). Measured
+  400 MB: load 3.98 → 4.07 s, 223 → 237 MB.
 - **Compact storage** (`src/store.rs`, `LogStore`): the parser still produces `LogEntry` (Strings)
-  per line, but they go straight into a `LogStore` – 32-byte `Rec` (message start in the text arena,
-  `i64` ms timestamp or tagged interned raw text, line, interned component/thread, severity), one
+  per line, but they go straight into a `LogStore` – 40-byte `Rec` (message start in the text arena,
+  `i64` ms timestamp or tagged interned raw text, raw byte range, line, interned component/thread, severity), one
   text arena in entry order (message `i` ends where `i + 1` starts), interner (id 0 = ""), extra
   columns column-major as interned ids. `PollResult` carries a `LogStore`; appends are merged with
   `LogStore::append` (re-interning). The parser reserves capacity after the first chunk (estimate).
@@ -222,7 +230,7 @@ Features (all implemented, see README for user-facing details):
 
 ## Commands
 - `cargo build --release` → `target\release\rustrace.exe`
-- `cargo test` (69 tests: filter (parallel = sequential, match bits), date column filter = text filter, updates (versions, release JSON, notes, sha256 file, ZIP, install, restore state), icon / .ico layout, search as you type threshold, status-bar position percentage, file association (registry in an own HKCU test key), search history, store drop_front / move to temp file, rotated parts (naming, merge on open, rotation while watching, replaced
+- `cargo test` (71 tests: raw lines of entries (all formats / encodings), filter (parallel = sequential, match bits), date column filter = text filter, updates (versions, release JSON, notes, sha256 file, ZIP, install, restore state), icon / .ico layout, search as you type threshold, status-bar position percentage, file association (registry in an own HKCU test key), search history, store drop_front / move to temp file, rotated parts (naming, merge on open, rotation while watching, replaced
   file), export segments by file, time range bounds, column filter syntax, parsers, chunked/ANSI/UTF-16 reading, log definitions (CBS, DISM, IIS,
   Exchange connectivity / CSV separator, choice by name/content, appending across refreshes), store (32-byte record, ISO ↔ ms, push /
   truncate / append, mapped temp file growing past 64 MB, interner), export incl. end-to-end and
@@ -340,6 +348,7 @@ Features (all implemented, see README for user-facing details):
 42. (2026-10-27) #16 search / filters of big logs in a background thread (parallel, cancelable,
     previous result stays visible), #17 date/time column filter compared as time ranges,
     #18 match count kept incrementally (`MatchBits`). Release v0.8.0.
+43. #29 details pane Message | Raw line (byte range of every entry, read from the file on demand).
 
 ## Ideas not done yet (offered to the owner)
 - Merge **different** logs into one view sorted by time (like CMTrace File → Open → "Merge
@@ -355,23 +364,7 @@ Features (all implemented, see README for user-facing details):
   status cells; descriptions in the language files (like `code.0x…`) so they are translatable and
   can be extended without recompiling. Ideally driven by the log definition (e.g. keys naming
   which columns hold HTTP status / substatus / Win32 status), so it is not hard-wired to IIS.
-- Show the **raw line(s)** of the selected entry in the details pane (as stored in the log file,
-  not only the parsed message), so the user sees the raw data. Today only the message text is
-  kept in memory (no CMTrace markup, other fields parsed out); for the raw line the store only
-  has the line number and file id, not the position in the file. Analysis of the options:
-  - **A. Byte offset of every entry in the file (recommended)**: `Rec` grows from 32 to 40 bytes
-    (+8 B per entry, ~+15 MB for the 400 MB / 1.8 M-line test log); on selection change read only
-    the bytes from this entry's offset to the next entry's offset (< 1 ms, OS cache), decode with
-    the file's encoding, cache like `code_cache` → no cost for drawing / scrolling. Parsing: for
-    UTF-8 the decoded text length equals the byte length, so practically no slowdown; for ANSI /
-    UTF-16 the original byte length of every line must be counted → a few % slower parsing
-    (estimate). Works with merged rotated parts (file id → current path); a part overwritten by a
-    later rotation → "raw line not available"; multi-line entries are read complete. UI: a toggle
-    **Message | Raw line** in the details pane (or both).
-  - B. Find the line in the file by its number: no extra memory, but scanning from the start
-    takes hundreds of ms up to ~1 s per click near the end of a 400 MB file → unsuitable.
-  - C. Keep the whole raw lines in memory instead of the messages: instant, but the text in
-    memory roughly doubles (CMTrace markup is about half of a line) → wastes memory.
+
 
 ## Possible further memory work (not done)
 - The "original lines" export reads the whole log file into memory (`read_line_ranges`), a

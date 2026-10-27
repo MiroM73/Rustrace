@@ -7,6 +7,17 @@ use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 use std::path::PathBuf;
 
+/// What the details pane shows for the selected entry.
+#[derive(Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Debug, Default)]
+#[serde(rename_all = "lowercase")]
+pub enum DetailsView {
+    /// The parsed message.
+    #[default]
+    Message,
+    /// The line(s) of the entry exactly as they are in the file.
+    Raw,
+}
+
 #[derive(Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Debug)]
 pub enum IntervalUnit {
     Ms,
@@ -177,6 +188,8 @@ pub struct Config {
     /// Previously used search texts, newest first.
     pub search_history: Vec<String>,
     pub show_details: bool,
+    /// Message or raw line(s) in the details pane.
+    pub details_view: DetailsView,
     /// Show the filter row under the column headers.
     pub show_column_filters: bool,
     /// Show the time range (from – to) filter row.
@@ -263,6 +276,7 @@ impl Default for Config {
             recent_files: Vec::new(),
             search_history: Vec::new(),
             show_details: true,
+            details_view: DetailsView::Message,
             show_column_filters: false,
             show_time_range: false,
             theme: "system".into(),

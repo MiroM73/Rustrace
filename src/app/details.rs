@@ -25,6 +25,31 @@ impl App {
         codes
     }
 
+    /// Raw line(s) of the selected entry from its file (read once per entry and data change).
+    pub(in crate::app) fn selected_raw(&mut self) -> Option<Result<Arc<str>, String>> {
+        let i = self.selected?;
+        if let Some((ci, gen_, r)) = &self.raw_cache
+            && *ci == i
+            && *gen_ == self.data_gen
+        {
+            return Some(r.clone());
+        }
+        let e = self.entries.get(i)?;
+        let file = self.files.get(e.file as usize);
+        let res = match (
+            e.raw_range(),
+            file.and_then(|f| Some((f.path.as_ref()?, f.encoding))),
+        ) {
+            (Some(range), Some((path, enc))) => crate::parser::read_raw(path, range, enc)
+                .map(Arc::from)
+                .map_err(|e| e.to_string()),
+            (Some(_), None) => Err(t!("details.raw.overwritten")),
+            (None, _) => Err(t!("details.raw.unknown")),
+        };
+        self.raw_cache = Some((i, self.data_gen, res.clone()));
+        Some(res)
+    }
+
     pub(in crate::app) fn open_lookup(&mut self, code: Option<u32>) {
         if let Some(v) = code {
             self.lookup_input = if v < 0x1_0000 {
@@ -39,7 +64,12 @@ impl App {
 
     pub(in crate::app) fn details(&mut self, ui: &mut egui::Ui) {
         let codes = self.selected_codes();
+        let raw = match self.cfg.details_view {
+            DetailsView::Raw => self.selected_raw(),
+            DetailsView::Message => None,
+        };
         let mut open_code: Option<u32> = None;
+        let mut view = self.cfg.details_view;
         let Some(e) = self.selected.and_then(|i| self.entries.get(i)) else {
             ui.centered_and_justified(|ui| {
                 ui.weak(t!("details.empty"));
@@ -47,6 +77,12 @@ impl App {
             return;
         };
         ui.horizontal_wrapped(|ui| {
+            // Message | Raw – the same setting as View → Details pane shows.
+            ui.selectable_value(&mut view, DetailsView::Message, t!("details.view.message"))
+                .on_hover_text(t!("details.view.message.tip"));
+            ui.selectable_value(&mut view, DetailsView::Raw, t!("details.view.raw"))
+                .on_hover_text(t!("details.view.raw.tip"));
+            ui.separator();
             ui.strong(t!("details.line", line = e.line_no));
             ui.separator();
             let (txt, col) = match e.severity {
@@ -104,15 +140,23 @@ impl App {
             });
         }
         ui.separator();
+        let text: &str = match &raw {
+            Some(Ok(r)) => r,
+            Some(Err(why)) => {
+                ui.weak(t!("details.raw.unavailable", reason = why));
+                ""
+            }
+            None => e.message,
+        };
         let font = FontId::monospace(self.cfg.font_size);
         let idx = self.selected.unwrap_or_default();
         let hit = self.is_match.get(idx);
-        // Scroll to the first search match once per selected row and search.
-        let scroll_key = (idx, self.search_gen);
+        // Scroll to the first search match once per selected row, search and view.
+        let scroll_key = (idx, self.search_gen, view);
         let first_match = (hit && self.details_scrolled != Some(scroll_key))
-            .then(|| self.search_re.as_ref().and_then(|re| re.find(e.message)))
+            .then(|| self.search_re.as_ref().and_then(|re| re.find(text)))
             .flatten()
-            .map(|m| e.message[..m.start()].chars().count());
+            .map(|m| text[..m.start()].chars().count());
         let fg = ui.visuals().text_color();
         let out = egui::ScrollArea::vertical()
             .auto_shrink([false, false])
@@ -125,7 +169,7 @@ impl App {
                     job.wrap.max_width = wrap;
                     ui.painter().layout_job(job)
                 };
-                let mut s = e.message;
+                let mut s = text;
                 let te = egui::TextEdit::multiline(&mut s)
                     .desired_width(f32::INFINITY)
                     .font(font.clone())
@@ -139,6 +183,10 @@ impl App {
         self.hover_log |= ui.rect_contains_pointer(out.inner_rect);
         if hit {
             self.details_scrolled = Some(scroll_key);
+        }
+        if view != self.cfg.details_view {
+            self.cfg.details_view = view;
+            self.cfg_dirty = true;
         }
         if open_code.is_some() {
             self.open_lookup(open_code);

@@ -375,6 +375,7 @@ mod tests {
                 thread: String::new(),
                 severity: crate::parser::Severity::Info,
                 extra: Vec::new(),
+                raw: (0, 0),
             })
             .collect();
         entries.sort_by(|a, b| a.datetime.cmp(&b.datetime));
