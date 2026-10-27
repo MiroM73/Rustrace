@@ -2,6 +2,9 @@
 //! system proxy settings and certificate store are used and no TLS library is compiled in.
 //! Redirects (GitHub release downloads go to another host) are followed by WinHTTP.
 
+// The pure helpers are only called by the Windows code (and tested on every platform).
+#![cfg_attr(not(windows), allow(dead_code))]
+
 /// Downloads `url` (https only). `progress(received, total)` is called after every block;
 /// returning `false` cancels the download.
 #[cfg(windows)]

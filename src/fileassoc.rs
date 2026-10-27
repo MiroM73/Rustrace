@@ -11,6 +11,9 @@
 //! hash): when another program was chosen for an extension, the user has to pick RusTrace in the
 //! Windows settings. [`status`] tells which case applies.
 
+// The pure helpers are only called by the Windows code (and tested on every platform).
+#![cfg_attr(not(windows), allow(dead_code))]
+
 /// File type (ProgID) of the log files opened by RusTrace.
 pub const PROG_ID: &str = "RusTrace.LogFile";
 /// Extensions RusTrace registers for.
