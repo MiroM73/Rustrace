@@ -13,6 +13,39 @@ impl App {
                     ui.close();
                     self.open_dialog();
                 }
+                if ui
+                    .add_enabled(
+                        self.cur_path.is_some(),
+                        egui::Button::new(format!("➕ {}", t!("menu.file.add"))),
+                    )
+                    .on_hover_text(t!("menu.file.add.tip"))
+                    .clicked()
+                {
+                    ui.close();
+                    self.add_dialog();
+                }
+                if self.is_merged() {
+                    ui.menu_button(format!("📚 {}", t!("menu.file.merged")), |ui| {
+                        let mut remove = None;
+                        for (i, p) in self.paths.iter().enumerate() {
+                            ui.horizontal(|ui| {
+                                if ui
+                                    .small_button("✖")
+                                    .on_hover_text(t!("menu.file.merged.remove"))
+                                    .clicked()
+                                {
+                                    remove = Some(i);
+                                }
+                                ui.label(RichText::new("■").color(self.log_color(i)));
+                                ui.label(p.display().to_string());
+                            });
+                        }
+                        if let Some(i) = remove {
+                            ui.close();
+                            self.remove_log(i);
+                        }
+                    });
+                }
                 ui.menu_button(t!("menu.file.recent"), |ui| {
                     if self.cfg.recent_files.is_empty() {
                         ui.weak(t!("menu.file.recent.none"));
@@ -164,6 +197,13 @@ impl App {
                         self.enforce_memory_limits();
                     }
                 });
+                if ui
+                    .checkbox(&mut self.cfg.color_files, t!("menu.view.color_files"))
+                    .on_hover_text(t!("menu.view.color_files.tip"))
+                    .changed()
+                {
+                    self.cfg_dirty = true;
+                }
                 if ui
                     .checkbox(&mut self.cfg.merge_rotated, t!("menu.view.merge_rotated"))
                     .on_hover_text(t!("menu.view.merge_rotated.tip"))

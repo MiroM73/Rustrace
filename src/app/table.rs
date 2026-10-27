@@ -306,6 +306,28 @@ impl App {
                         ColumnKind::Role(Role::Thread) => {
                             row.col(|ui| simple(ui, e.thread));
                         }
+                        // A merged view of several logs: a color mark per log.
+                        ColumnKind::File if self.cfg.color_files && self.is_merged() => {
+                            row.col(|ui| {
+                                paint_bg(ui);
+                                let log = self.file_sources.get(e.file as usize).copied();
+                                let mut job = LayoutJob::default();
+                                job.append(
+                                    "■ ",
+                                    0.0,
+                                    TextFormat::simple(
+                                        font.clone(),
+                                        log.map_or(fg_col, |l| self.log_color(l)),
+                                    ),
+                                );
+                                job.append(
+                                    &self.file_label(e.file),
+                                    0.0,
+                                    TextFormat::simple(font.clone(), fg_col),
+                                );
+                                ui.add(egui::Label::new(job).truncate().selectable(false));
+                            });
+                        }
                         kind => {
                             row.col(|ui| simple(ui, &self.cell_text(&e, kind)));
                         }

@@ -46,6 +46,27 @@ Features (all implemented, see README for user-facing details):
 - Encodings: UTF-8 (BOM or not), UTF-16 LE/BE (BOM), ANSI Windows-1250 fallback.
 - Incremental reading in a **background thread** in 8 MB chunks with progress + cancel; truncation /
   rotation detection; provisional last line. 400 MB / 1.8 M lines ≈ 3.7 s in release.
+- **Different logs merged by time** (#21, `src/merge.rs`): `LogSet` = one or more `LogSource`s
+  (App holds `source: Option<LogSet>`, `paths`, `cur_path` = first path). One log: results of
+  `LogSource` passed through unchanged (no reordering). Several: every source polled, new final
+  entries merged with `interleave` (k-way heap on (merge key, log index), order inside a log
+  kept); merge key = timestamp, undated = key of the previous entry of the same log
+  (`last_key` per log, `KEY_MIN` at the start). Results are `ReadResult` (provisional entries
+  as a `LogStore` with file ids); `Appended.from_key` = batch has a key older than `newest` →
+  `merge::apply_appended` / `merge_tail` (split_off after the last entry dated ≤ key, re-interleave
+  per log, `file_sources`). Files of the view: `map[log][local id]` → global id, `file_sources`;
+  columns: `sync` unites the schemas (extra columns by name, `extra_map`); `LogStore::copy_entry`
+  re-interns + maps extra columns. A source that was loaded and returns `Reset` (truncated /
+  replaced) → the whole set is read again; a source that could not be read → `errors()` (status
+  bar), others shown. Provisional entries cached per log (`provisional`), merged at the end.
+  UI: Open with several files / drop several / command line `a.log b.log`, File → Add log to
+  view…, File → Merged logs (✖ = `remove_log`, reopens the rest), File column color mark per log
+  (`cfg.color_files`, `App::log_color`), status bar "📚 N logs merged" with a tooltip per log,
+  `format.mixed` when the formats differ, `SessionState::extra_paths` for the update restart.
+  Selection kept by (file, line) when older rows are merged in before it. Progress counters
+  accumulate over the logs (`LogSource::progress_base`). Measured: 400 MB CMTrace + 100 MB CBS +
+  100 MB IIS (3.7 M rows): separately ~9.2 s, merged ~9.3 s (`bench_merge`). First merge keeps
+  the per-log stores and the merged store at once (temporary peak).
 - **Rotated logs merged** (`cfg.merge_rotated`, default on; `parser::rotated_parts`): opening
   `service.log` also reads `service.lo_` and `service-YYYYMMDD-HHMMSS.log` first (sorted by mtime,
   then name; only for the active file name, not when a part itself is opened). `LogSource::files`
@@ -196,6 +217,7 @@ Features (all implemented, see README for user-facing details):
   `pub(in crate::app) fn`; shared free helpers are `pub(in crate::app)` and glob-imported in
   `mod.rs` (`use table::*;` …). A new window → `dialogs/<name>.rs` + `mod <name>;` in
   `dialogs/mod.rs`; keep files under ~800 lines.
+- `src/merge.rs` – `LogSet` (several logs in one view by time), `interleave`, `apply_appended`.
 - `src/parser.rs` – `LogSource::poll()` chunked incremental reading, encodings, format parsing,
   `read_line_ranges()` for original-line export. Dates stored as ISO `YYYY-MM-DD HH:MM:SS.mmm`,
   formatted for display by the UI (`format.date` in the language file).
@@ -230,7 +252,7 @@ Features (all implemented, see README for user-facing details):
 
 ## Commands
 - `cargo build --release` → `target\release\rustrace.exe`
-- `cargo test` (71 tests: raw lines of entries (all formats / encodings), filter (parallel = sequential, match bits), date column filter = text filter, updates (versions, release JSON, notes, sha256 file, ZIP, install, restore state), icon / .ico layout, search as you type threshold, status-bar position percentage, file association (registry in an own HKCU test key), search history, store drop_front / move to temp file, rotated parts (naming, merge on open, rotation while watching, replaced
+- `cargo test` (76 tests: merged logs (order by time, appended older rows, formats + rotated parts + re-read, single log unchanged, interleave), store copy_entry / split_off, raw lines of entries (all formats / encodings), filter (parallel = sequential, match bits), date column filter = text filter, updates (versions, release JSON, notes, sha256 file, ZIP, install, restore state), icon / .ico layout, search as you type threshold, status-bar position percentage, file association (registry in an own HKCU test key), search history, store drop_front / move to temp file, rotated parts (naming, merge on open, rotation while watching, replaced
   file), export segments by file, time range bounds, column filter syntax, parsers, chunked/ANSI/UTF-16 reading, log definitions (CBS, DISM, IIS,
   Exchange connectivity / CSV separator, choice by name/content, appending across refreshes), store (32-byte record, ISO ↔ ms, push /
   truncate / append, mapped temp file growing past 64 MB, interner), export incl. end-to-end and
@@ -349,11 +371,8 @@ Features (all implemented, see README for user-facing details):
     previous result stays visible), #17 date/time column filter compared as time ranges,
     #18 match count kept incrementally (`MatchBits`). Release v0.8.0.
 43. #29 details pane Message | Raw line (byte range of every entry, read from the file on demand).
+44. #21 several different logs merged into one view by time (`LogSet`), tabs still not wanted.
 
-## Ideas not done yet (offered to the owner)
-- Merge **different** logs into one view sorted by time (like CMTrace File → Open → "Merge
-  selected files", e.g. AppEnforce.log + AppDiscovery.log). The owner wants it noted as an idea;
-  tabs with several logs are not wanted. The rotated-parts merge (concatenation) already exists.
 
 ## Ideas not done yet (offered by the owner)
 - For IIS logs, explain the status codes like the error code lookup does: HTTP `sc-status`

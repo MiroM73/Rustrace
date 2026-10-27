@@ -379,6 +379,8 @@ pub enum FormatState {
 #[serde(default)]
 pub struct SessionState {
     pub path: Option<String>,
+    /// The other logs of a merged view.
+    pub extra_paths: Vec<String>,
     pub format: Option<FormatState>,
     /// Index of the selected entry.
     pub selected: Option<usize>,

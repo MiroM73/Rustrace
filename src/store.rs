@@ -630,6 +630,71 @@ impl LogStore {
         }
     }
 
+    /// Adds a copy of entry `i` of `src` with file id `file`. `ids` caches the ids of the
+    /// strings of `src` in this store (start with an empty vector for every `src`); `cols` maps
+    /// the extra columns of `src` to the extra columns of this store (`None` = the same).
+    pub fn copy_entry(
+        &mut self,
+        src: &LogStore,
+        i: usize,
+        file: u16,
+        ids: &mut Vec<u32>,
+        cols: Option<&[usize]>,
+    ) {
+        if ids.len() < src.strings.len() {
+            ids.resize(src.strings.len(), NO_ID);
+        }
+        let strings = &mut self.strings;
+        let mut map = |id: u32| {
+            let slot = &mut ids[id as usize];
+            if *slot == NO_ID {
+                *slot = strings.intern(src.strings.get(id));
+            }
+            *slot
+        };
+        let r = src.recs[i];
+        let ts = if (TS_RAW..TS_RAW_END).contains(&r.ts) {
+            TS_RAW + map((r.ts - TS_RAW) as u32) as i64
+        } else {
+            r.ts
+        };
+        let rec = Rec {
+            start: self.text.len() as u64,
+            ts,
+            component: map(r.component),
+            thread: map(r.thread),
+            file,
+            ..r
+        };
+        let n = self.recs.len();
+        for (j, c) in src.extra.iter().enumerate() {
+            let d = cols.and_then(|m| m.get(j).copied()).unwrap_or(j);
+            let id = map(c[i]);
+            while self.extra.len() <= d {
+                self.extra.push(vec![0; n]);
+            }
+            let col = &mut self.extra[d];
+            col.resize(n, 0);
+            col.push(id);
+        }
+        self.text.push_str(src.message(i));
+        self.recs.push(rec);
+        for c in &mut self.extra {
+            c.resize(n + 1, 0);
+        }
+    }
+
+    /// Removes the entries from `p` on and returns them as a new store (text in memory).
+    pub fn split_off(&mut self, p: usize) -> LogStore {
+        let mut tail = LogStore::new();
+        let mut ids = Vec::new();
+        for i in p..self.len() {
+            tail.copy_entry(self, i, self.recs[i].file, &mut ids, None);
+        }
+        self.truncate(p);
+        tail
+    }
+
     /// Keeps only the first `n` entries.
     pub fn truncate(&mut self, n: usize) {
         if n >= self.recs.len() {
@@ -883,6 +948,56 @@ mod tests {
         assert_eq!((e.message, e.component, e.line_no), ("six", "CompB", 6));
         assert_eq!(s.datetime(2), "raw date");
         assert_eq!((s.extra(2, 1), s.extra(0, 1)), ("q", ""));
+    }
+
+    /// Copying entries between stores (merged view of several logs): strings re-interned,
+    /// extra columns mapped, file ids replaced; `split_off` keeps everything.
+    #[test]
+    fn copy_entry_and_split_off() {
+        let mut a = LogStore::new();
+        a.push(entry(1, "a1", "CompA", "2026-10-23 10:00:00.000", &[]), 0);
+        a.push(entry(2, "a2", "CompA", "raw a", &["x", "y"]), 1);
+        let mut b = LogStore::new();
+        b.push(entry(7, "b1", "CompB", "", &["q"]), 0);
+        let mut m = LogStore::new();
+        let (mut ia, mut ib) = (Vec::new(), Vec::new());
+        m.copy_entry(&b, 0, 5, &mut ib, Some(&[2]));
+        m.copy_entry(&a, 0, 3, &mut ia, Some(&[0, 1]));
+        m.copy_entry(&a, 1, 4, &mut ia, Some(&[0, 1]));
+        let got: Vec<_> = (0..m.len())
+            .map(|i| {
+                let e = m.at(i);
+                (
+                    e.message,
+                    e.component,
+                    e.file,
+                    e.line_no,
+                    m.datetime(i),
+                    e.extras().collect::<Vec<_>>(),
+                )
+            })
+            .collect();
+        assert_eq!(
+            got,
+            [
+                ("b1", "CompB", 5, 7, String::new(), vec!["", "", "q"]),
+                (
+                    "a1",
+                    "CompA",
+                    3,
+                    1,
+                    "2026-10-23 10:00:00.000".into(),
+                    vec!["", "", ""]
+                ),
+                ("a2", "CompA", 4, 2, "raw a".into(), vec!["x", "y", ""]),
+            ]
+        );
+        let tail = m.split_off(1);
+        assert_eq!(m.len(), 1);
+        assert_eq!(m.text_len(), 2);
+        assert_eq!((tail.message(0), tail.file(0)), ("a1", 3));
+        assert_eq!(tail.datetime(1), "raw a");
+        assert_eq!(tail.extra(1, 1), "y");
     }
 
     #[test]

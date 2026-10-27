@@ -10,7 +10,8 @@ use crate::filter::{
 };
 use crate::i18n;
 use crate::logdef::{self, Column as LogColumn, ColumnKind, LogDef, Role, Schema};
-use crate::parser::{FormatChoice, LogSource, PollResult, Progress, Severity, SourceFile};
+use crate::merge::{self, LogSet, ReadResult};
+use crate::parser::{FormatChoice, Progress, Severity, SourceFile};
 use crate::store::{EntryRef, LogStore, iso_to_ms, ms_to_iso};
 use crate::t;
 use crate::update::{self, FormatState, Release, SessionState, WindowState};
@@ -97,7 +98,7 @@ struct Span {
 
 /// File reading in progress in a background thread.
 struct Loading {
-    rx: mpsc::Receiver<(LogSource, std::io::Result<PollResult>)>,
+    rx: mpsc::Receiver<(LogSet, std::io::Result<ReadResult>)>,
     progress: Arc<Progress>,
     started: Instant,
 }
@@ -158,9 +159,16 @@ pub struct App {
 
     ctx: egui::Context,
     /// While loading, the source is moved into the reader thread (then it is `None`).
-    source: Option<LogSource>,
+    source: Option<LogSet>,
     loading: Option<Loading>,
+    /// The open log (the first one of a merged view) and all logs of the view (#21).
     cur_path: Option<PathBuf>,
+    paths: Vec<PathBuf>,
+    /// The log of every file (index = file id) and the log definition of every log.
+    file_sources: Vec<usize>,
+    source_defs: Vec<Option<Arc<LogDef>>>,
+    /// The logs of a merged view are read with different formats.
+    mixed_formats: bool,
     encoding_name: &'static str,
     file_size: u64,
     /// The file is added to recent files only after it has been read successfully.
@@ -324,7 +332,7 @@ struct ExportKey {
 impl App {
     pub fn new(
         cc: &eframe::CreationContext<'_>,
-        path: Option<String>,
+        paths: Vec<String>,
         restore: Option<SessionState>,
     ) -> Self {
         let (mut cfg, existed) = Config::load();
@@ -341,6 +349,10 @@ impl App {
             source: None,
             loading: None,
             cur_path: None,
+            paths: Vec::new(),
+            file_sources: Vec::new(),
+            source_defs: Vec::new(),
+            mixed_formats: false,
             encoding_name: "",
             file_size: 0,
             pending_recent: None,
@@ -432,8 +444,8 @@ impl App {
             .clamp(*UI_ZOOM_RANGE.start(), *UI_ZOOM_RANGE.end());
         cc.egui_ctx.set_zoom_factor(zoom);
         app.recompile_rules();
-        if let Some(p) = path {
-            app.open_file(&p);
+        if !paths.is_empty() {
+            app.open_files(paths.into_iter().map(PathBuf::from).collect());
         }
         let restored = restore.is_some();
         if let Some(state) = restore {
@@ -517,15 +529,19 @@ impl App {
     }
 
     fn update_title(&mut self, ctx: &egui::Context) {
-        let t = match &self.cur_path {
-            Some(p) => format!(
-                "{} – {}",
-                base_title(),
+        let names: Vec<String> = self
+            .paths
+            .iter()
+            .map(|p| {
                 p.file_name()
                     .map(|f| f.to_string_lossy().into_owned())
                     .unwrap_or_default()
-            ),
-            None => base_title(),
+            })
+            .collect();
+        let t = if names.is_empty() {
+            base_title()
+        } else {
+            format!("{} – {}", base_title(), names.join(" + "))
         };
         if t != self.title {
             ctx.send_viewport_cmd(egui::ViewportCommand::Title(t.clone()));

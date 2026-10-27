@@ -4,12 +4,17 @@ use crate::app::*;
 
 impl App {
     pub(in crate::app) fn handle_input(&mut self, ctx: &egui::Context) {
-        // Drag & drop of a file onto the window.
-        let dropped = ctx
-            .input(|i| i.raw.dropped_files.first().map(|f| f.path().to_path_buf()))
-            .filter(|p| !p.as_os_str().is_empty());
-        if let Some(p) = dropped {
-            self.open_file(&p.to_string_lossy());
+        // Drag & drop of files onto the window (several files: one view merged by time).
+        let dropped: Vec<PathBuf> = ctx.input(|i| {
+            i.raw
+                .dropped_files
+                .iter()
+                .map(|f| f.path().to_path_buf())
+                .filter(|p| !p.as_os_str().is_empty())
+                .collect()
+        });
+        if !dropped.is_empty() {
+            self.open_files(dropped);
         }
 
         let typing = ctx.egui_wants_keyboard_input();

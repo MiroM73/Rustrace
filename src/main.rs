@@ -16,6 +16,7 @@ mod http;
 mod i18n;
 mod icon;
 mod logdef;
+mod merge;
 mod parser;
 mod splash;
 mod store;
@@ -69,11 +70,11 @@ fn block_on<F: std::future::Future>(f: F) -> F::Output {
     }
 }
 
-/// What the program opens with: a log file from the command line, or the state of the previous
-/// version after an update (`--restore <file>`).
+/// What the program opens with: log files from the command line (several are merged into one
+/// view), or the state of the previous version after an update (`--restore <file>`).
 #[derive(Clone, Default)]
 struct Startup {
-    path: Option<String>,
+    paths: Vec<String>,
     restore: Option<update::SessionState>,
 }
 
@@ -114,24 +115,24 @@ fn run(renderer: eframe::Renderer, startup: Startup, created: &Cell<bool>) -> ef
         options,
         Box::new(move |cc| {
             created.set(true);
-            Ok(Box::new(app::App::new(cc, startup.path, startup.restore)))
+            Ok(Box::new(app::App::new(cc, startup.paths, startup.restore)))
         }),
     )
 }
 
 fn main() -> eframe::Result {
-    // Optional: path to a log file as the first argument (e.g. .log file association), or
+    // Optional: paths of log files (e.g. .log file association; several = one merged view), or
     // `--restore <file>` from the previous version that has just installed this one.
     let mut args = std::env::args().skip(1);
     let startup = match args.next() {
         Some(a) if a == update::RESTORE_ARG => Startup {
-            path: None,
+            paths: Vec::new(),
             restore: args
                 .next()
                 .and_then(|f| update::SessionState::take(std::path::Path::new(&f))),
         },
-        path => Startup {
-            path,
+        first => Startup {
+            paths: first.into_iter().chain(args).collect(),
             restore: None,
         },
     };

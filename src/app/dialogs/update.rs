@@ -149,6 +149,12 @@ impl App {
                 .cur_path
                 .as_ref()
                 .map(|p| p.to_string_lossy().into_owned()),
+            extra_paths: self
+                .paths
+                .iter()
+                .skip(1)
+                .map(|p| p.to_string_lossy().into_owned())
+                .collect(),
             format: match &self.format_choice {
                 FormatChoice::Auto => None,
                 FormatChoice::Builtin => Some(FormatState::Builtin),
@@ -191,7 +197,11 @@ impl App {
         let Some(path) = state.path.clone() else {
             return;
         };
-        self.open_file(&path);
+        let paths = std::iter::once(&path)
+            .chain(&state.extra_paths)
+            .map(PathBuf::from)
+            .collect();
+        self.open_files(paths);
         let format = match &state.format {
             None => None,
             Some(FormatState::Builtin) => Some(FormatChoice::Builtin),

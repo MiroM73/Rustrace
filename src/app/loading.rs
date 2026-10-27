@@ -81,6 +81,11 @@ impl App {
             .collect();
     }
 
+    /// Several logs merged into one view (#21).
+    pub(in crate::app) fn is_merged(&self) -> bool {
+        self.paths.len() > 1
+    }
+
     /// Name of a file of the log ("(overwritten)" when a later rotation replaced it).
     pub(in crate::app) fn file_label(&self, id: u16) -> String {
         match self.files.get(id as usize) {
@@ -91,6 +96,36 @@ impl App {
     }
 
     pub(in crate::app) fn open_dialog(&mut self) {
+        // Several files chosen: one view interleaved by time (#21).
+        if let Some(paths) = self.pick_logs() {
+            self.open_files(paths);
+        }
+    }
+
+    /// File → Add log to view: the chosen logs are merged with the open ones.
+    pub(in crate::app) fn add_dialog(&mut self) {
+        if let Some(new) = self.pick_logs() {
+            let mut paths = self.paths.clone();
+            for p in new {
+                if !paths.contains(&p) {
+                    paths.push(p);
+                }
+            }
+            self.open_files(paths);
+        }
+    }
+
+    /// Removes a log from a merged view (the others are read again).
+    pub(in crate::app) fn remove_log(&mut self, i: usize) {
+        let mut paths = self.paths.clone();
+        if i < paths.len() && paths.len() > 1 {
+            paths.remove(i);
+            self.open_files(paths);
+        }
+    }
+
+    /// File dialog for one or more logs.
+    fn pick_logs(&self) -> Option<Vec<PathBuf>> {
         let mut dlg = rfd::FileDialog::new()
             .add_filter(t!("dialog.filter.logs"), &["log", "lo_", "txt"])
             .add_filter(t!("dialog.filter.all"), &["*"]);
@@ -103,17 +138,29 @@ impl App {
         } else if cfg!(windows) && std::path::Path::new(r"C:\Windows\CCM\Logs").exists() {
             dlg = dlg.set_directory(r"C:\Windows\CCM\Logs");
         }
-        if let Some(p) = dlg.pick_file() {
-            self.open_file(&p.to_string_lossy());
-        }
+        dlg.pick_files().filter(|p| !p.is_empty())
     }
 
     pub(in crate::app) fn open_file(&mut self, path: &str) {
+        self.open_files(vec![PathBuf::from(path)]);
+    }
+
+    /// Opens one log, or several logs as one view interleaved by time (#21).
+    pub(in crate::app) fn open_files(&mut self, paths: Vec<PathBuf>) {
+        if paths.is_empty() {
+            return;
+        }
         self.cancel_loading();
         self.cancel_filter_job();
         self.data_gen += 1;
-        self.cur_path = Some(PathBuf::from(path));
-        self.source = Some(LogSource::new(path, self.cfg.keyword_severity));
+        self.cur_path = paths.first().cloned();
+        self.source = Some(LogSet::new(&paths, self.cfg.keyword_severity));
+        // Recent files remember single logs.
+        self.pending_recent = (paths.len() == 1).then(|| paths[0].to_string_lossy().into_owned());
+        self.paths = paths;
+        self.file_sources.clear();
+        self.source_defs.clear();
+        self.mixed_formats = false;
         self.format_choice = FormatChoice::Auto;
         self.active_def = None;
         self.schema = Schema::default();
@@ -129,7 +176,6 @@ impl App {
         self.last_refresh_wall = None;
         self.file_size = 0;
         self.status_error = None;
-        self.pending_recent = Some(path.to_owned());
         self.start_poll();
     }
 
@@ -158,7 +204,7 @@ impl App {
             .spawn(move || {
                 let res = src.poll(&prog);
                 // Nothing new: no extra frame, the next scheduled refresh picks the result up.
-                let changed = !matches!(res, Ok(PollResult::Unchanged));
+                let changed = !matches!(res, Ok(ReadResult::Unchanged));
                 // If the UI no longer waits for the result (other file, cancelled), send fails – that's fine.
                 let _ = tx.send((src, res));
                 if changed {
@@ -193,7 +239,11 @@ impl App {
             Ok((src, res)) => {
                 self.loading = None;
                 self.encoding_name = src.encoding_name();
-                self.file_size = src.file_size;
+                self.file_size = src.file_size();
+                self.file_sources = src.file_sources().to_vec();
+                self.source_defs = src.source_defs();
+                self.mixed_formats = src.mixed_formats();
+                let read_errors = src.errors().join("\n");
                 if self.schema != *src.schema() {
                     // Other columns (another log type): the column filters no longer apply.
                     if self.schema.columns != src.schema().columns {
@@ -208,6 +258,10 @@ impl App {
                 }
                 self.source = Some(src);
                 self.apply_result(res);
+                // A log of a merged view that could not be read (the others are shown).
+                if !read_errors.is_empty() {
+                    self.status_error = Some(t!("error.read", error = read_errors));
+                }
                 self.enforce_memory_limits();
                 if let Some(state) = self.pending_restore.take() {
                     self.restore_view(state);
@@ -227,21 +281,19 @@ impl App {
         }
     }
 
-    pub(in crate::app) fn apply_result(&mut self, res: std::io::Result<PollResult>) {
+    pub(in crate::app) fn apply_result(&mut self, res: std::io::Result<ReadResult>) {
         let before = self.filtered.len();
-        // Provisional entries belong to the active file (the last one).
-        let active = self.files.len().saturating_sub(1) as u16;
         if matches!(
             res,
-            Ok(PollResult::Reset { .. }) | Ok(PollResult::Appended { .. })
+            Ok(ReadResult::Reset { .. }) | Ok(ReadResult::Appended { .. })
         ) {
             self.data_gen += 1;
         }
         match res {
-            Ok(PollResult::Unchanged) => {
+            Ok(ReadResult::Unchanged) => {
                 self.status_error = None;
             }
-            Ok(PollResult::Reset {
+            Ok(ReadResult::Reset {
                 committed,
                 provisional,
             }) => {
@@ -249,9 +301,7 @@ impl App {
                 let mut entries = committed;
                 self.dropped = 0;
                 self.committed_len = entries.len();
-                for e in provisional {
-                    entries.push(e, active);
-                }
+                entries.append(provisional);
                 self.cancel_filter_job();
                 self.entries = Arc::new(entries);
                 self.selected = None;
@@ -268,24 +318,43 @@ impl App {
                     self.scroll_to_end_after_filter();
                 }
             }
-            Ok(PollResult::Appended {
+            Ok(ReadResult::Appended {
                 committed,
                 provisional,
+                from_key,
             }) => {
                 self.status_error = None;
                 let start = self.committed_len;
+                let file_sources = std::mem::take(&mut self.file_sources);
+                // The selected entry by file and line: in a merged view older new entries can
+                // be merged in before it.
+                let sel_id = self
+                    .selected
+                    .filter(|&s| s < start)
+                    .map(|s| (self.entries.file(s), self.entries.line_no(s)));
                 let entries = self.entries_mut();
-                entries.truncate(start);
-                entries.append(committed);
-                let committed_len = entries.len();
-                for e in provisional {
-                    entries.push(e, active);
-                }
+                let (committed_len, changed) = merge::apply_appended(
+                    entries,
+                    start,
+                    committed,
+                    provisional,
+                    from_key,
+                    &file_sources,
+                );
+                self.file_sources = file_sources;
                 self.committed_len = committed_len;
-                if self.selected.is_some_and(|s| s >= start) {
+                if self.selected.is_some_and(|s| s >= changed) {
                     self.code_cache = None;
+                    let entries = &self.entries;
+                    self.selected = sel_id.and_then(|id| {
+                        (changed..committed_len)
+                            .find(|&i| (entries.file(i), entries.line_no(i)) == id)
+                    });
+                    if !self.cfg.auto_scroll {
+                        self.scroll_to_selected_after_filter();
+                    }
                 }
-                self.refilter_from(start);
+                self.refilter_from(changed);
                 self.last_refresh_wall = Some(chrono::Local::now());
                 if self.cfg.auto_scroll
                     && self.filtered.len() != before
@@ -301,12 +370,10 @@ impl App {
         }
     }
 
-    /// New source for the current file (the next read starts from the beginning).
+    /// New source for the current logs (the next read starts from the beginning).
     pub(in crate::app) fn recreate_source(&mut self) {
-        self.source = self
-            .cur_path
-            .as_ref()
-            .map(|p| LogSource::new(p, self.cfg.keyword_severity));
+        self.source =
+            (!self.paths.is_empty()).then(|| LogSet::new(&self.paths, self.cfg.keyword_severity));
     }
 
     /// Cancels loading in progress (the thread stops at the next chunk).

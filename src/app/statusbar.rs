@@ -6,7 +6,15 @@ impl App {
     pub(in crate::app) fn status_bar(&mut self, ui: &mut egui::Ui) {
         ui.horizontal(|ui| {
             if let Some(path) = &self.cur_path {
-                ui.label(path.display().to_string());
+                if self.is_merged() {
+                    ui.label(format!(
+                        "📚 {}",
+                        t!("status.merged", count = self.paths.len())
+                    ))
+                    .on_hover_ui(|ui| self.merged_tip(ui));
+                } else {
+                    ui.label(path.display().to_string());
+                }
                 ui.separator();
                 if !self.encoding_name.is_empty() {
                     ui.label(self.encoding_name);
@@ -32,7 +40,7 @@ impl App {
                     .on_hover_text(t!("status.dropped.tip", limit = self.cfg.max_log_mb));
                     ui.separator();
                 }
-                if self.files.len() > 1 {
+                if self.files.len() > 1 && !self.is_merged() {
                     ui.label(format!(
                         "📚 {}",
                         t!("status.parts", count = self.files.len())
@@ -136,6 +144,67 @@ impl App {
                 ui.ctx().request_repaint_after(Duration::from_millis(500));
             }
         });
+    }
+}
+
+impl App {
+    /// Tooltip of a merged view: every log with its format, its files, their rows and encodings.
+    fn merged_tip(&self, ui: &mut egui::Ui) {
+        let mut rows = vec![0usize; self.files.len()];
+        for i in 0..self.entries.len() {
+            if let Some(r) = rows.get_mut(self.entries.file(i) as usize) {
+                *r += 1;
+            }
+        }
+        for (s, p) in self.paths.iter().enumerate() {
+            ui.horizontal(|ui| {
+                ui.label(RichText::new("■").color(self.log_color(s)));
+                ui.strong(p.display().to_string());
+            });
+            let format = match self.source_defs.get(s) {
+                Some(Some(d)) => format!("{} – {}", d.name, d.id),
+                _ => t!("format.builtin"),
+            };
+            ui.label(format!("    📐 {format}"));
+            for (f, file) in self.files.iter().enumerate() {
+                if self.file_sources.get(f) == Some(&s) {
+                    ui.label(format!(
+                        "    {} – {}, {}",
+                        self.file_labels.get(f).map_or("", |l| l.as_str()),
+                        t!("status.rows", count = rows[f]),
+                        file.encoding.name()
+                    ));
+                }
+            }
+        }
+        ui.separator();
+        ui.weak(t!("status.merged.tip"));
+    }
+
+    /// Color of a log in a merged view (File column, menu, status bar).
+    pub(in crate::app) fn log_color(&self, log: usize) -> Color32 {
+        const LIGHT: [(u8, u8, u8); 8] = [
+            (0, 110, 200),
+            (200, 90, 0),
+            (0, 140, 70),
+            (150, 60, 180),
+            (190, 40, 90),
+            (0, 130, 140),
+            (130, 105, 0),
+            (100, 100, 100),
+        ];
+        const DARK: [(u8, u8, u8); 8] = [
+            (90, 170, 255),
+            (255, 160, 70),
+            (80, 210, 120),
+            (200, 140, 255),
+            (255, 110, 160),
+            (70, 210, 220),
+            (225, 200, 80),
+            (180, 180, 180),
+        ];
+        let (r, g, b) = if self.dark { DARK } else { LIGHT }[log % 8];
+        Color32::from_rgb(r, g, b)
     }
 }
 

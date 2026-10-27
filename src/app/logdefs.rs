@@ -201,6 +201,9 @@ impl App {
     /// Name of the format in use.
     /// Name of the format in use, with the file name of the log definition.
     pub(in crate::app) fn format_name(&self) -> String {
+        if self.mixed_formats {
+            return t!("format.mixed");
+        }
         match &self.active_def {
             Some(d) => format!("{} – {}", d.name, d.id),
             None => t!("format.builtin"),
@@ -221,6 +224,9 @@ impl App {
     /// Log definitions whose file name patterns match the open file (when chosen automatically
     /// and more than one matches – the first one is used).
     pub(in crate::app) fn competing_defs(&self) -> Vec<Arc<LogDef>> {
+        if self.is_merged() {
+            return Vec::new();
+        }
         match (&self.cur_path, &self.format_choice) {
             (Some(p), FormatChoice::Auto) => {
                 let m = logdef::matching_by_name(&self.defs, p);

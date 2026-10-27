@@ -230,6 +230,8 @@ pub struct Config {
     /// Also read the rotated older parts of a log (`name.lo_`, `name-YYYYMMDD-HHMMSS.log`) and keep
     /// the history when the log is rotated while it is watched.
     pub merge_rotated: bool,
+    /// A merged view of several logs marks the File column with a color per log.
+    pub color_files: bool,
     /// Memory limit of a (long watched) log: when the message text exceeds `max_log_mb` MB, the
     /// oldest entries are removed (down to three quarters of the limit).
     pub max_log_enabled: bool,
@@ -299,6 +301,7 @@ impl Default for Config {
             temp_file_enabled: true,
             temp_file_threshold_mb: 100,
             merge_rotated: true,
+            color_files: true,
             max_log_enabled: true,
             max_log_mb: 1000,
             logdef_sources: "all".into(),

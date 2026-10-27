@@ -57,6 +57,17 @@ pub enum Encoding {
     Utf16Be,
 }
 
+impl Encoding {
+    pub fn name(self) -> &'static str {
+        match self {
+            Encoding::Utf8 => "UTF-8",
+            Encoding::Ansi => "ANSI (1250)",
+            Encoding::Utf16Le => "UTF-16 LE",
+            Encoding::Utf16Be => "UTF-16 BE",
+        }
+    }
+}
+
 /// Result of one refresh.
 pub enum PollResult {
     /// The file has not changed.
@@ -113,7 +124,7 @@ pub enum FormatChoice {
 /// Loading progress – shared between the background thread and the UI.
 #[derive(Default)]
 pub struct Progress {
-    /// Number of bytes to read in this round.
+    /// Number of bytes to read in this round (several logs of a merged view add theirs).
     pub total: AtomicU64,
     /// Number of bytes already processed.
     pub done: AtomicU64,
@@ -244,6 +255,8 @@ pub struct LogSource {
     files: Vec<SourceFile>,
     /// The format for the current read has been chosen.
     format_decided: bool,
+    /// Progress counters (total, done) when this read started.
+    progress_base: (u64, u64),
 }
 
 impl LogSource {
@@ -263,6 +276,7 @@ impl LogSource {
             merge_rotated: false,
             files: Vec::new(),
             format_decided: false,
+            progress_base: (0, 0),
         }
     }
 
@@ -342,12 +356,7 @@ impl LogSource {
     }
 
     pub fn encoding_name(&self) -> &'static str {
-        match self.encoding {
-            Encoding::Utf8 => "UTF-8",
-            Encoding::Ansi => "ANSI (1250)",
-            Encoding::Utf16Le => "UTF-16 LE",
-            Encoding::Utf16Be => "UTF-16 BE",
-        }
+        self.encoding.name()
     }
 
     /// The active file still starts with the remembered first bytes.
@@ -410,8 +419,11 @@ impl LogSource {
         if !is_reset && rotated.is_none() && len == self.offset {
             return Ok(PollResult::Unchanged);
         }
-        progress.total.store(total, Ordering::Relaxed);
-        progress.done.store(0, Ordering::Relaxed);
+        // Several logs of a merged view read with the same progress one after another.
+        self.progress_base = (
+            progress.total.fetch_add(total, Ordering::Relaxed),
+            progress.done.load(Ordering::Relaxed),
+        );
 
         let mut committed = if self.temp_file_threshold.is_some_and(|t| total >= t) {
             LogStore::new_mapped()
@@ -584,8 +596,9 @@ impl LogSource {
             }
             // After the first chunk: room for the whole read, estimated from that chunk, so the
             // storage does not grow (and copy) step by step.
-            let done = progress.done.load(Ordering::Relaxed);
-            let rest = progress.total.load(Ordering::Relaxed).saturating_sub(done);
+            let (total_before, done_before) = self.progress_base;
+            let done = progress.done.load(Ordering::Relaxed) - done_before;
+            let rest = (progress.total.load(Ordering::Relaxed) - total_before).saturating_sub(done);
             if !*reserved && rest > 0 && done > 0 && !committed.is_empty() {
                 *reserved = true;
                 let scale = rest as f64 / done as f64 * 1.05;

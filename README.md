@@ -135,6 +135,32 @@ the version information into the exe; this uses the resource compiler `rc.exe` o
   **Exchange Transport Connectivity logs**, **dism.log**, **CBS.log**; your own in `logdef\*.def` (see [Log definitions](#log-definitions))
 - encodings UTF-8, UTF-16 LE/BE (by BOM), ANSI (Windows-1250)
 
+**Several logs in one view, sorted by time** (like CMTrace "Merge selected files")
+- select **several files** in File → Open (Ctrl / Shift + click), **drop several files** onto
+  the window, or start `rustrace.exe AppDiscovery.log AppEnforce.log` – they are shown as one
+  table interleaved by date/time, e.g. `AppDiscovery.log` + `AppEnforce.log` +
+  `AppIntentEval.log` to follow one deployment across components
+- **File → Add log to view…** adds more logs to the open view; **File → Merged logs** lists them
+  and removes one (✖) from the view
+- order: by date/time; equal times keep the order of the logs, then the order of the lines; a
+  row without a date/time stays right after the row before it in the same log; the order of the
+  rows inside one log never changes
+- the **File** column shows where every row comes from, with a color mark per log (View →
+  "Color mark per log in the File column"); the status bar shows "📚 N logs merged" – its
+  tooltip lists every log with its format, its files, their row counts and encodings
+- every log is watched and refreshed on its own; new rows normally go at the end, a row older
+  than the newest one in the view is merged into the right place (only the end of the view after
+  its time is rearranged)
+- logs of **different formats** can be merged (e.g. CMTrace + plain text + IIS): the columns are
+  united – the standard columns once, the extra columns of log definitions by name
+- rotated parts of every merged log are still included; when a log is truncated or replaced, the
+  whole view is read again; a log that cannot be read is reported in the status bar and the others
+  are shown
+- search, highlight rules, filters, time range and export work across all logs; the export of
+  original lines writes blocks per file with the file name in the separator
+- loading three big logs merged (400 MB CMTrace + 100 MB CBS + 100 MB IIS, 3.7 million rows)
+  takes about as long as loading them one after another (~9.3 s)
+
 **Details pane: message or raw line**
 - the details pane under the table shows the selected entry: its line number, severity, the other
   columns and the full message
@@ -456,7 +482,7 @@ The built-in languages live in `lang/*.lang` in the source tree and are embedded
 
 | Shortcut | Action |
 |---|---|
-| Ctrl+O | Open file |
+| Ctrl+O | Open file (several selected files: one view sorted by time) |
 | F5 / Ctrl+F5 | Refresh / reload the whole file |
 | Ctrl+P | Pause / resume automatic refresh |
 | Ctrl+F | Search |
@@ -478,6 +504,8 @@ The built-in languages live in `lang/*.lang` in the source tree and are embedded
   (+ tests)
 - `src/filter.rs` – which entries are displayed / match the search: the filter run (sequential
   and parallel in chunks), match bits with a running count (+ tests)
+- `src/merge.rs` – several logs in one view: reading them as a set, merging by time (also
+  appended older rows), file ids and united columns (+ tests)
 - `src/store.rs` – compact entry storage: 40-byte records, text arena in memory or in a
   memory-mapped temporary file, string interner, date/time as milliseconds (+ tests)
 - `src/logdef.rs` – log definitions: `.def` file format, loading, choosing by file name / content,
