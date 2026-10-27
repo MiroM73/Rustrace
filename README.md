@@ -45,8 +45,11 @@ RusTrace** shows the version, author, license, links to the project page, new ve
 issue tracker, the build (platform) and the settings file; "Copy version information" puts e.g.
 `RusTrace 0.6.0 (windows x86_64, release)` on the clipboard for a bug report.
 
-**Updates** (Help → Check for updates…): RusTrace asks GitHub for the latest release and shows
-whether it is newer than the installed version, together with its release notes. **Download and
+**Updates** (Help → Check for updates…): RusTrace asks GitHub for the published releases and shows
+whether there is a newer one than the installed version, together with its release notes. When
+several versions were released since yours, the window lists **all of them** with their dates and
+release notes, newest first (the newest one open, older ones folded), so nothing that changed in
+between is missed; drafts and pre-releases are ignored. **Download and
 install** downloads the release ZIP, verifies it against the published SHA-256 checksum, replaces
 `rustrace.exe` and the files from the archive (`lang\`, `logdef\`, `LICENSE`; other files in those
 folders are kept, the old program is renamed to `rustrace.exe.old` and deleted by the next start) and
@@ -54,9 +57,12 @@ folders are kept, the old program is renamed to `rustrace.exe.old` and deleted b
 toggles, column filters, time range, selected row and the window position and size. If the program
 folder is not writable (e.g. under Program Files), nothing is changed and the window points to the
 release page for a manual download. Other buttons: open the release page, skip this version, later.
-With "Check for a new version automatically at start-up (once a day)" (on by default, can be turned
-off in the same window) a newer version opens this window at start-up and a green `⬆ <version>`
-button appears in the status bar. The check uses the Windows HTTP stack (WinHTTP), so the system
+"Check for a new version: **at every start** (default) / **once a day** / **never**" at the bottom of
+the window sets the automatic check: it runs in the background without slowing down the start, a
+newer version opens this window and a green `⬆ <version>` button appears in the status bar (it
+stays there after "Later" and opens the window again). A skipped version does not open the window
+again, a newer one does. Errors of the automatic check (e.g. no internet) are not shown, and there
+is no check right after the program was restarted by an update. The check uses the Windows HTTP stack (WinHTTP), so the system
 proxy and certificates apply; only `api.github.com` / GitHub downloads are contacted, nothing is sent
 except the request itself (user agent `RusTrace/<version>`).
 

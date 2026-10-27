@@ -1,4 +1,4 @@
-//! New versions (#15): the latest GitHub release, download of its ZIP (checked against the
+//! New versions (#15, #31): the published GitHub releases newer than this program, download of its ZIP (checked against the
 //! `.sha256` file published next to it), installation over the running program and the state
 //! handed to the restarted program.
 //!
@@ -24,11 +24,13 @@ pub struct Asset {
     pub url: String,
 }
 
-/// The latest published release.
+/// A published release.
 #[derive(Clone, Debug, PartialEq)]
 pub struct Release {
     /// Version without the leading "v", e.g. "0.7.0".
     pub version: String,
+    /// Publication date "YYYY-MM-DD" (empty when unknown).
+    pub date: String,
     /// Release notes (Markdown as written on GitHub).
     pub notes: String,
     /// Web page of the release.
@@ -64,54 +66,125 @@ pub fn current_version() -> String {
     std::env::var("RUSTRACE_UPDATE_AS_VERSION").unwrap_or_else(|_| crate::app::VERSION.to_owned())
 }
 
-/// GitHub API URL of the latest release of a `https://github.com/owner/repo` project.
-pub fn latest_release_url(repository: &str) -> Option<String> {
+/// GitHub API URL of the releases (newest first, up to 100) of a `https://github.com/owner/repo`
+/// project.
+pub fn releases_url(repository: &str) -> Option<String> {
     let rest = repository
         .trim_end_matches('/')
         .strip_prefix("https://github.com/")?;
     let mut it = rest.split('/');
     let (owner, repo) = (it.next()?, it.next()?);
     (it.next().is_none() && !owner.is_empty() && !repo.is_empty())
-        .then(|| format!("https://api.github.com/repos/{owner}/{repo}/releases/latest"))
+        .then(|| format!("https://api.github.com/repos/{owner}/{repo}/releases?per_page=100"))
 }
 
-/// Reads the release from the GitHub API answer.
-pub fn parse_release(json: &str) -> Result<Release, String> {
-    #[derive(Deserialize)]
-    struct GhAsset {
-        name: String,
-        browser_download_url: String,
-    }
-    #[derive(Deserialize)]
-    struct GhRelease {
-        tag_name: String,
-        #[serde(default)]
-        body: Option<String>,
-        html_url: String,
-        #[serde(default)]
-        assets: Vec<GhAsset>,
-    }
-    let r: GhRelease = serde_json::from_str(json).map_err(|e| e.to_string())?;
-    if parse_version(&r.tag_name).is_none() {
-        return Err(format!("unexpected version {}", r.tag_name));
-    }
-    let asset = |pred: &dyn Fn(&str) -> bool| {
-        r.assets.iter().find(|a| pred(&a.name)).map(|a| Asset {
-            name: a.name.clone(),
-            url: a.browser_download_url.clone(),
+#[derive(Deserialize)]
+struct GhAsset {
+    name: String,
+    browser_download_url: String,
+}
+
+#[derive(Deserialize)]
+struct GhRelease {
+    tag_name: String,
+    #[serde(default)]
+    body: Option<String>,
+    html_url: String,
+    #[serde(default)]
+    published_at: Option<String>,
+    #[serde(default)]
+    draft: bool,
+    #[serde(default)]
+    prerelease: bool,
+    #[serde(default)]
+    assets: Vec<GhAsset>,
+}
+
+impl GhRelease {
+    fn into_release(self) -> Result<Release, String> {
+        if parse_version(&self.tag_name).is_none() {
+            return Err(format!("unexpected version {}", self.tag_name));
+        }
+        let asset = |pred: &dyn Fn(&str) -> bool| {
+            self.assets.iter().find(|a| pred(&a.name)).map(|a| Asset {
+                name: a.name.clone(),
+                url: a.browser_download_url.clone(),
+            })
+        };
+        let zip = asset(&|n: &str| n.ends_with(ZIP_SUFFIX));
+        let sha256 = zip
+            .as_ref()
+            .and_then(|z| asset(&|n: &str| n.eq_ignore_ascii_case(&format!("{}.sha256", z.name))));
+        Ok(Release {
+            version: self.tag_name.trim_start_matches(['v', 'V']).to_owned(),
+            date: self
+                .published_at
+                .and_then(|d| d.get(..10).map(str::to_owned))
+                .unwrap_or_default(),
+            notes: self.body.unwrap_or_default().replace("\r\n", "\n"),
+            page: self.html_url,
+            zip,
+            sha256,
         })
-    };
-    let zip = asset(&|n: &str| n.ends_with(ZIP_SUFFIX));
-    let sha256 = zip
-        .as_ref()
-        .and_then(|z| asset(&|n: &str| n.eq_ignore_ascii_case(&format!("{}.sha256", z.name))));
-    Ok(Release {
-        version: r.tag_name.trim_start_matches(['v', 'V']).to_owned(),
-        notes: r.body.unwrap_or_default().replace("\r\n", "\n"),
-        page: r.html_url,
-        zip,
-        sha256,
-    })
+    }
+}
+
+/// Reads one release from the GitHub API answer (`releases/latest`; the program reads the list).
+#[cfg(test)]
+pub fn parse_release(json: &str) -> Result<Release, String> {
+    serde_json::from_str::<GhRelease>(json)
+        .map_err(|e| e.to_string())?
+        .into_release()
+}
+
+/// Reads the list of releases from the GitHub API answer: drafts, pre-releases and tags that are
+/// not a version are left out; newest version first.
+pub fn parse_releases(json: &str) -> Result<Vec<Release>, String> {
+    let list: Vec<GhRelease> = serde_json::from_str(json).map_err(|e| e.to_string())?;
+    let mut releases: Vec<Release> = list
+        .into_iter()
+        .filter(|r| !r.draft && !r.prerelease)
+        .filter_map(|r| r.into_release().ok())
+        .collect();
+    releases.sort_by_key(|r| std::cmp::Reverse(parse_version(&r.version)));
+    Ok(releases)
+}
+
+/// The releases newer than `current` (the ones the user has missed), newest first.
+pub fn missed_releases(all: &[Release], current: &str) -> Vec<Release> {
+    let mut missed: Vec<Release> = all
+        .iter()
+        .filter(|r| is_newer(&r.version, current))
+        .cloned()
+        .collect();
+    missed.sort_by_key(|r| std::cmp::Reverse(parse_version(&r.version)));
+    missed
+}
+
+/// Result of a check: the latest release (installed from) and the missed ones.
+#[derive(Clone, Debug, PartialEq)]
+pub struct Updates {
+    pub latest: Release,
+    /// Releases newer than this program, newest first (empty = up to date).
+    pub missed: Vec<Release>,
+}
+
+impl Updates {
+    /// `None` when there is no published release at all.
+    pub fn new(all: &[Release], current: &str) -> Option<Self> {
+        let latest = all
+            .iter()
+            .max_by_key(|r| parse_version(&r.version))?
+            .clone();
+        Some(Self {
+            latest,
+            missed: missed_releases(all, current),
+        })
+    }
+
+    pub fn is_newer(&self) -> bool {
+        !self.missed.is_empty()
+    }
 }
 
 /// Release notes (GitHub Markdown) as plain lines for the window: (is a heading, text).
@@ -139,11 +212,13 @@ pub fn plain_notes(notes: &str) -> Vec<(bool, String)> {
         .collect()
 }
 
-/// Asks GitHub for the latest release (blocking – call it in a background thread).
-pub fn fetch_latest() -> Result<Release, String> {
-    let url = latest_release_url(env!("CARGO_PKG_REPOSITORY")).ok_or("no GitHub repository")?;
-    let body = crate::http::get(&url, "application/vnd.github+json", |n, _| n < 4 << 20)?;
-    parse_release(&String::from_utf8_lossy(&body))
+/// Asks GitHub for the published releases and compares them with this program (blocking – call
+/// it in a background thread).
+pub fn fetch_updates() -> Result<Updates, String> {
+    let url = releases_url(env!("CARGO_PKG_REPOSITORY")).ok_or("no GitHub repository")?;
+    let body = crate::http::get(&url, "application/vnd.github+json", |n, _| n < 16 << 20)?;
+    let all = parse_releases(&String::from_utf8_lossy(&body))?;
+    Updates::new(&all, &current_version()).ok_or_else(|| "no published release".to_owned())
 }
 
 /// The checksum for `name` from a `sha256sum`-style file ("<hex>  <name>", or only the hex).
@@ -450,10 +525,71 @@ mod tests {
     #[test]
     fn api_url() {
         assert_eq!(
-            latest_release_url("https://github.com/MiroM73/Rustrace").as_deref(),
-            Some("https://api.github.com/repos/MiroM73/Rustrace/releases/latest")
+            releases_url("https://github.com/MiroM73/Rustrace").as_deref(),
+            Some("https://api.github.com/repos/MiroM73/Rustrace/releases?per_page=100")
         );
-        assert_eq!(latest_release_url("https://example.com/a/b"), None);
+        assert_eq!(releases_url("https://example.com/a/b"), None);
+    }
+
+    fn release_json(tag: &str, extra: &str) -> String {
+        format!(
+            r#"{{"tag_name":"{tag}","html_url":"https://g/{tag}","body":"notes {tag}",
+            "published_at":"2026-10-2{}T10:00:00Z"{extra}}}"#,
+            tag.len() % 10
+        )
+    }
+
+    #[test]
+    fn releases_list_from_github_json() {
+        let list = [
+            release_json("v0.7.0", ""),
+            release_json("v0.9.0", r#","draft":true"#),
+            release_json("v0.8.1-beta", r#","prerelease":true"#),
+            release_json("v0.10.0", r#","draft":false,"prerelease":false"#),
+            release_json("nightly", ""),
+            release_json("v0.8.0", ""),
+        ]
+        .join(",");
+        let all = parse_releases(&format!("[{list}]")).unwrap();
+        let versions: Vec<&str> = all.iter().map(|r| r.version.as_str()).collect();
+        // Drafts, pre-releases and tags that are no version left out; newest first.
+        assert_eq!(versions, ["0.10.0", "0.8.0", "0.7.0"]);
+        assert_eq!(all[0].date, "2026-10-27");
+        assert_eq!(all[0].notes, "notes v0.10.0");
+        assert!(parse_releases("[]").unwrap().is_empty());
+        assert!(parse_releases(r#"{"message":"API rate limit exceeded"}"#).is_err());
+        // Without a date.
+        let r = parse_release(r#"{"tag_name":"v1.0.0","html_url":"h"}"#).unwrap();
+        assert_eq!(r.date, "");
+    }
+
+    #[test]
+    fn missed_versions() {
+        let tags = ["v0.5.0", "v0.6.0", "v0.6.1", "v0.7.0", "v0.8.0"];
+        let list: Vec<String> = tags.iter().map(|t| release_json(t, "")).collect();
+        let all = parse_releases(&format!("[{}]", list.join(","))).unwrap();
+        let versions =
+            |rs: &[Release]| -> Vec<String> { rs.iter().map(|r| r.version.clone()).collect() };
+        assert_eq!(
+            versions(&missed_releases(&all, "0.5.0")),
+            ["0.8.0", "0.7.0", "0.6.1", "0.6.0"]
+        );
+        assert_eq!(
+            versions(&missed_releases(&all, "0.6.1")),
+            ["0.8.0", "0.7.0"]
+        );
+        // Equal to the latest or newer (a local build): nothing missed.
+        assert!(missed_releases(&all, "0.8.0").is_empty());
+        assert!(missed_releases(&all, "0.9.0").is_empty());
+
+        let u = Updates::new(&all, "0.6.0").unwrap();
+        assert_eq!(u.latest.version, "0.8.0");
+        assert!(u.is_newer());
+        assert_eq!(u.missed.len(), 3);
+        let u = Updates::new(&all, "0.8.0").unwrap();
+        assert_eq!(u.latest.version, "0.8.0");
+        assert!(!u.is_newer());
+        assert_eq!(Updates::new(&[], "0.8.0"), None);
     }
 
     #[test]
@@ -652,8 +788,12 @@ mod tests {
     #[ignore]
     #[cfg(windows)]
     fn fetch_latest_release() {
-        let r = fetch_latest().unwrap();
-        println!("latest: {} {}", r.version, r.page);
+        let u = fetch_updates().unwrap();
+        for m in &u.missed {
+            println!("missed: {} {}", m.version, m.date);
+        }
+        let r = u.latest;
+        println!("latest: {} {} {}", r.version, r.date, r.page);
         let tmp = std::env::temp_dir().join(format!("rustrace-dl-test-{}", std::process::id()));
         std::fs::create_dir_all(&tmp).unwrap();
         let exe = tmp.join("rustrace.exe");

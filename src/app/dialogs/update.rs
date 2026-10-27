@@ -1,9 +1,9 @@
-//! New versions (#15): check, download + install, restart with the same log and view.
+//! New versions (#15, #31): check, download + install, restart with the same log and view.
 
 use crate::app::*;
 
 impl App {
-    /// Asks GitHub for the latest release in a background thread.
+    /// Asks GitHub for the releases in a background thread.
     pub(in crate::app) fn start_update_check(&mut self, silent: bool) {
         if matches!(
             self.update,
@@ -16,7 +16,7 @@ impl App {
         let spawned = std::thread::Builder::new()
             .name("rustrace-update".into())
             .spawn(move || {
-                let _ = tx.send(update::fetch_latest());
+                let _ = tx.send(update::fetch_updates());
                 ctx.request_repaint();
             });
         self.update = match spawned {
@@ -38,14 +38,15 @@ impl App {
                 self.cfg.update_last_check = chrono::Local::now().timestamp();
                 self.cfg_dirty = true;
                 self.update = match res {
-                    Ok(r) => {
-                        let newer = update::is_newer(&r.version, &update::current_version());
-                        self.update_available = newer.then(|| r.clone());
-                        if silent && !(newer && r.version != self.cfg.update_skipped) {
+                    Ok(u) => {
+                        let newer = u.is_newer();
+                        self.update_available = newer.then(|| u.clone());
+                        // A skipped version opens no window at start-up, a newer one does.
+                        if silent && !(newer && u.latest.version != self.cfg.update_skipped) {
                             UpdateState::Idle
                         } else {
                             self.show_update = true;
-                            UpdateState::Checked(r)
+                            UpdateState::Checked(u)
                         }
                     }
                     // A failed automatic check (e.g. offline) is not reported.
@@ -259,28 +260,35 @@ impl App {
                     UpdateState::Failed(e) => {
                         ui.colored_label(RED, t!("update.check_failed", error = e));
                     }
-                    UpdateState::Checked(r)
-                        if update::is_newer(&r.version, &update::current_version()) =>
-                    {
+                    UpdateState::Checked(u) if u.is_newer() => {
+                        let r = &u.latest;
                         ui.label(
                             RichText::new(t!("update.new_version", version = r.version)).strong(),
                         );
-                        if !r.notes.trim().is_empty() {
-                            ui.add_space(4.0);
-                            egui::ScrollArea::vertical()
-                                .max_height(260.0)
-                                .auto_shrink([false, true])
-                                .show(ui, |ui| {
-                                    for (heading, line) in update::plain_notes(&r.notes) {
-                                        if heading {
-                                            ui.add_space(4.0);
-                                            ui.label(RichText::new(line).strong());
-                                        } else {
-                                            ui.add(egui::Label::new(line).wrap());
-                                        }
-                                    }
-                                });
+                        if u.missed.len() > 1 {
+                            ui.label(t!("update.behind", count = u.missed.len()));
                         }
+                        ui.add_space(4.0);
+                        egui::ScrollArea::vertical()
+                            .max_height(360.0)
+                            .auto_shrink([false, true])
+                            .show(ui, |ui| match u.missed.as_slice() {
+                                [only] => notes_ui(ui, &only.notes),
+                                // One section per missed version, the newest one open.
+                                missed => {
+                                    for (i, m) in missed.iter().enumerate() {
+                                        let title = if m.date.is_empty() {
+                                            m.version.clone()
+                                        } else {
+                                            format!("{} – {}", m.version, m.date)
+                                        };
+                                        egui::CollapsingHeader::new(RichText::new(title).strong())
+                                            .id_salt(("update_notes", &m.version))
+                                            .default_open(i == 0)
+                                            .show(ui, |ui| notes_ui(ui, &m.notes));
+                                    }
+                                }
+                            });
                         ui.add_space(6.0);
                         let can_install = cfg!(windows) && r.zip.is_some() && r.sha256.is_some();
                         if can_install {
@@ -317,7 +325,7 @@ impl App {
                             }
                         });
                     }
-                    UpdateState::Checked(r) => {
+                    UpdateState::Checked(Updates { latest: r, .. }) => {
                         ui.colored_label(
                             Color32::from_rgb(60, 170, 80),
                             format!("✔ {}", t!("update.up_to_date", version = r.version)),
@@ -368,9 +376,14 @@ impl App {
                     }
                 });
                 ui.separator();
-                auto_changed = ui
-                    .checkbox(&mut self.cfg.update_check, t!("update.auto"))
-                    .changed();
+                ui.horizontal(|ui| {
+                    ui.label(t!("update.when"));
+                    for when in UpdateCheck::ALL {
+                        auto_changed |= ui
+                            .radio_value(&mut self.cfg.update_when, when, when.label())
+                            .changed();
+                    }
+                });
             });
         if auto_changed {
             self.cfg_dirty = true;
@@ -388,6 +401,18 @@ impl App {
             }
             Some(UpdateAction::Close) => self.show_update = false,
             None => {}
+        }
+    }
+}
+
+/// Release notes as plain lines (headings bold).
+fn notes_ui(ui: &mut egui::Ui, notes: &str) {
+    for (heading, line) in update::plain_notes(notes) {
+        if heading {
+            ui.add_space(4.0);
+            ui.label(RichText::new(line).strong());
+        } else {
+            ui.add(egui::Label::new(line).wrap());
         }
     }
 }

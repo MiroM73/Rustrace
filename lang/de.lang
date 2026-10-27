@@ -362,7 +362,11 @@ update.cancel = Abbrechen
 update.install_failed = Das Update ist fehlgeschlagen: {error}
 update.install_failed_hint = Wenn der Programmordner nicht beschreibbar ist (z. B. Program Files), laden Sie die neue Version von der Release-Seite herunter und ersetzen Sie die Dateien selbst.
 update.restart_failed = die neue Version ist installiert, konnte aber nicht gestartet werden ({error}) – starten Sie RusTrace erneut
-update.auto = Beim Start automatisch nach einer neuen Version suchen (einmal täglich)
+update.behind = Seit Ihrer Version erschienene Versionen: {count} – die Änderungen aller stehen unten.
+update.when = Nach einer neuen Version suchen:
+update.when.start = bei jedem Start
+update.when.daily = einmal täglich
+update.when.never = nie
 update.available = Version {version} ist verfügbar – klicken für Neuerungen und Update
 # --- Fenster Standard-App (Windows) ---
 assoc.title = Standard-App für Logdateien

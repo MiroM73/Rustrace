@@ -18,6 +18,39 @@ pub enum DetailsView {
     Raw,
 }
 
+/// When RusTrace looks for a new version at start-up.
+#[derive(Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Debug, Default)]
+#[serde(rename_all = "lowercase")]
+pub enum UpdateCheck {
+    /// At every start.
+    #[default]
+    Start,
+    /// At most once a day.
+    Daily,
+    Never,
+}
+
+impl UpdateCheck {
+    pub const ALL: [UpdateCheck; 3] = [UpdateCheck::Start, UpdateCheck::Daily, UpdateCheck::Never];
+
+    /// The automatic check runs now (`last` / `now` in Unix seconds).
+    pub fn due(self, last: i64, now: i64) -> bool {
+        match self {
+            UpdateCheck::Start => true,
+            UpdateCheck::Daily => now - last >= 24 * 3600,
+            UpdateCheck::Never => false,
+        }
+    }
+
+    pub fn label(self) -> String {
+        match self {
+            UpdateCheck::Start => t!("update.when.start"),
+            UpdateCheck::Daily => t!("update.when.daily"),
+            UpdateCheck::Never => t!("update.when.never"),
+        }
+    }
+}
+
 #[derive(Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Debug)]
 pub enum IntervalUnit {
     Ms,
@@ -243,8 +276,12 @@ pub struct Config {
     /// RusTrace the new / changed ones are reported against these.
     pub known_logdefs: BTreeMap<String, String>,
 
-    /// Look for a new version on GitHub at start-up (at most once a day).
-    pub update_check: bool,
+    /// When to look for a new version on GitHub at start-up.
+    pub update_when: UpdateCheck,
+    /// The on / off switch of versions before 0.9.1 (read only for the migration to `update_when`;
+    /// old versions ignore `update_when` and keep checking once a day).
+    #[serde(rename = "update_check", skip_serializing)]
+    pub update_check_old: Option<bool>,
     /// Time of the last automatic check (Unix seconds).
     pub update_last_check: i64,
     /// A version the user chose to skip (no notice for it at start-up).
@@ -306,7 +343,8 @@ impl Default for Config {
             max_log_mb: 1000,
             logdef_sources: "all".into(),
             known_logdefs: BTreeMap::new(),
-            update_check: true,
+            update_when: UpdateCheck::Start,
+            update_check_old: None,
             update_last_check: 0,
             update_skipped: String::new(),
         }
@@ -372,7 +410,15 @@ impl Config {
             .and_then(|s| serde_json::from_str(&s).ok())
             .unwrap_or_default();
         cfg.fill_missing_dark();
+        cfg.migrate_update_check();
         (cfg, existed)
+    }
+
+    /// The old switch "check automatically (once a day)": on → at every start, off → never.
+    pub fn migrate_update_check(&mut self) {
+        if self.update_check_old.take() == Some(false) {
+            self.update_when = UpdateCheck::Never;
+        }
     }
 
     pub fn save(&self) -> std::io::Result<()> {
@@ -516,6 +562,35 @@ mod tests {
         // Old settings files without the history still load.
         let cfg: Config = serde_json::from_str("{}").unwrap();
         assert!(cfg.search_history.is_empty());
+    }
+
+    #[test]
+    fn update_check_migration() {
+        let load = |json: &str| {
+            let mut cfg: Config = serde_json::from_str(json).unwrap();
+            cfg.migrate_update_check();
+            cfg
+        };
+        assert_eq!(
+            load(r#"{"update_check":true}"#).update_when,
+            UpdateCheck::Start
+        );
+        assert_eq!(
+            load(r#"{"update_check":false}"#).update_when,
+            UpdateCheck::Never
+        );
+        assert_eq!(load("{}").update_when, UpdateCheck::Start);
+        let cfg = load(r#"{"update_when":"daily"}"#);
+        assert_eq!(cfg.update_when, UpdateCheck::Daily);
+        // Saved without the old switch, and read back the same.
+        let json = serde_json::to_string(&cfg).unwrap();
+        assert!(json.contains(r#""update_when":"daily""#) && !json.contains("update_check\""));
+        assert_eq!(load(&json).update_when, UpdateCheck::Daily);
+
+        assert!(UpdateCheck::Start.due(1000, 1001));
+        assert!(!UpdateCheck::Daily.due(1000, 1000 + 24 * 3600 - 1));
+        assert!(UpdateCheck::Daily.due(1000, 1000 + 24 * 3600));
+        assert!(!UpdateCheck::Never.due(0, i64::MAX));
     }
 
     #[test]

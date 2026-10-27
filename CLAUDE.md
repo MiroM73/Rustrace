@@ -184,11 +184,17 @@ Features (all implemented, see README for user-facing details):
   context always from the whole file – the owner's expectation, an earlier variant that also took
   context only from visible rows was rejected). Order: hits → time filter → merge → clip older
   context → last N.
-- **Updates** (#15, `src/update.rs`, `src/http.rs`): Help → Check for updates; GitHub API
-  `releases/latest` via WinHTTP FFI (system proxy / certs, follows redirects); `is_newer` on
-  major.minor.patch; auto check at start-up when `cfg.update_check` and `cfg.update_last_check` is
-  ≥ 24 h old (silent: window only for a newer, not `cfg.update_skipped` version; errors ignored);
-  status-bar `⬆ <version>` button. Install: ZIP asset `*-windows-x64.zip` + its `.sha256`, own ZIP
+- **Updates** (#15, #31, `src/update.rs`, `src/http.rs`): Help → Check for updates; GitHub API
+  `releases?per_page=100` via WinHTTP FFI (system proxy / certs, follows redirects);
+  `parse_releases` drops drafts / pre-releases / non-version tags, `Updates { latest, missed }`
+  (`missed_releases` = newer than the current version, newest first; install always from
+  `latest`); `is_newer` on major.minor.patch. Auto check `cfg.update_when` = start (default) /
+  daily / never (`UpdateCheck::due` with `cfg.update_last_check`); the old bool `update_check`
+  is read as `update_check_old` (never written) and migrated in `Config::load` (false → never)
+  – old versions ignore `update_when`. Silent: window only for a newer, not
+  `cfg.update_skipped` latest version; errors ignored; not after `--restore`. Window: one
+  collapsible section per missed version (version – date, notes), the newest open;
+  status-bar `⬆ <version>` button (`update_available: Option<Updates>`). Install: ZIP asset `*-windows-x64.zip` + its `.sha256`, own ZIP
   reader (stored / deflate via flate2, CRC check, no `..`), write probe first, running exe renamed to
   `rustrace.exe.old` (`update::cleanup_old` at start), files written next to it, then
   `rustrace.exe --restore <temp json>` (`SessionState`: path, format, selection, search, filters,
@@ -252,7 +258,7 @@ Features (all implemented, see README for user-facing details):
 
 ## Commands
 - `cargo build --release` → `target\release\rustrace.exe`
-- `cargo test` (76 tests: merged logs (order by time, appended older rows, formats + rotated parts + re-read, single log unchanged, interleave), store copy_entry / split_off, raw lines of entries (all formats / encodings), filter (parallel = sequential, match bits), date column filter = text filter, updates (versions, release JSON, notes, sha256 file, ZIP, install, restore state), icon / .ico layout, search as you type threshold, status-bar position percentage, file association (registry in an own HKCU test key), search history, store drop_front / move to temp file, rotated parts (naming, merge on open, rotation while watching, replaced
+- `cargo test` (79 tests: update releases list / missed versions / check setting migration, merged logs (order by time, appended older rows, formats + rotated parts + re-read, single log unchanged, interleave), store copy_entry / split_off, raw lines of entries (all formats / encodings), filter (parallel = sequential, match bits), date column filter = text filter, updates (versions, release JSON, notes, sha256 file, ZIP, install, restore state), icon / .ico layout, search as you type threshold, status-bar position percentage, file association (registry in an own HKCU test key), search history, store drop_front / move to temp file, rotated parts (naming, merge on open, rotation while watching, replaced
   file), export segments by file, time range bounds, column filter syntax, parsers, chunked/ANSI/UTF-16 reading, log definitions (CBS, DISM, IIS,
   Exchange connectivity / CSV separator, choice by name/content, appending across refreshes), store (32-byte record, ISO ↔ ms, push /
   truncate / append, mapped temp file growing past 64 MB, interner), export incl. end-to-end and
@@ -373,6 +379,8 @@ Features (all implemented, see README for user-facing details):
 43. #29 details pane Message | Raw line (byte range of every entry, read from the file on demand).
 44. #21 several different logs merged into one view by time (`LogSet`), tabs still not wanted.
     Release v0.9.0 (#21, #29), published 2026-10-27.
+45. #31 update check at every start (setting start / daily / never) and the notes of all missed
+    releases in the update window. Release v0.9.1.
 
 
 ## Ideas not done yet (offered by the owner)

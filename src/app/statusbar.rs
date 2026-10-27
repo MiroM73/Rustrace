@@ -112,9 +112,9 @@ impl App {
             } else {
                 ui.label(t!("status.no_file"));
             }
-            if let Some(r) = &self.update_available {
+            if let Some(u) = &self.update_available {
                 ui.separator();
-                let version = r.version.clone();
+                let version = u.latest.version.clone();
                 if ui
                     .button(
                         RichText::new(format!("⬆ {version}")).color(Color32::from_rgb(60, 170, 80)),
@@ -124,7 +124,7 @@ impl App {
                 {
                     self.show_update = true;
                     if matches!(self.update, UpdateState::Idle | UpdateState::Failed(_)) {
-                        self.update = UpdateState::Checked(r.clone());
+                        self.update = UpdateState::Checked(u.clone());
                     }
                 }
             }

@@ -376,7 +376,11 @@ update.cancel = Cancel
 update.install_failed = The update failed: {error}
 update.install_failed_hint = If the program folder is not writable (e.g. Program Files), download the new version from the release page and replace the files yourself.
 update.restart_failed = the new version is installed but could not be started ({error}) – start RusTrace again
-update.auto = Check for a new version automatically at start-up (once a day)
+update.behind = Versions released since yours: {count} – the changes of all of them are below.
+update.when = Check for a new version:
+update.when.start = at every start
+update.when.daily = once a day
+update.when.never = never
 update.available = Version {version} is available – click to see what's new and update
 # --- Default app window (Windows) ---
 assoc.title = Default app for log files

@@ -1,5 +1,7 @@
 use crate::colfilter::{ColumnFilter, DateFilter, DateLayout};
-use crate::config::{Config, DetailsView, HighlightRule, HighlightScope, IntervalUnit};
+use crate::config::{
+    Config, DetailsView, HighlightRule, HighlightScope, IntervalUnit, UpdateCheck,
+};
 use crate::errcodes::{self, CodeInfo};
 use crate::excerpt;
 use crate::export::{self, ExportFormat, ReadableRow};
@@ -14,7 +16,7 @@ use crate::merge::{self, LogSet, ReadResult};
 use crate::parser::{FormatChoice, Progress, Severity, SourceFile};
 use crate::store::{EntryRef, LogStore, iso_to_ms, ms_to_iso};
 use crate::t;
-use crate::update::{self, FormatState, Release, SessionState, WindowState};
+use crate::update::{self, FormatState, Release, SessionState, Updates, WindowState};
 use eframe::egui::{
     self, Align, Color32, FontId, Key, Layout, Modifiers, RichText, Sense, TextFormat, TextStyle,
     text::LayoutJob,
@@ -120,17 +122,17 @@ struct AfterFilter {
     scroll_selected: bool,
 }
 
-/// Update check and installation (#15).
+/// Update check and installation (#15, #31).
 enum UpdateState {
     Idle,
     /// Asking GitHub; `silent` = automatic check at start-up (no window unless a new version).
     Checking {
-        rx: mpsc::Receiver<Result<Release, String>>,
+        rx: mpsc::Receiver<Result<Updates, String>>,
         silent: bool,
     },
     Failed(String),
-    /// The latest release (newer or not).
-    Checked(Release),
+    /// The latest release (newer or not) and the missed ones.
+    Checked(Updates),
     /// Download + installation; `exe` = the program path before it was renamed.
     Installing {
         rx: mpsc::Receiver<Result<Vec<String>, String>>,
@@ -295,8 +297,8 @@ pub struct App {
     frames: u8,
     update: UpdateState,
     show_update: bool,
-    /// The latest release when it is newer than this program (status bar button).
-    update_available: Option<Release>,
+    /// The releases newer than this program, when there are any (status bar button).
+    update_available: Option<Updates>,
     /// Selection and column filters of the previous version, applied after the first read.
     pending_restore: Option<SessionState>,
 }
@@ -451,9 +453,9 @@ impl App {
         if let Some(state) = restore {
             app.restore_session(state);
         }
-        // Automatic update check at most once a day (not right after an update).
+        // Automatic update check at every start / once a day (not right after an update).
         let now = chrono::Local::now().timestamp();
-        if app.cfg.update_check && !restored && now - app.cfg.update_last_check >= 24 * 3600 {
+        if !restored && app.cfg.update_when.due(app.cfg.update_last_check, now) {
             app.start_update_check(true);
         }
         app

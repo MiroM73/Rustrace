@@ -362,7 +362,11 @@ update.cancel = Zrušit
 update.install_failed = Aktualizace selhala: {error}
 update.install_failed_hint = Pokud do složky programu nelze zapisovat (např. Program Files), stáhněte novou verzi ze stránky vydání a nahraďte soubory sami.
 update.restart_failed = nová verze je nainstalovaná, ale nepodařilo se ji spustit ({error}) – spusťte RusTrace znovu
-update.auto = Automaticky hledat novou verzi při spuštění (jednou denně)
+update.behind = Verze vydané od té vaší: {count} – změny všech jsou níže.
+update.when = Hledat novou verzi:
+update.when.start = při každém spuštění
+update.when.daily = jednou denně
+update.when.never = nikdy
 update.available = Je k dispozici verze {version} – klikněte pro novinky a aktualizaci
 # --- Okno výchozího programu (Windows) ---
 assoc.title = Výchozí program pro soubory logů
