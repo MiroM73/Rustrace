@@ -168,6 +168,7 @@ search.not_found = Not found
 
 # --- Status bar ---
 status.entries = Entries: {count}
+status.searching = Searching…
 status.shown = Shown {shown} of {total}
 status.position = Row {row} / {total} ({percent} %)
 status.position.tip = Position of the selected row among the rows shown in the table. Line in the file: {line}

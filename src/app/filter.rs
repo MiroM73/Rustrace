@@ -46,24 +46,37 @@ impl App {
         search_active(&self.search_text, self.search_confirmed)
     }
 
-    /// Selects the first displayed row that matches the search (search as you type).
+    /// Selects the first displayed row that matches the search (search as you type); while a
+    /// background re-filter runs, once its result is there.
     pub(in crate::app) fn select_first_match(&mut self) {
-        if let Some(pos) = self
-            .filtered
-            .iter()
-            .position(|&i| self.is_match.get(i) == Some(&true))
-        {
+        if self.filter_job.is_some() {
+            self.after_filter.select_first = true;
+            return;
+        }
+        if let Some(pos) = self.filtered.iter().position(|&i| self.is_match.get(i)) {
             self.select_row(pos);
         }
     }
 
-    pub(in crate::app) fn entry_matches(re: &Regex, e: &EntryRef) -> bool {
-        re.is_match(e.message) || Self::other_columns_match(re, e)
+    /// Follows the end of the log (now, or after the running background re-filter).
+    pub(in crate::app) fn scroll_to_end_after_filter(&mut self) {
+        if self.filter_job.is_some() {
+            self.after_filter.scroll_end = true;
+        } else if !self.filtered.is_empty() {
+            self.scroll_to = Some(self.filtered.len() - 1);
+        }
     }
 
-    /// Component or one of the extra columns of a log definition matches.
-    pub(in crate::app) fn other_columns_match(re: &Regex, e: &EntryRef) -> bool {
-        re.is_match(e.component) || e.extras().any(|v| re.is_match(v))
+    /// Scrolls to the selected row (now, or after the running background re-filter).
+    pub(in crate::app) fn scroll_to_selected_after_filter(&mut self) {
+        if self.filter_job.is_some() {
+            self.after_filter.scroll_selected = true;
+        } else if let Some(pos) = self
+            .selected
+            .and_then(|s| self.filtered.binary_search(&s).ok())
+        {
+            self.scroll_to = Some(pos);
+        }
     }
 
     /// Text of a column for an entry (date/time formatted for display).
@@ -78,68 +91,144 @@ impl App {
         }
     }
 
-    pub(in crate::app) fn sev_visible(&self, s: Severity) -> bool {
-        match s {
-            Severity::Info => self.show_sev[0],
-            Severity::Warning => self.show_sev[1],
-            Severity::Error => self.show_sev[2],
+    /// Everything the filter depends on, for the filter run.
+    fn filter_spec(&self) -> FilterSpec {
+        FilterSpec {
+            search: self.search_re.clone(),
+            filter_mode: self.filter_mode,
+            show_sev: self.show_sev,
+            time_range: self.time_range,
+            columns: self.col_filters.clone(),
+            file_labels: self.file_labels.clone(),
         }
     }
 
-    /// Recomputes the filter from entry `start` on (earlier entries stay).
+    /// Recomputes the filter from entry `start` on (earlier entries stay). A full re-filter of a
+    /// big log runs in a background thread (#16); until its result is there the previous one
+    /// stays displayed. Appended rows and small logs are filtered right away.
     pub(in crate::app) fn refilter_from(&mut self, start: usize) {
+        // A running full re-filter is outdated now – start over from the beginning.
+        let restart = self.cancel_filter_job() | std::mem::take(&mut self.filter_restart);
+        let start = if restart { 0 } else { start };
+        let spec = self.filter_spec();
+        if start == 0 && self.entries.len() > SYNC_FILTER_MAX_ENTRIES {
+            self.start_filter_job(spec);
+        } else {
+            self.refilter_here(start, &spec);
+        }
+    }
+
+    /// Filters the entries from `start` on this thread.
+    fn refilter_here(&mut self, start: usize, spec: &FilterSpec) {
         while self.filtered.last().is_some_and(|&i| i >= start) {
             self.filtered.pop();
         }
         self.is_match.truncate(start);
-        for i in start..self.entries.len() {
-            let e = self.entries.at(i);
-            let m = self
-                .search_re
-                .as_ref()
-                .is_some_and(|re| Self::entry_matches(re, &e));
-            self.is_match.push(m);
-            let pass_search = !self.filter_mode || self.search_re.is_none() || m;
-            if pass_search
-                && self.sev_visible(e.severity)
-                && self.in_time_range(e.timestamp())
-                && self.passes_column_filters(&e)
-            {
-                self.filtered.push(i);
+        let mut out = FilterOutput {
+            filtered: std::mem::take(&mut self.filtered),
+            is_match: std::mem::take(&mut self.is_match),
+        };
+        spec.run(&self.entries, start..self.entries.len(), &mut out);
+        self.filter_done(out);
+    }
+
+    /// Starts the full re-filter in a background thread.
+    fn start_filter_job(&mut self, spec: FilterSpec) {
+        let entries = self.entries.clone();
+        let cancel = Arc::new(AtomicBool::new(false));
+        let (tx, rx) = mpsc::channel();
+        let ctx = self.ctx.clone();
+        let flag = cancel.clone();
+        let spawned = std::thread::Builder::new()
+            .name("rustrace-filter".into())
+            .spawn(move || {
+                let out = spec.run_parallel(&entries, &flag);
+                // Released before the UI hears about it: it may need the store to itself.
+                drop(entries);
+                if out.is_some() {
+                    let _ = tx.send(out);
+                    ctx.request_repaint();
+                }
+            });
+        match spawned {
+            Ok(handle) => {
+                self.filter_job = Some(FilterJob {
+                    rx,
+                    cancel,
+                    handle,
+                    started: Instant::now(),
+                });
             }
+            Err(_) => self.refilter_here(0, &self.filter_spec()),
         }
-        self.match_count = self.is_match.iter().filter(|&&b| b).count();
+    }
+
+    /// Takes over the result of the background re-filter when it is ready.
+    pub(in crate::app) fn check_filter_job(&mut self) {
+        self.stale_filter_jobs.retain(|h| !h.is_finished());
+        let Some(job) = &self.filter_job else { return };
+        match job.rx.try_recv() {
+            Ok(Some(out)) => {
+                self.filter_job = None;
+                self.filter_done(out);
+            }
+            Ok(None) | Err(mpsc::TryRecvError::Disconnected) => {
+                // The thread crashed – filter here instead.
+                self.filter_job = None;
+                self.refilter_here(0, &self.filter_spec());
+            }
+            Err(mpsc::TryRecvError::Empty) => {}
+        }
+    }
+
+    /// Stops the running background re-filter; `true` when there was one.
+    pub(in crate::app) fn cancel_filter_job(&mut self) -> bool {
+        let Some(job) = self.filter_job.take() else {
+            return false;
+        };
+        job.cancel.store(true, Ordering::Relaxed);
+        // It stops at the next chunk; the store may be changed only after it let go of it.
+        self.stale_filter_jobs.push(job.handle);
+        true
+    }
+
+    /// The entries for changing them in place. A running background re-filter is stopped first
+    /// (the next `refilter_from` starts it again from the beginning).
+    pub(in crate::app) fn entries_mut(&mut self) -> &mut LogStore {
+        if self.cancel_filter_job() {
+            self.filter_restart = true;
+        }
+        for h in self.stale_filter_jobs.drain(..) {
+            let _ = h.join();
+        }
+        Arc::get_mut(&mut self.entries).expect("no filter thread holds the entries")
+    }
+
+    /// How long the background re-filter has been running (`None` = none runs).
+    pub(in crate::app) fn filter_running_for(&self) -> Option<Duration> {
+        self.filter_job.as_ref().map(|j| j.started.elapsed())
+    }
+
+    /// Displays a filter result and does what waited for it.
+    fn filter_done(&mut self, out: FilterOutput) {
+        self.filtered = out.filtered;
+        self.is_match = out.is_match;
+        debug_assert_eq!(self.is_match.count(), self.is_match.recount());
+        debug_assert_eq!(self.is_match.len(), self.entries.len());
         if let Some(s) = self.selected
             && s >= self.entries.len()
         {
             self.selected = None;
         }
-    }
-
-    /// All column filters match the entry (the date/time as displayed).
-    pub(in crate::app) fn passes_column_filters(&self, e: &EntryRef) -> bool {
-        self.col_filters.iter().all(|(kind, f)| match kind {
-            ColumnKind::Role(Role::Message) => f.matches(e.message),
-            ColumnKind::Role(Role::Component) => f.matches(e.component),
-            ColumnKind::Role(Role::Thread) => f.matches(e.thread),
-            ColumnKind::Role(Role::DateTime) => f.matches(&self.display_dt(&e.datetime())),
-            ColumnKind::Extra(i) => f.matches(e.extra(*i)),
-            ColumnKind::File => f.matches(
-                self.file_labels
-                    .get(e.file as usize)
-                    .map_or("", String::as_str),
-            ),
-        })
-    }
-
-    /// The time range filter lets the entry through. With an active range, entries without
-    /// a date/time are hidden (their time is unknown).
-    pub(in crate::app) fn in_time_range(&self, ts: Option<i64>) -> bool {
-        match self.time_range {
-            (None, None) => true,
-            (from, to) => {
-                ts.is_some_and(|t| from.is_none_or(|f| t >= f) && to.is_none_or(|x| t <= x))
-            }
+        let after = std::mem::take(&mut self.after_filter);
+        if after.select_first {
+            self.select_first_match();
+        }
+        if after.scroll_end {
+            self.scroll_to_end_after_filter();
+        }
+        if after.scroll_selected && !self.cfg.auto_scroll {
+            self.scroll_to_selected_after_filter();
         }
     }
 
@@ -162,38 +251,33 @@ impl App {
         self.time_invalid = (from_bad, to_bad);
         if (from, to) != self.time_range {
             self.time_range = (from, to);
-            self.filtered.clear();
             self.refilter_from(0);
         }
     }
 
-    /// Compiles the column filter texts and filters the table again.
+    /// Compiles the column filter texts and filters the table again. The date/time column is
+    /// compared with the timestamps where possible (#17).
     pub(in crate::app) fn apply_column_filters(&mut self) {
         self.col_filters = self
             .columns()
             .iter()
             .filter_map(|c| {
                 let text = self.col_filter_text.get(&c.kind)?;
-                ColumnFilter::parse(text).map(|f| (c.kind, f))
+                let f = match c.kind {
+                    ColumnKind::Role(Role::DateTime) => {
+                        CellFilter::Date(DateFilter::parse(text, &self.date_format)?)
+                    }
+                    _ => CellFilter::Text(ColumnFilter::parse(text)?),
+                };
+                Some((c.kind, f))
             })
             .collect();
-        self.filtered.clear();
         self.refilter_from(0);
     }
 
     /// Formats an ISO date-time ("2026-10-23 13:22:01.123") using the language pattern.
     pub(in crate::app) fn display_dt(&self, iso: &str) -> String {
-        let b = iso.as_bytes();
-        if b.len() >= 10 && b[4] == b'-' && b[7] == b'-' {
-            let date = self
-                .date_format
-                .replace("{y}", &iso[0..4])
-                .replace("{m}", &iso[5..7])
-                .replace("{d}", &iso[8..10]);
-            format!("{date}{}", &iso[10..])
-        } else {
-            iso.to_owned()
-        }
+        self.date_layout.format_iso(iso)
     }
 
     /// Adds the current search text to the search history.
@@ -230,7 +314,7 @@ impl App {
                 None => n - k,
             };
             let idx = self.filtered[pos];
-            if Self::entry_matches(&re, &self.entries.at(idx)) {
+            if entry_matches(&re, &self.entries.at(idx)) {
                 self.select_row(pos);
                 return;
             }

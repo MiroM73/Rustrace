@@ -47,6 +47,16 @@ impl App {
                     ));
                     ui.separator();
                 }
+                // Background re-filter (#16): the counts below are still the previous result.
+                if let Some(running) = self.filter_running_for() {
+                    if running >= FILTER_HINT_DELAY {
+                        ui.spinner();
+                        ui.label(t!("status.searching"));
+                        ui.separator();
+                    } else {
+                        ui.ctx().request_repaint_after(FILTER_HINT_DELAY - running);
+                    }
+                }
                 if self.filtered.len() == self.entries.len() {
                     ui.label(t!("status.entries", count = self.entries.len()));
                 } else {

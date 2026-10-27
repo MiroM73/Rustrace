@@ -106,7 +106,7 @@ impl App {
         ui.separator();
         let font = FontId::monospace(self.cfg.font_size);
         let idx = self.selected.unwrap_or_default();
-        let hit = self.is_match.get(idx).copied().unwrap_or(false);
+        let hit = self.is_match.get(idx);
         // Scroll to the first search match once per selected row and search.
         let scroll_key = (idx, self.search_gen);
         let first_match = (hit && self.details_scrolled != Some(scroll_key))

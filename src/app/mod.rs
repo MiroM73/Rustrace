@@ -1,10 +1,13 @@
-use crate::colfilter::ColumnFilter;
+use crate::colfilter::{ColumnFilter, DateFilter, DateLayout};
 use crate::config::{Config, HighlightRule, HighlightScope, IntervalUnit};
 use crate::errcodes::{self, CodeInfo};
 use crate::excerpt;
 use crate::export::{self, ExportFormat, ReadableRow};
 #[cfg(windows)]
 use crate::fileassoc::{self, ExtStatus};
+use crate::filter::{
+    CellFilter, FilterOutput, FilterSpec, MatchBits, entry_matches, other_columns_match,
+};
 use crate::i18n;
 use crate::logdef::{self, Column as LogColumn, ColumnKind, LogDef, Role, Schema};
 use crate::parser::{FormatChoice, LogSource, PollResult, Progress, Severity, SourceFile};
@@ -19,7 +22,7 @@ use egui_extras::{Column, TableBuilder};
 use regex::{Regex, RegexBuilder};
 use std::collections::HashMap;
 use std::path::PathBuf;
-use std::sync::atomic::Ordering;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, mpsc};
 use std::time::{Duration, Instant};
 
@@ -54,6 +57,10 @@ pub fn base_title() -> String {
 const MAX_CELL_CHARS: usize = 2000;
 /// A typed search text is searched right away from this many characters on (shorter: Enter).
 const INSTANT_SEARCH_MIN_CHARS: usize = 3;
+/// Logs with more entries are re-filtered in a background thread (#16).
+const SYNC_FILTER_MAX_ENTRIES: usize = 100_000;
+/// The "Searching…" hint shows only for a background re-filter that takes longer than this.
+const FILTER_HINT_DELAY: Duration = Duration::from_millis(200);
 
 const RED: Color32 = Color32::from_rgb(220, 60, 60);
 const ORANGE: Color32 = Color32::from_rgb(230, 140, 0);
@@ -93,6 +100,23 @@ struct Loading {
     rx: mpsc::Receiver<(LogSource, std::io::Result<PollResult>)>,
     progress: Arc<Progress>,
     started: Instant,
+}
+
+/// Full re-filter of a big log in a background thread (#16).
+struct FilterJob {
+    /// `None` is never sent (a cancelled run sends nothing).
+    rx: mpsc::Receiver<Option<FilterOutput>>,
+    cancel: Arc<AtomicBool>,
+    handle: std::thread::JoinHandle<()>,
+    started: Instant,
+}
+
+/// What waits for the running background re-filter.
+#[derive(Default)]
+struct AfterFilter {
+    select_first: bool,
+    scroll_end: bool,
+    scroll_selected: bool,
 }
 
 /// Update check and installation (#15).
@@ -141,14 +165,21 @@ pub struct App {
     file_size: u64,
     /// The file is added to recent files only after it has been read successfully.
     pending_recent: Option<String>,
-    entries: LogStore,
+    /// Shared with a background re-filter while one runs (`App::entries_mut` changes it).
+    entries: Arc<LogStore>,
     /// Number of "final" entries; provisional ones follow (incomplete last line).
     committed_len: usize,
     /// Indexes of the displayed entries (after filtering).
     filtered: Vec<usize>,
-    /// For every entry: does it match the search?
-    is_match: Vec<bool>,
-    match_count: usize,
+    /// For every entry: does it match the search? (Keeps the match count.)
+    is_match: MatchBits,
+    /// Background re-filter in progress, cancelled ones that may still hold the entries, and
+    /// what waits for its result.
+    filter_job: Option<FilterJob>,
+    stale_filter_jobs: Vec<std::thread::JoinHandle<()>>,
+    after_filter: AfterFilter,
+    /// A cancelled re-filter has to start again from the beginning.
+    filter_restart: bool,
     /// (entry, search generation) the details pane was last scrolled to the first match for.
     details_scrolled: Option<(usize, u64)>,
 
@@ -197,8 +228,9 @@ pub struct App {
     lookup_focus: bool,
     lookup_cache: Option<(String, Option<CodeInfo>)>,
 
-    /// Date pattern of the current language, e.g. "{d}.{m}.{y}".
+    /// Date pattern of the current language, e.g. "{d}.{m}.{y}", and how it is displayed.
     date_format: String,
+    date_layout: DateLayout,
     /// Code of the language actually in use.
     lang_code: String,
     new_lang_code: String,
@@ -233,7 +265,7 @@ pub struct App {
     schema: Schema,
     /// Texts of the column filters (filter row under the headers) and their compiled form.
     col_filter_text: HashMap<ColumnKind, String>,
-    col_filters: Vec<(ColumnKind, ColumnFilter)>,
+    col_filters: Vec<(ColumnKind, CellFilter)>,
     /// Time range filter: texts as entered, parsed bounds (ms) and which text is invalid.
     time_from: String,
     time_to: String,
@@ -309,11 +341,14 @@ impl App {
             encoding_name: "",
             file_size: 0,
             pending_recent: None,
-            entries: LogStore::new(),
+            entries: Arc::new(LogStore::new()),
             committed_len: 0,
             filtered: Vec::new(),
-            is_match: Vec::new(),
-            match_count: 0,
+            is_match: MatchBits::default(),
+            filter_job: None,
+            stale_filter_jobs: Vec::new(),
+            after_filter: AfterFilter::default(),
+            filter_restart: false,
             details_scrolled: None,
             last_refresh: None,
             last_refresh_wall: None,
@@ -349,6 +384,7 @@ impl App {
             lookup_focus: false,
             lookup_cache: None,
             date_format: t!("format.date"),
+            date_layout: DateLayout::new(&t!("format.date")),
             lang_code,
             new_lang_code: String::new(),
             dark: cc.egui_ctx.global_style().visuals.dark_mode,
@@ -458,11 +494,16 @@ impl App {
             i18n::set_language(code)
         };
         self.date_format = t!("format.date");
+        self.date_layout = DateLayout::new(&self.date_format);
         self.code_cache = None;
         self.lookup_cache = None;
         self.cfg_dirty = true;
-        // The date order of the time range texts depends on the language.
+        // The date order of the time range texts and of the date column filter depends on the
+        // language.
         self.apply_time_range();
+        if !self.col_filters.is_empty() {
+            self.apply_column_filters();
+        }
         let files = std::mem::take(&mut self.files);
         self.set_files(files);
     }
@@ -511,6 +552,7 @@ impl eframe::App for App {
             // Editors open with the colors of the theme in use.
             self.edit_dark = self.dark;
         }
+        self.check_filter_job();
         self.check_loading();
         self.handle_input(&ctx);
         self.tick_auto_refresh(&ctx);

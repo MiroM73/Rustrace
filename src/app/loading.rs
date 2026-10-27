@@ -13,7 +13,7 @@ impl App {
             && !self.entries.is_mapped()
             && self.entries.text_len() >= mb(self.cfg.temp_file_threshold_mb)
         {
-            self.entries.move_text_to_temp_file();
+            self.entries_mut().move_text_to_temp_file();
         }
         if !self.cfg.max_log_enabled {
             return;
@@ -33,7 +33,7 @@ impl App {
         let pos_selected = self
             .selected
             .and_then(|s| self.filtered.binary_search(&s).ok());
-        self.entries.drop_front(k);
+        self.entries_mut().drop_front(k);
         self.committed_len -= k;
         self.dropped += k;
         self.data_gen += 1;
@@ -43,8 +43,7 @@ impl App {
         for i in &mut self.filtered {
             *i -= k;
         }
-        self.is_match.drain(..k.min(self.is_match.len()));
-        self.match_count = self.is_match.iter().filter(|&&b| b).count();
+        self.is_match.drain_front(k);
         self.selected = self.selected.and_then(|s| s.checked_sub(k));
         self.code_cache = None;
         // Keep the selected row in view (the rows above it disappeared).
@@ -52,6 +51,10 @@ impl App {
             && let Some(p) = pos_selected.and_then(|p| p.checked_sub(gone))
         {
             self.scroll_to = Some(p);
+        }
+        // A background re-filter was stopped for the change – start it again.
+        if self.filter_restart {
+            self.refilter_from(0);
         }
     }
 
@@ -107,6 +110,7 @@ impl App {
 
     pub(in crate::app) fn open_file(&mut self, path: &str) {
         self.cancel_loading();
+        self.cancel_filter_job();
         self.data_gen += 1;
         self.cur_path = Some(PathBuf::from(path));
         self.source = Some(LogSource::new(path, self.cfg.keyword_severity));
@@ -115,10 +119,9 @@ impl App {
         self.schema = Schema::default();
         self.set_files(Vec::new());
         self.dropped = 0;
-        self.entries = LogStore::new();
+        self.entries = Arc::new(LogStore::new());
         self.filtered.clear();
         self.is_match.clear();
-        self.match_count = 0;
         self.committed_len = 0;
         self.selected = None;
         self.code_cache = None;
@@ -179,6 +182,11 @@ impl App {
 
     /// Takes over the result from the background thread when it is ready.
     pub(in crate::app) fn check_loading(&mut self) {
+        // While a background re-filter uses the entries the result waits (only a moment), so
+        // appending does not have to stop the re-filter.
+        if self.filter_job.is_some() {
+            return;
+        }
         let Some(l) = &self.loading else { return };
         let started = l.started;
         match l.rx.try_recv() {
@@ -238,23 +246,26 @@ impl App {
                 provisional,
             }) => {
                 self.status_error = None;
-                self.entries = committed;
+                let mut entries = committed;
                 self.dropped = 0;
-                self.committed_len = self.entries.len();
+                self.committed_len = entries.len();
                 for e in provisional {
-                    self.entries.push(e, active);
+                    entries.push(e, active);
                 }
+                self.cancel_filter_job();
+                self.entries = Arc::new(entries);
                 self.selected = None;
                 self.code_cache = None;
                 self.filtered.clear();
+                self.is_match.clear();
                 self.refilter_from(0);
                 self.last_refresh_wall = Some(chrono::Local::now());
                 if let Some(p) = self.pending_recent.take() {
                     self.cfg.push_recent(&p);
                     self.cfg_dirty = true;
                 }
-                if self.cfg.auto_scroll && !self.filtered.is_empty() {
-                    self.scroll_to = Some(self.filtered.len() - 1);
+                if self.cfg.auto_scroll {
+                    self.scroll_to_end_after_filter();
                 }
             }
             Ok(PollResult::Appended {
@@ -263,12 +274,14 @@ impl App {
             }) => {
                 self.status_error = None;
                 let start = self.committed_len;
-                self.entries.truncate(start);
-                self.entries.append(committed);
-                self.committed_len = self.entries.len();
+                let entries = self.entries_mut();
+                entries.truncate(start);
+                entries.append(committed);
+                let committed_len = entries.len();
                 for e in provisional {
-                    self.entries.push(e, active);
+                    entries.push(e, active);
                 }
+                self.committed_len = committed_len;
                 if self.selected.is_some_and(|s| s >= start) {
                     self.code_cache = None;
                 }

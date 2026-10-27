@@ -154,6 +154,7 @@ search.not_found = Nenájdené
 
 # --- Stavový riadok ---
 status.entries = Záznamy: {count}
+status.searching = Hľadám…
 status.shown = Zobrazených {shown} z {total}
 status.position = Riadok {row} / {total} ({percent} %)
 status.position.tip = Pozícia vybraného riadku medzi riadkami zobrazenými v tabuľke. Riadok v súbore: {line}

@@ -136,7 +136,6 @@ impl App {
                 )
                 .changed();
             if sev_changed {
-                self.filtered.clear();
                 self.refilter_from(0);
             }
         });
@@ -206,7 +205,7 @@ impl App {
                 ui.colored_label(RED, format!("⚠ {}", t!("search.invalid_regex")))
                     .on_hover_text(err);
             } else if self.search_re.is_some() {
-                ui.label(t!("search.matches", count = self.match_count));
+                ui.label(t!("search.matches", count = self.is_match.count()));
             } else if !self.search_text.is_empty() {
                 ui.weak(t!("search.short", count = INSTANT_SEARCH_MIN_CHARS));
             }

@@ -11,7 +11,7 @@ impl App {
                 continue;
             }
             let hit = r.regex.is_match(e.message)
-                || (r.rule.match_component && Self::other_columns_match(&r.regex, e));
+                || (r.rule.match_component && other_columns_match(&r.regex, e));
             if hit {
                 let (fg, bg) = r.rule.colors(self.dark);
                 return (
@@ -293,7 +293,7 @@ impl App {
                         ColumnKind::Role(Role::Message) => {
                             row.col(|ui| {
                                 paint_bg(ui);
-                                let hit = self.is_match.get(idx).copied().unwrap_or(false);
+                                let hit = self.is_match.get(idx);
                                 let text = self.message_cell_text(ui, e.message, hit, &font);
                                 let spans = self.text_spans(&text, hit);
                                 let job = build_job(&text, &spans, fg_col, &font);

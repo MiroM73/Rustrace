@@ -108,10 +108,19 @@ pub fn iso_to_ms(s: &str) -> Option<i64> {
 
 /// Milliseconds since 1970 → "YYYY-MM-DD HH:MM:SS.mmm".
 pub fn ms_to_iso(ms: i64) -> String {
+    match ms_to_iso_bytes(ms) {
+        Ok(b) => b.iter().map(|&c| c as char).collect(),
+        Err((y, m, d)) => format!("{y}-{m:02}-{d:02}"),
+    }
+}
+
+/// Milliseconds since 1970 → "YYYY-MM-DD HH:MM:SS.mmm" as bytes (no allocation); the civil date
+/// for years outside 0–9999.
+pub fn ms_to_iso_bytes(ms: i64) -> Result<[u8; 23], (i64, i64, i64)> {
     let (days, rem) = (ms.div_euclid(86_400_000), ms.rem_euclid(86_400_000));
     let (y, m, d) = civil_from_days(days);
     if !(0..=9999).contains(&y) {
-        return format!("{y}-{m:02}-{d:02}");
+        return Err((y, m, d));
     }
     // Written digit by digit – called for every visible row, `format!` is several times slower.
     let mut b = *b"0000-00-00 00:00:00.000";
@@ -128,7 +137,7 @@ pub fn ms_to_iso(ms: i64) -> String {
     put(14, 2, rem / 60_000 % 60);
     put(17, 2, rem / 1000 % 60);
     put(20, 3, rem % 1000);
-    b.iter().map(|&c| c as char).collect()
+    Ok(b)
 }
 
 // ----------------------------------------------------------------------

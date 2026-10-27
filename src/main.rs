@@ -11,6 +11,7 @@ mod errcodes;
 mod excerpt;
 mod export;
 mod fileassoc;
+mod filter;
 mod http;
 mod i18n;
 mod icon;

@@ -98,7 +98,38 @@ Features (all implemented, see README for user-facing details):
   elsewhere → whole-UI `zoom_factor` (0.5–3.0, saved as `cfg.ui_zoom`, also Ctrl+plus/minus/0).
   Hover is tracked per frame in `hover_log`, applied in `handle_zoom` after the panels are drawn.
 - Search: text/regex, next/prev, filter mode, info/warning/error toggles; search as you type from 3
-  characters (`App::search_active`), the first match gets selected. A match that would not be
+  characters (`App::search_active`), the first match gets selected.
+- **Filtering** (`src/filter.rs`, pure; UI part `app/filter.rs`): `FilterSpec` (search regex,
+  filter mode, severity, time range, `CellFilter` per column, file labels) → `eval` per entry,
+  `run` (range, sequential) / `run_parallel` (64 Ki-entry chunks, scoped threads = cores − 1 so
+  the UI thread keeps a core, cancel flag per chunk; same result as `run`, tested).
+  `App::refilter_from(start)`: a full re-filter (`start == 0`) of more than
+  `SYNC_FILTER_MAX_ENTRIES` (100 000) entries runs in a background thread (#16, `FilterJob`),
+  everything else on the UI thread. `entries: Arc<LogStore>` is shared with the job; every
+  in-place change goes through `App::entries_mut` (cancels + joins the job and the cancelled
+  `stale_filter_jobs`, sets `filter_restart` so the next `refilter_from` starts from 0); a new
+  store (open / Reset) is just a new `Arc` after `cancel_filter_job`. While a job runs
+  `check_loading` leaves the read result waiting (so appends never stop a search) and the old
+  `filtered` / `is_match` stay displayed (not cleared on parameter changes, only for new data).
+  Actions that need the result wait in `AfterFilter` (`select_first_match`,
+  `scroll_to_end_after_filter`, `scroll_to_selected_after_filter`). Status bar: spinner +
+  "Searching…" after `FILTER_HINT_DELAY` (200 ms). Measured (400 MB, frame time while typing,
+  temporary instrumentation): v0.7.0 ~160 ms per character, now max ~7 ms; 8 workers on 8 cores
+  still gave one 34 ms frame, hence cores − 1.
+- `is_match` is `MatchBits` (#18): bit set that keeps its count of ones (`push`, `truncate`
+  O(removed), `drain_front` for `drop_front`); `is_match.count()` is the match count – no
+  recount per auto refresh; `debug_assert` against `recount()` after every filter.
+- Date/time column filter (#17, `colfilter::DateFilter`): `DateLayout` = date pattern + time as
+  slots (literal / chronological digit `YYYYMMDDHHMMSSmmm`). Every alternative is aligned at
+  every offset of the layout; the fixed digits of each fitting offset must be a chronological
+  prefix → inclusive ms range (lowest = zeros with month/day ≥ 1, invalid → empty; highest =
+  nines clamped per field); union of ranges, `!` negates, `=` only at offset 0 with full length.
+  Otherwise (e.g. `:30`, `23.10` without the year, non-ASCII) the displayed text is written
+  into a stack buffer (`with_displayed`) and matched like before; entries without a parsed
+  timestamp match their text. Tests compare it with the plain text filter for many inputs.
+  `App::display_dt` = `DateLayout::format_iso`. Measured (`bench_filter`, 400 MB, 1.9 M rows,
+  one day): text per row 1.20 s → ranges 40 ms; `:30` on the stack 175 ms; search sequential
+  143 ms → parallel 68 ms. A match that would not be
   visible in the Message cell (later line, past `MAX_CELL_CHARS`, past the column width measured
   with `layout_no_wrap`) → `App::message_cell_text` shows `excerpt::around` (context before the
   match, "…"). Details pane: `TextEdit` with a layouter using `text_spans` (rules + search), scrolls
@@ -164,6 +195,8 @@ Features (all implemented, see README for user-facing details):
   interner, `iso_to_ms` / `ms_to_iso`).
 - `src/logdef.rs` – log definitions: `.def` parsing, loading/overrides, choice by name/content,
   `DefState::parse()` line → `LogEntry`, `Schema` / `Column` / `Role`.
+- `src/filter.rs` – `FilterSpec` / `CellFilter` / `MatchBits`, sequential + parallel filter run.
+- `src/colfilter.rs` – column filter syntax, `DateLayout`, `DateFilter` (date column as ranges).
 - `src/export.rs` – pure export logic (range merging, time filter, date input parsing, last-N, output).
 - `src/errcodes.rs` – error code detection/parsing/lookup.
 - `src/fileassoc.rs` – Windows file association (.log / .lo_, HKCU only, raw advapi32 FFI):
@@ -189,7 +222,7 @@ Features (all implemented, see README for user-facing details):
 
 ## Commands
 - `cargo build --release` → `target\release\rustrace.exe`
-- `cargo test` (65 tests: updates (versions, release JSON, notes, sha256 file, ZIP, install, restore state), icon / .ico layout, search as you type threshold, status-bar position percentage, file association (registry in an own HKCU test key), search history, store drop_front / move to temp file, rotated parts (naming, merge on open, rotation while watching, replaced
+- `cargo test` (69 tests: filter (parallel = sequential, match bits), date column filter = text filter, updates (versions, release JSON, notes, sha256 file, ZIP, install, restore state), icon / .ico layout, search as you type threshold, status-bar position percentage, file association (registry in an own HKCU test key), search history, store drop_front / move to temp file, rotated parts (naming, merge on open, rotation while watching, replaced
   file), export segments by file, time range bounds, column filter syntax, parsers, chunked/ANSI/UTF-16 reading, log definitions (CBS, DISM, IIS,
   Exchange connectivity / CSV separator, choice by name/content, appending across refreshes), store (32-byte record, ISO ↔ ms, push /
   truncate / append, mapped temp file growing past 64 MB, interner), export incl. end-to-end and
@@ -201,6 +234,8 @@ Features (all implemented, see README for user-facing details):
   100 MB / IIS 100 MB; list in `testlogs/README.txt`. Use these for manual / GUI checks.
   `cargo test --release testlogs_overview -- --ignored --nocapture` loads all of them and prints
   format, encoding, files, entries, errors/warnings, dated entries and time.
+- Filter benchmark (ignored): `RUSTRACE_BENCH_FILE=<log> cargo test --release bench_filter --
+  --ignored --nocapture` – date column filter as text vs ranges, search sequential vs parallel.
 - Benchmark (ignored test, Windows): `RUSTRACE_BENCH_FILE=<log> cargo test --release
   bench_large_file -- --ignored --nocapture` (`RUSTRACE_BENCH_MAPPED=1` = temp file); prints load /
   search / random access times and private bytes. A realistic 400 MB CMTrace log can be generated
@@ -302,6 +337,9 @@ Features (all implemented, see README for user-facing details):
 41. #20: CI workflow `ci.yml` (Windows: fmt, clippy -D warnings, tests, release build artifact;
     Linux: clippy, tests), the whole code formatted with `cargo fmt` in its own commit (listed in
     `.git-blame-ignore-revs`), the one clippy warning (test in `config.rs`) fixed, CI badge.
+42. (2026-10-27) #16 search / filters of big logs in a background thread (parallel, cancelable,
+    previous result stays visible), #17 date/time column filter compared as time ranges,
+    #18 match count kept incrementally (`MatchBits`). Release v0.8.0.
 
 ## Ideas not done yet (offered to the owner)
 - Merge **different** logs into one view sorted by time (like CMTrace File → Open → "Merge

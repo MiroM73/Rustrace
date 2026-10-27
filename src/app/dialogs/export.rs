@@ -9,13 +9,13 @@ impl App {
         let c = &self.cfg;
         (c.export_errors && e.severity == Severity::Error)
             || (c.export_warnings && e.severity == Severity::Warning)
-            || (c.export_search && self.is_match.get(idx).copied().unwrap_or(false))
+            || (c.export_search && self.is_match.get(idx))
             || (c.export_rules
                 && self.rules.iter().any(|r| {
                     r.regex.is_match(e.message)
                         || (r.rule.scope == HighlightScope::Row
                             && r.rule.match_component
-                            && Self::other_columns_match(&r.regex, &e))
+                            && other_columns_match(&r.regex, &e))
                 }))
     }
 

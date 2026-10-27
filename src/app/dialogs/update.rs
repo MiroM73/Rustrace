@@ -214,10 +214,8 @@ impl App {
         }
         if let Some(sel) = state.selected.filter(|&s| s < self.entries.len()) {
             self.selected = Some(sel);
-            if !self.cfg.auto_scroll
-                && let Ok(pos) = self.filtered.binary_search(&sel)
-            {
-                self.scroll_to = Some(pos);
+            if !self.cfg.auto_scroll {
+                self.scroll_to_selected_after_filter();
             }
         }
     }
