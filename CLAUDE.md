@@ -10,274 +10,61 @@
   Anthropic) and the owner only specified requirements. Keep it at the top when editing the README.
 - License: **the Unlicense** (public domain, `LICENSE`, `license = "Unlicense"` in Cargo.toml).
   `LICENSE` is also shipped in the release archive.
-- This file (`CLAUDE.md`) is committed in the repository.
+- This file (`CLAUDE.md`) and `docs/` are committed in the repository.
 - Do not push or rewrite published history without asking.
 
 ## What the application is
 A native desktop log viewer in Rust (eframe/egui 0.37) modelled on **CMTrace** from Microsoft
-SCCM / ConfigMgr. Single self-contained executable; main target is Windows.
+SCCM / ConfigMgr. Single self-contained executable; main target is Windows. User-facing details
+are in `README.md`.
 
-Features (all implemented, see README for user-facing details):
-- Formats: CMTrace `<![LOG[..]LOG]!><time="" date="" component="" type="" thread="">` incl. multi-line,
-  old SMS format `msg $$<comp><date time><thread=..>`, plain text. Severity from `type` (1/2/3) or
-  optional keywords error/fail/warn.
-- **Log definitions** (`logdef\*.def`, `src/logdef.rs`): regex with named groups or W3C (`#Fields:`)
-  describe other layouts (w3c `separator`: space = IIS with `-` = empty, other = CSV-style values
-  with quotes, `-` kept – Exchange); built-in `iisweb.log.def`, `exchconnect.log.def`,
-  `dism.log.def`, `cbs.log.def`, external files
-  from `logdef\` next to the exe or `%APPDATA%\RusTrace\logdef` (same name overrides built-in).
-  Roles fill the standard columns (message/component/datetime/thread), `role.severity` + regexes give
-  the severity, other groups are extra columns (`LogEntry::extra`, `Schema::extra_names`). The table
-  columns come from `Schema` (`LogSource::schema()`); CMTrace = `Schema::default()`. Format choice:
-  Groups: predefined = built-in, replaced by a same-named file in `logdef\` next to the exe
-  (`PRIO_BUILTIN` 0 / `PRIO_PROGRAM` 1); own = user folder (`PRIO_USER` 2) – own files never
-  replace predefined ones, both are offered (`LogDef::same_as` = id + priority identifies a
-  definition, e.g. for the manual choice after reloading). `cfg.logdef_sources` = all /
-  predefined / own (`SourceFilter`). `DefSet::defs` sorted by priority desc, then id;
-  `logdef::matching_by_name`; the UI shows the active definition (`LogSource::active_def`, name –
-  file in the status bar, ⚠ + list in the menu when several match).
-  Update notice: `cfg.known_logdefs` (file → text of the predefined definitions seen; filled
-  silently on the first start) vs `DefSet::predefined` → `logdef::definition_updates` (new /
-  changed key by key with the own copy's value / removed) → window at start-up; "Got it" stores
-  the current texts.
-  View → Log format (Auto = file name → content `detect` → built-in; CMTrace content never uses
-  `detect`), reset to Auto for every newly opened file. `unmatched = append` keeps the last entry
-  provisional until the next one starts (`ParserState::pending_entry`).
-- Encodings: UTF-8 (BOM or not), UTF-16 LE/BE (BOM), ANSI Windows-1250 fallback.
-- Incremental reading in a **background thread** in 8 MB chunks with progress + cancel; truncation /
-  rotation detection; provisional last line. 400 MB / 1.8 M lines ≈ 3.7 s in release.
-- **Different logs merged by time** (#21, `src/merge.rs`): `LogSet` = one or more `LogSource`s
-  (App holds `source: Option<LogSet>`, `paths`, `cur_path` = first path). One log: results of
-  `LogSource` passed through unchanged (no reordering). Several: every source polled, new final
-  entries merged with `interleave` (k-way heap on (merge key, log index), order inside a log
-  kept); merge key = timestamp, undated = key of the previous entry of the same log
-  (`last_key` per log, `KEY_MIN` at the start). Results are `ReadResult` (provisional entries
-  as a `LogStore` with file ids); `Appended.from_key` = batch has a key older than `newest` →
-  `merge::apply_appended` / `merge_tail` (split_off after the last entry dated ≤ key, re-interleave
-  per log, `file_sources`). Files of the view: `map[log][local id]` → global id, `file_sources`;
-  columns: `sync` unites the schemas (extra columns by name, `extra_map`); `LogStore::copy_entry`
-  re-interns + maps extra columns. A source that was loaded and returns `Reset` (truncated /
-  replaced) → the whole set is read again; a source that could not be read → `errors()` (status
-  bar), others shown. Provisional entries cached per log (`provisional`), merged at the end.
-  UI: Open with several files / drop several / command line `a.log b.log`, File → Add log to
-  view…, File → Merged logs (✖ = `remove_log`, reopens the rest), File column color mark per log
-  (`cfg.color_files`, `App::log_color`), status bar "📚 N logs merged" with a tooltip per log,
-  `format.mixed` when the formats differ, `SessionState::extra_paths` for the update restart.
-  Selection kept by (file, line) when older rows are merged in before it. Progress counters
-  accumulate over the logs (`LogSource::progress_base`). Measured: 400 MB CMTrace + 100 MB CBS +
-  100 MB IIS (3.7 M rows): separately ~9.2 s, merged ~9.3 s (`bench_merge`). First merge keeps
-  the per-log stores and the merged store at once (temporary peak).
-- **Rotated logs merged** (`cfg.merge_rotated`, default on; `parser::rotated_parts`): opening
-  `service.log` also reads `service.lo_` and `service-YYYYMMDD-HHMMSS.log` first (sorted by mtime,
-  then name; only for the active file name, not when a part itself is opened). `LogSource::files`
-  (`SourceFile { name, path: Option }`) = file id of every entry (`Rec::file: u16`, fits the
-  32-byte record); line numbers are per file. Rotation/replacement detection: the first 4 KB of the
-  active file (`head`) must still match and the file must not shrink; on a mismatch with merging the
-  older part starting with `head` (and ≥ offset) is the renamed active file → its unread rest is
-  read, the file id is retagged to the new name, files with that path before are marked overwritten
-  (`path = None`), the new active file is read from 0 – an `Appended` result, nothing is lost.
-  Otherwise (or without merging) a full reset. UI: `App::columns()` adds `ColumnKind::File` first
-  when `files.len() > 1`; status bar 📚 with the list. Export: `export::segments` splits blocks by
-  file; original lines are read per file, overwritten parts fall back to the message texts.
-- **Memory limits for long-watched logs** (`App::enforce_memory_limits`, after every poll):
-  text in memory ≥ temp file threshold → `LogStore::move_text_to_temp_file`; text >
-  `cfg.max_log_mb` (default 1000, `cfg.max_log_enabled`) → `LogStore::drop_front(k)` down to ¾ of
-  the limit (never provisional rows), interner rebuilt; App shifts `filtered`, `is_match`,
-  `selected`, `committed_len` by k, bumps `data_gen`, counts `dropped` (✂ in the status bar, reset
-  by a full read). Known limit: the first read of a huge file still loads it whole before trimming.
-- **Raw line in the details pane** (#29): `cfg.details_view` (`DetailsView::Message | Raw`),
-  toggle in the details header + View menu. `LogEntry::raw` = byte range of the entry in its file
-  (start of the first line .. after the line break of the last; set by `parse_line` /
-  `parse_def_line`, extended for multi-line CMTrace and `unmatched = append`, line positions from
-  the raw bytes by `line_ends` – memchr for UTF-8/ANSI, 2-byte units for UTF-16), packed into
-  `Rec::raw` (40-bit offset, 24-bit length, 0 = unknown). `SourceFile::encoding` per file;
-  `parser::read_raw` reads + decodes the range; `App::raw_cache` (entry, `data_gen`). Measured
-  400 MB: load 3.98 → 4.07 s, 223 → 237 MB.
-- **Compact storage** (`src/store.rs`, `LogStore`): the parser still produces `LogEntry` (Strings)
-  per line, but they go straight into a `LogStore` – 40-byte `Rec` (message start in the text arena,
-  `i64` ms timestamp or tagged interned raw text, raw byte range, line, interned component/thread, severity), one
-  text arena in entry order (message `i` ends where `i + 1` starts), interner (id 0 = ""), extra
-  columns column-major as interned ids. `PollResult` carries a `LogStore`; appends are merged with
-  `LogStore::append` (re-interning). The parser reserves capacity after the first chunk (estimate).
-  Text arena = `String` or a **memory-mapped temp file** (`memmap2`, `FILE_ATTRIBUTE_TEMPORARY` +
-  `FILE_FLAG_DELETE_ON_CLOSE`, share mode 0, grows by doubling from 64 MB, falls back to memory on
-  error) for reads ≥ `cfg.temp_file_threshold_mb` (default 100, `cfg.temp_file_enabled`). Never map
-  the original log (blocks the writer from truncating / rotating it on Windows).
-- **Renderer** (`main.rs`, issue #6): **OpenGL (glow) by default** – with wgpu (DX12 and Vulkan
-  alike) a thread of the AMD driver (`amdxc64.dll` / `amdvlk64.dll`) spun at 100 % of a core while
-  the window was idle (it only stopped after ~2.5 s of continuous rendering; present mode / frame
-  latency did not help). Glow: idle ~0 %, empty window 284 MB private vs 323 MB DX12. If glow fails
-  before the app is created (error **or panic**, caught with `catch_unwind`; e.g. RDP / VM with GL
-  1.1) → wgpu on the reused event loop. `RUSTRACE_RENDERER=wgpu|glow` forces one (no fallback).
-  wgpu fallback (`prefer_dx12`): instance limited to DX12 when a non-CPU DX12 adapter exists,
-  unless `WGPU_BACKEND` is set (default wgpu loads Vulkan + DX12 + GL drivers: 516 MB vs 325 MB).
-  Idle CPU is measured from `Process.TotalProcessorTime` over a few seconds; per-thread start
-  address (`NtQueryInformationThread` class 9) → module found the driver thread.
-- Auto refresh frames: the reader thread requests a repaint only when the result is not
-  `Unchanged`; `last_refresh` = start of the read (otherwise the delayed pick-up would double the
-  interval); the status-bar separator belongs to the progress (a widget appearing for a moment
-  costs an extra frame, egui `theme/mod.rs` repaint for unknown widget ids).
-- Measured (400 MB CMTrace, GUI private bytes): v0.2.0 1231 MB → 421 MB (temp file) / 582 MB (memory);
-  benchmark without GUI: 695 → 76 / 239 MB, load same, search 157 → 138 ms.
-- Auto refresh: interval in ms / s / min, pause/resume (Ctrl+P), presets, "follow end".
-- Highlight rules: text or regex, case, scope whole row / text only, also-component, order = priority,
-  JSON import/export, **separate colors for light and dark theme**; severity + search colors per theme.
-- Themes: system / light / dark (View menu + quick toggle button in the toolbar).
-- Zoom: Ctrl + mouse wheel over the log text (table, details message) → `cfg.font_size` (6–48);
-  elsewhere → whole-UI `zoom_factor` (0.5–3.0, saved as `cfg.ui_zoom`, also Ctrl+plus/minus/0).
-  Hover is tracked per frame in `hover_log`, applied in `handle_zoom` after the panels are drawn.
-- Search: text/regex, next/prev, filter mode, info/warning/error toggles; search as you type from 3
-  characters (`App::search_active`), the first match gets selected.
-- **Filtering** (`src/filter.rs`, pure; UI part `app/filter.rs`): `FilterSpec` (search regex,
-  filter mode, severity, time range, `CellFilter` per column, file labels) → `eval` per entry,
-  `run` (range, sequential) / `run_parallel` (64 Ki-entry chunks, scoped threads = cores − 1 so
-  the UI thread keeps a core, cancel flag per chunk; same result as `run`, tested).
-  `App::refilter_from(start)`: a full re-filter (`start == 0`) of more than
-  `SYNC_FILTER_MAX_ENTRIES` (100 000) entries runs in a background thread (#16, `FilterJob`),
-  everything else on the UI thread. `entries: Arc<LogStore>` is shared with the job; every
-  in-place change goes through `App::entries_mut` (cancels + joins the job and the cancelled
-  `stale_filter_jobs`, sets `filter_restart` so the next `refilter_from` starts from 0); a new
-  store (open / Reset) is just a new `Arc` after `cancel_filter_job`. While a job runs
-  `check_loading` leaves the read result waiting (so appends never stop a search) and the old
-  `filtered` / `is_match` stay displayed (not cleared on parameter changes, only for new data).
-  Actions that need the result wait in `AfterFilter` (`select_first_match`,
-  `scroll_to_end_after_filter`, `scroll_to_selected_after_filter`). Status bar: spinner +
-  "Searching…" after `FILTER_HINT_DELAY` (200 ms). Measured (400 MB, frame time while typing,
-  temporary instrumentation): v0.7.0 ~160 ms per character, now max ~7 ms; 8 workers on 8 cores
-  still gave one 34 ms frame, hence cores − 1.
-- `is_match` is `MatchBits` (#18): bit set that keeps its count of ones (`push`, `truncate`
-  O(removed), `drain_front` for `drop_front`); `is_match.count()` is the match count – no
-  recount per auto refresh; `debug_assert` against `recount()` after every filter.
-- Date/time column filter (#17, `colfilter::DateFilter`): `DateLayout` = date pattern + time as
-  slots (literal / chronological digit `YYYYMMDDHHMMSSmmm`). Every alternative is aligned at
-  every offset of the layout; the fixed digits of each fitting offset must be a chronological
-  prefix → inclusive ms range (lowest = zeros with month/day ≥ 1, invalid → empty; highest =
-  nines clamped per field); union of ranges, `!` negates, `=` only at offset 0 with full length.
-  Otherwise (e.g. `:30`, `23.10` without the year, non-ASCII) the displayed text is written
-  into a stack buffer (`with_displayed`) and matched like before; entries without a parsed
-  timestamp match their text. Tests compare it with the plain text filter for many inputs.
-  `App::display_dt` = `DateLayout::format_iso`. Measured (`bench_filter`, 400 MB, 1.9 M rows,
-  one day): text per row 1.20 s → ranges 40 ms; `:30` on the stack 175 ms; search sequential
-  143 ms → parallel 68 ms. A match that would not be
-  visible in the Message cell (later line, past `MAX_CELL_CHARS`, past the column width measured
-  with `layout_no_wrap`) → `App::message_cell_text` shows `excerpt::around` (context before the
-  match, "…"). Details pane: `TextEdit` with a layouter using `text_spans` (rules + search), scrolls
-  to the first match once per (row, `search_gen`) (`details_scrolled`).
-- Horizontal scrolling of the table (`App::table`): egui_extras tables only scroll vertically, so
-  the table is laid out in a child Ui shifted left by `table_scroll_x` and clipped to the visible
-  rect – its right edge with the vertical scroll bar stays in view; a separate horizontal
-  `ScrollArea` (solid style) below it owns the offset, Shift + wheel changes it too. The natural
-  width `table_width` is measured every frame from the header cells (last column min
-  `LAST_COLUMN_MIN` = 150, it fills the rest when everything fits).
-- Column filters (`src/colfilter.rs`, toolbar toggle `cfg.show_column_filters`): filter row in the
-  table header built from `Schema::columns` (adapts to the log type); `App::col_filter_text`
-  (by `ColumnKind`) → `col_filters` compiled; checked in `refilter_from` via
-  `passes_column_filters` (date/time as displayed). Syntax: contains / `=exact` / `a|b` / leading
-  `!` negation, case-insensitive. Cleared when the columns change (other log type).
-- Error code lookup (Ctrl+E) + automatic explanation in the details pane; descriptions from language
-  files (`code.0xXXXXXXXX`) + Windows `FormatMessageW` (also wininet/winhttp).
-- **Overview strip** (#24, `src/overview.rs` pure + `app/strip.rs`): `Overview` = highest mark per
-  bucket of `per` displayed rows (power of two, ≤ 4096 buckets, pairs joined when it grows);
-  `update(from, len, mark)` recomputes only from the bucket of `from` (appends: the end).
-  `App::overview_dirty` = first changed displayed row (`overview_changed_from`: `refilter_here`
-  start position, full job result / `drop_front` / bookmark or mark-setting changes → 0).
-  Marks: bookmark 4 > search 3 > error 2 > warning 1 (rules not shown – a regex per row would be
-  too slow). Drawn right of the table (the table `view` is narrower by `STRIP_WIDTH` + 2) from
-  the header bottom; `runs(px)` per physical pixel; viewport = rows drawn by the table body;
-  click / drag → `scroll_to`. `cfg.overview` (`OverviewSettings`).
-- **Δ time column** (#23, `app/delta.rs`): `ColumnKind::Delta` inserted by `App::columns()` after
-  the date/time column when `cfg.delta_column`; `cfg.delta_mode` (`DeltaMode::Visible` = previous
-  row of `filtered` before the entry, also for hidden rows / `Log` = previous entry /
-  `Reference` = `App::time_ref` (ms, file, line)), at most `MAX_LOOK_BACK` rows back for a dated
-  one; `delta_cell` → text + long gap (`cfg.delta_threshold_s`, palette pair `gap`); never
-  filtered (`passes_columns` → true, no filter field); `App::cell(idx, kind)` for copies;
-  readable export `ReadableRow::delta` after the date/time; header context menu (header labels
-  are not selectable, otherwise they take the click).
-- **Selection of several rows** (#25, `app/selection.rs`): `selected` = cursor row, `sel: MatchBits`
-  (entry indexes; `MatchBits::set / first_one / last_one / ones`), `sel_anchor` for Shift ranges.
-  Every single selection goes through `select_only` (also `select_row`); `drop_front` →
-  `selection_drop_front`; merged older rows before the selection keep only the cursor row.
-  Click modifiers in `click_row`, Shift + keys in `extend_selection`, Ctrl+A, Ctrl+C messages,
-  Ctrl+Shift+C table (`columns()` + header), original lines via `parser::read_raw_many` in a
-  thread (`copy_job`), `export_selected` (export dialog, reset when it closes). Details pane =
-  `details_row()` (first selected row); summary with `timefmt::format_duration`.
-- **Bookmarks** (#22, `app/bookmarks.rs`, window `dialogs/bookmarks.rs`): `App::bookmarks`
-  (file id, line) → note is the truth; `bookmark_rows` = sorted entry indexes, kept like
-  `filtered` (`find_bookmarks_from(changed)` after appends, `bookmarks_drop_front`,
-  `bookmarks_after_reset` remaps file ids by path via `remap_files` – `open_files` stashes the old
-  files in `bookmark_files`, so adding a log / Ctrl+F5 keeps them). Ctrl+F2 / F2 / Shift+F2,
-  filter `FilterSpec::bookmarks` (keys), export criterion `cfg.export_bookmarks`, palette pair
-  `bookmark` (line cell), `SessionState::bookmarks` for the update restart; not saved per file.
-- Export highlighted rows with context (Ctrl+Shift+S): lines before/after, criteria (rules, errors,
-  warnings, search), overlapping ranges merged (no duplicates), formats original lines / readable
-  table, separators, **only records since date/time** (with presets relative to newest log record),
-  **only the last N blocks**, **rows visible in the table = highlighted rows**
-  (`export_visible_only`: hits = `filtered`, the rules/errors/warnings/search criteria are disabled;
-  context always from the whole file – the owner's expectation, an earlier variant that also took
-  context only from visible rows was rejected). Order: hits → time filter → merge → clip older
-  context → last N.
-- **Updates** (#15, #31, `src/update.rs`, `src/http.rs`): Help → Check for updates; GitHub API
-  `releases?per_page=100` via WinHTTP FFI (system proxy / certs, follows redirects);
-  `parse_releases` drops drafts / pre-releases / non-version tags, `Updates { latest, missed }`
-  (`missed_releases` = newer than the current version, newest first; install always from
-  `latest`); `is_newer` on major.minor.patch. Auto check `cfg.update_when` = start (default) /
-  daily / never (`UpdateCheck::due` with `cfg.update_last_check`); the old bool `update_check`
-  is read as `update_check_old` (never written) and migrated in `Config::load` (false → never)
-  – old versions ignore `update_when`. Silent: window only for a newer, not
-  `cfg.update_skipped` latest version; errors ignored; not after `--restore`. Window: one
-  collapsible section per missed version (version – date, notes), the newest open;
-  status-bar `⬆ <version>` button (`update_available: Option<Updates>`). Install: ZIP asset `*-windows-x64.zip` + its `.sha256`, own ZIP
-  reader (stored / deflate via flate2, CRC check, no `..`), write probe first, running exe renamed to
-  `rustrace.exe.old` (`update::cleanup_old` at start), files written next to it, then
-  `rustrace.exe --restore <temp json>` (`SessionState`: path, format, selection, search, filters,
-  time range, window pos/size × `zoom_factor`) and the old window closes. Restore: search/format at
-  start, selection + column filters after the first read (`pending_restore`).
-  `RUSTRACE_UPDATE_AS_VERSION=0.5.0` pretends an older version (testing the update);
-  `cargo test fetch_latest_release -- --ignored` downloads + installs the real latest release into temp.
-  The release notes of the GitHub release are shown in the window – write them for users.
-- Localization: built-in en / sk / cs / de; external `<code>.lang` files load **without recompiling**
-  from `lang\` next to the exe or `%APPDATA%\RusTrace\lang`; fallback to English.
-- Settings saved automatically to `%APPDATA%\RusTrace\config.json` (with migration of old settings).
+- **`docs/architecture.md`** – how every feature works inside. Read the section of a feature
+  before changing it, and update it with the change.
+- **`docs/history.md`** – what was done when (add a line per issue / release), open ideas of the
+  owner, possible further memory work.
+
+Feature index (file → section of `docs/architecture.md`):
+- Formats, encodings, chunked background reading – `src/parser.rs` → Formats, Reading
+- Log definitions (`.def`, W3C, groups, update notice) – `src/logdef.rs`, `app/logdefs.rs` → Log definitions
+- Several logs merged by time – `src/merge.rs` → Merged logs
+- Rotated parts, rotation while watching – `src/parser.rs` → Rotated logs
+- Compact store, temp file, memory limit – `src/store.rs`, `app/loading.rs` → Compact storage, Memory limits
+- Details pane message / raw line – `app/details.rs` → Raw line
+- Renderer (glow, wgpu fallback), repaint rules – `src/main.rs` → Renderer and refresh frames
+- Search, filters, background re-filter, date column filter – `src/filter.rs`, `src/colfilter.rs`, `app/filter.rs` → Filtering
+- Table, horizontal scrolling, column filters – `app/table.rs` → Table
+- Overview strip – `src/overview.rs`, `app/strip.rs` → Overview strip
+- Δ time column – `app/delta.rs` → Delta column
+- Several selected rows, copying – `app/selection.rs` → Selection
+- Bookmarks – `app/bookmarks.rs`, `dialogs/bookmarks.rs` → Bookmarks
+- Export with context – `src/export.rs`, `dialogs/export.rs` → Export
+- Updates – `src/update.rs`, `src/http.rs`, `dialogs/update.rs` → Updates
+- Languages, settings – `src/i18n.rs`, `src/config.rs` → Localization and settings
 
 ## Code layout
-- `src/main.rs` – window start-up, optional log path argument, start-up splash.
-- `src/splash.rs` – start-up splash (#11, Windows): own thread + message loop, WS_POPUP window,
-  painted into a DIB (icon, anti-aliased ring of 8 dots, GDI text), per-monitor DPI aware; closed by
-  `App::ui` on the second frame (`splash::close`, safe before the window exists).
-- `src/icon.rs` – program icon drawn in code (`rgba(size)`, `ico(sizes)`); `build.rs` includes it
-  with `#[path]` and embeds the .ico + version info with `winresource` (needs `rc.exe`).
+- `src/main.rs` – window start-up, log path arguments, renderer choice, start-up splash.
+- `src/splash.rs`, `src/icon.rs`, `build.rs`, `src/fileassoc.rs` – Windows-specific parts
+  (details: `docs/architecture.md` → Windows modules).
 - `src/app/` – the whole UI (`App`), split by area (#19): `mod.rs` holds the `App` struct, its
   helper types/consts, `App::new` and the frame loop; every other file is an `impl App` block for
-  one area (`loading`, `filter`, `logdefs`, `input`, `menu`, `toolbar`, `statusbar`, `table`,
-  `details`, `widgets`, `dialogs/*`). Conventions: each submodule starts with
-  `use crate::app::*;` (gets the parent's imports, private types and consts – child modules may use
-  private items of their ancestors); methods used outside their own file are
-  `pub(in crate::app) fn`; shared free helpers are `pub(in crate::app)` and glob-imported in
-  `mod.rs` (`use table::*;` …). A new window → `dialogs/<name>.rs` + `mod <name>;` in
-  `dialogs/mod.rs`; keep files under ~800 lines.
-- `src/merge.rs` – `LogSet` (several logs in one view by time), `interleave`, `apply_appended`.
+  one area. Conventions: each submodule starts with `use crate::app::*;` (gets the parent's
+  imports, private types and consts – child modules may use private items of their ancestors);
+  methods used outside their own file are `pub(in crate::app) fn`; shared free helpers are
+  `pub(in crate::app)` and glob-imported in `mod.rs` (`use table::*;` …). A new window →
+  `dialogs/<name>.rs` + `mod <name>;` in `dialogs/mod.rs`; keep files under ~800 lines.
 - `src/parser.rs` – `LogSource::poll()` chunked incremental reading, encodings, format parsing,
-  `read_line_ranges()` for original-line export. Dates stored as ISO `YYYY-MM-DD HH:MM:SS.mmm`,
-  formatted for display by the UI (`format.date` in the language file).
-- `src/store.rs` – `LogStore` / `EntryRef` (compact entries, text arena memory / mapped temp file,
-  interner, `iso_to_ms` / `ms_to_iso`).
-- `src/logdef.rs` – log definitions: `.def` parsing, loading/overrides, choice by name/content,
-  `DefState::parse()` line → `LogEntry`, `Schema` / `Column` / `Role`.
-- `src/filter.rs` – `FilterSpec` / `CellFilter` / `MatchBits`, sequential + parallel filter run.
-- `src/colfilter.rs` – column filter syntax, `DateLayout`, `DateFilter` (date column as ranges).
-- `src/export.rs` – pure export logic (range merging, time filter, date input parsing, last-N, output).
-- `src/errcodes.rs` – error code detection/parsing/lookup.
-- `src/fileassoc.rs` – Windows file association (.log / .lo_, HKCU only, raw advapi32 FFI):
-  ProgID `RusTrace.LogFile`, `RegisteredApplications` → Settings page; `status()` reads
-  `UserChoiceLatest\ProgId` / `UserChoiceLatest` / `UserChoice` (a user choice cannot be set by a
-  program), names via `AssocQueryStringW`. Test `register_and_unregister` uses its own HKCU key.
-- `src/update.rs` – update check / download / install / restart state; `src/http.rs` – WinHTTP GET.
-- `src/excerpt.rs` – text of the message cell: first line, or an excerpt around a search match.
-- `src/timefmt.rs` – durations for display (`format_duration`; Δ column, selection span).
-- `src/i18n.rs` – language files, `t!()` macro, fallback, external language folders.
-- `src/config.rs` – `Config`, `HighlightRule`, per-theme palettes, serde defaults/migration.
-- `lang/*.lang` – built-in translations, embedded with `include_str!`.
-- `logdef/*.def` – built-in log definitions, embedded with `include_str!` and shipped in `logdef\`.
+  raw lines. Dates stored as ISO `YYYY-MM-DD HH:MM:SS.mmm`, formatted for display by the UI
+  (`format.date` in the language file).
+- `src/store.rs` – `LogStore` / `EntryRef` (compact entries, text arena, interner, ISO ↔ ms).
+- `src/merge.rs` – `LogSet`, `interleave`, `apply_appended`.
+- `src/logdef.rs` – log definitions, `Schema` / `Column` / `ColumnKind` / `Role`.
+- `src/filter.rs` – `FilterSpec` / `CellFilter` / `MatchBits`; `src/colfilter.rs` – column filter syntax.
+- `src/export.rs` – pure export logic; `src/overview.rs` – overview strip buckets;
+  `src/timefmt.rs` – durations; `src/excerpt.rs` – message cell text; `src/errcodes.rs` – error codes.
+- `src/update.rs` / `src/http.rs` – updates; `src/i18n.rs` – `t!()`, language files;
+  `src/config.rs` – `Config`, rules, per-theme palettes, serde defaults/migration.
+- `lang/*.lang` – built-in translations; `logdef/*.def` – built-in log definitions (both embedded
+  with `include_str!` and shipped next to the exe).
 
 ## Conventions
 - **Every user-visible string goes through `t!("key")`** (placeholders `t!("key", name = value)`).
@@ -290,149 +77,18 @@ Features (all implemented, see README for user-facing details):
   `egui::MenuBar::new().ui(..)`, `ui.close()`, `egui::Id::unique(..)` (not `Id::new`).
 
 ## Commands
-- `cargo build --release` → `target\release\rustrace.exe`
-- `cargo test` (84 tests: overview buckets incremental = full / pixel runs, readable export with Δ, durations, match bits set / iterate, bookmark file id remap, update releases list / missed versions / check setting migration, merged logs (order by time, appended older rows, formats + rotated parts + re-read, single log unchanged, interleave), store copy_entry / split_off, raw lines of entries (all formats / encodings), filter (parallel = sequential, match bits), date column filter = text filter, updates (versions, release JSON, notes, sha256 file, ZIP, install, restore state), icon / .ico layout, search as you type threshold, status-bar position percentage, file association (registry in an own HKCU test key), search history, store drop_front / move to temp file, rotated parts (naming, merge on open, rotation while watching, replaced
-  file), export segments by file, time range bounds, column filter syntax, parsers, chunked/ANSI/UTF-16 reading, log definitions (CBS, DISM, IIS,
-  Exchange connectivity / CSV separator, choice by name/content, appending across refreshes), store (32-byte record, ISO ↔ ms, push /
-  truncate / append, mapped temp file growing past 64 MB, interner), export incl. end-to-end and
-  visible rows as highlighted rows, error codes, i18n completeness, config migration)
-- **Test logs**: `python scripts/gen_testlogs.py [--small-only]` creates `testlogs/` (in `.gitignore`,
-  ~650 MB with the big ones, ~1 min) – CMTrace (UTF-8, UTF-8 BOM, UTF-16 LE, multi-line, unfinished
-  last line), SMS format, plain ANSI 1250 / without timestamps, CBS, DISM, IIS (two `#Fields` sets,
-  detection by content), Exchange Transport Connectivity (by name and by content), a rotation set with set modification times, big CMTrace 400 MB / CBS
-  100 MB / IIS 100 MB; list in `testlogs/README.txt`. Use these for manual / GUI checks.
-  `cargo test --release testlogs_overview -- --ignored --nocapture` loads all of them and prints
-  format, encoding, files, entries, errors/warnings, dated entries and time.
-- Filter benchmark (ignored): `RUSTRACE_BENCH_FILE=<log> cargo test --release bench_filter --
-  --ignored --nocapture` – date column filter as text vs ranges, search sequential vs parallel.
-- Benchmark (ignored test, Windows): `RUSTRACE_BENCH_FILE=<log> cargo test --release
-  bench_large_file -- --ignored --nocapture` (`RUSTRACE_BENCH_MAPPED=1` = temp file); prints load /
-  search / random access times and private bytes. A realistic 400 MB CMTrace log can be generated
-  with a small script (random components, threads, messages, ~1 % multi-line).
+- `cargo build --release` → `target\release\rustrace.exe`; `cargo test` (84 tests; what they
+  cover: `docs/architecture.md` → Tests and benchmarks).
 - `cargo fmt` + `cargo clippy --all-targets --locked -- -D warnings` – the code is rustfmt-clean and
-  clippy-clean; CI (`.github/workflows/ci.yml`, #20) fails otherwise. CI on every push to master and
-  every PR: Windows job fmt / clippy / test / release build (exe as artifact), Linux job clippy /
-  test. Formatting-only commits go into `.git-blame-ignore-revs`.
-- `scripts\package.ps1` → `dist\RusTrace-v<version>-windows-x64.exe` (7-Zip SFX) and `.zip` (same
-  content, for extracting manually), each with a `.sha256`; both extract to
-  `RusTrace\` with `rustrace.exe` + `lang\` + `logdef\` + `LICENSE`. Needs 7-Zip.
-- Releases: push tag `v<version>` (matching `Cargo.toml`) → GitHub Actions `release.yml` tests,
-  builds, packages and creates a **draft** release; then publish it. Manual workflow run = artifact only.
-  `scripts\release.ps1 <version> [-Publish] [-DryRun] [-NoWatch] [-Yes]` does all of it (checks,
-  version bump, tests with config backup, commit, push, tag, wait, publish); the owner runs it
-  himself to save tokens.
-- Rust (rustup, stable MSVC) is installed on the owner's PC since 2026-10-24 (VS 2019 C++ tools);
-  `cargo` is in `%USERPROFILE%\.cargo\bin` – add it to PATH in shells started before that.
+  clippy-clean; CI (`.github/workflows/ci.yml`) fails otherwise. Formatting-only commits go into
+  `.git-blame-ignore-revs`.
 - Do not leave test runs touching `%APPDATA%\RusTrace\config.json`: back it up and restore it
   (or delete it if it did not exist before).
-- CRT is linked statically via `.cargo/config.toml` (no VC++ redistributable needed).
+- `cargo` is in `%USERPROFILE%\.cargo\bin` – add it to PATH in shells started before 2026-10-24.
+- **Test logs**: `python scripts/gen_testlogs.py [--small-only]` creates `testlogs/` (not in git,
+  list in `testlogs/README.txt`, incl. 400 MB CMTrace / 100 MB CBS / IIS). Use these for manual /
+  GUI checks; benchmarks: `docs/architecture.md` → Tests and benchmarks.
+- Releases: `scripts\release.ps1 <version> [-Publish] [-DryRun] [-NoWatch] [-Yes]`; the owner runs
+  it himself to save tokens. Details: `docs/architecture.md` → Packaging and releases.
 - Line endings: `.gitattributes` forces LF for all text files (`* text=auto eol=lf`); write new
-  files with LF. The release `.sha256` is written with LF so `sha256sum -c` works.
-
-## History (2026-10-23)
-1. Initial viewer: parser, highlight rules, regex search, auto refresh (ms/s/min, pause).
-2. Background chunked loading with progress; error code lookup.
-3. All code translated to English; localization system (en/sk/cs/de, external .lang files).
-4. Theme quick toggle + separate light/dark colors for rules and severity colors.
-5. Export of highlighted rows with context (merging, two formats).
-6. Export: since date/time filter + last N blocks.
-7. Owner rewrote the history so that all commits are authored by him (Claude stays as
-   `Co-Authored-By`); old hashes are gone.
-8. Release packaging (7-Zip SFX), GitHub Actions release workflow, static CRT; first release v0.1.0
-   (https://github.com/MiroM73/Rustrace/releases/tag/v0.1.0, published 2026-10-23).
-9. Unlicense added, AI-authorship notice moved to the top of the README, CLAUDE.md committed.
-10. (2026-10-24) Ctrl + mouse wheel zoom: log text vs. whole UI depending on the pointer position.
-11. Release v0.2.0 (zoom; LICENSE now shipped in the archive).
-12. Export option "rows visible in the table" as the highlighted rows (context from the whole file).
-13. Log definitions (owner's idea): `logdef\*.def` files, built-in IIS (W3C) / DISM / CBS,
-    View → Log format, dynamic table columns, extra columns in search/rules/details/readable export.
-14. Memory saving (owner's idea): measured first, then compact `LogStore`, text in a memory-mapped
-    temp file for big logs (View menu setting, 💾 in the status bar), DX12 preferred on Windows.
-15. Column filters: filter row under the headers, adapts to the columns of the open log type.
-16. Time range filter (from – to) in the main view: `cfg.show_time_range`, `App::time_range` (ms),
-    `export::parse_range_bound` (inclusive end fills up the missing day/hour/minute/second).
-17. Merging of rotated logs (owner: only concatenation for now, also the dated history files,
-    File column only for logs of several files) incl. rotation while watching.
-18. Memory protection for long-watched logs: automatic move to the temp file + size limit that
-    removes the oldest records (owner agreed to dropping old records from memory and view).
-19. Release v0.3.0 (log definitions, memory saving, column filters, time range, rotated logs,
-    memory limit); the release now also contains a plain ZIP next to the self-extracting .exe.
-23. Horizontal scroll bar under the table for columns that do not fit (Shift + wheel too).
-24. Log definitions: clear priority (user folder > next to exe > built-in) instead of file-name
-    order, active definition with its file shown, warning when several match (owner's report).
-25. Own definitions no longer replace predefined ones with the same file name (both offered),
-    setting which groups are used, notice of new / changed predefined definitions after updates.
-26. Release v0.4.0 (IIS columns fix, horizontal scroll bar, log definition priority / groups /
-    update notice).
-20. Test logs generator (`scripts/gen_testlogs.py`, `testlogs/` not in git) + `testlogs_overview`;
-    it found that a `.lo_` opened directly was merged with itself – fixed (rotated parts opened
-    directly are never merged).
-21. Release v0.3.1 (bug fix: a rotated part opened directly was read twice).
-22. Fix: a later w3c `#Fields:` header replaced the table columns, so rows of the first part lost
-    their columns; now the first header replaces the default fields, later ones only add columns.
-
-27. (2026-10-26) GitHub workflow with issues + PRs started. #2: match count right after the search
-    field. #1: a search match hidden in a long message → excerpt in the cell, highlighted and
-    scrolled to in the details pane.
-28. #13: Exchange Server Transport Connectivity log definition; w3c definitions got `separator`
-    (comma-separated `#Fields:` and values, CSV quoting, `-` kept as a value).
-29. Release v0.5.0 (#2 search match count, #1 search match in long messages, #13 Exchange
-    Transport Connectivity log definition + w3c `separator`).
-30. `scripts/release.ps1` – the owner makes releases himself (checks, version, tests, tag, publish).
-31. #10 version in the window title, #7 Help → About, #5 search history (🕘 next to the search
-    field, `cfg.search_history`, max 30), #9 default app for .log / .lo_ (`src/fileassoc.rs`).
-32. Release v0.6.0 (#10, #7, #5, #9).
-33. #6 high CPU: the AMD driver spun a core with wgpu → OpenGL renderer by default with wgpu
-    fallback; fewer frames per auto refresh.
-34. Release v0.6.1 (#6 high CPU fix).
-35. #3: position of the selected row in the status bar (`📍 Row 25 / 100 (25 %)`, counted among
-    the displayed rows `filtered`, tooltip = line in the file; `position_percent` rounds down).
-36. #4: search as you type from `INSTANT_SEARCH_MIN_CHARS` (3) characters, the first match (from the
-    top of `filtered`) is selected; shorter texts only after Enter / F3 / history / search component
-    (`search_confirmed`, cleared by typing); before, every keystroke searched even 1 character.
-37. #11: start-up splash (icon, name + version, "Starting…", rotating dots) until the main window
-    shows; new program icon drawn in code, used for the window and embedded in the exe.
-38. #15: update check (Help menu + automatic once a day, can be turned off), download + install of
-    the release ZIP over the running program and restart with the same log and view.
-39. Release v0.7.0 (#11 splash + icon, #15 updates). Verified end to end on the published release:
-    0.7.0 started with RUSTRACE_UPDATE_AS_VERSION=0.6.0 updated itself and came back with the log,
-    search and selected row; `rustrace.exe.old` was deleted by the new process.
-40. #19: `src/app.rs` (~4 450 lines) split into `src/app/` modules – a pure move of code, no
-    behaviour change. Checked: the multiset of non-blank source lines is the same apart from module
-    headers / visibility, 64 tests pass, clippy shows the same warnings as before, Xvfb screenshots
-    of the main window from the old and new build are pixel-identical (except the clock in the
-    status bar). Not run through `cargo fmt` on purpose (the code was not rustfmt-clean before and
-    formatting would hide the move in the diff).
-41. #20: CI workflow `ci.yml` (Windows: fmt, clippy -D warnings, tests, release build artifact;
-    Linux: clippy, tests), the whole code formatted with `cargo fmt` in its own commit (listed in
-    `.git-blame-ignore-revs`), the one clippy warning (test in `config.rs`) fixed, CI badge.
-42. (2026-10-27) #16 search / filters of big logs in a background thread (parallel, cancelable,
-    previous result stays visible), #17 date/time column filter compared as time ranges,
-    #18 match count kept incrementally (`MatchBits`). Release v0.8.0.
-43. #29 details pane Message | Raw line (byte range of every entry, read from the file on demand).
-44. #21 several different logs merged into one view by time (`LogSet`), tabs still not wanted.
-    Release v0.9.0 (#21, #29), published 2026-10-27.
-45. #31 update check at every start (setting start / daily / never) and the notes of all missed
-    releases in the update window. Release v0.9.1.
-46. #22 bookmarks (Ctrl+F2, F2 / Shift+F2, notes, list window, filter, export criterion).
-47. #25 several selected rows (Shift / Ctrl, Ctrl+A, copy messages / table / original lines,
-    export selected rows).
-48. #23 Δ time column (previous shown / previous of the log / reference row, long gaps colored).
-49. #24 overview strip next to the scroll bar (errors, warnings, search, bookmarks; click to scroll).
-
-
-## Ideas not done yet (offered by the owner)
-- For IIS logs, explain the status codes like the error code lookup does: HTTP `sc-status`
-  (e.g. 404 Not Found, 500 Internal Server Error), together with `sc-substatus` (IIS-specific,
-  e.g. 404.3 "MIME map policy prevents this request", 401.2) and `sc-win32-status` (a Win32 error,
-  e.g. 64 "The specified network name is no longer available" – the existing Win32 lookup can be
-  reused). Show the explanation in the details pane of the selected row and as a tooltip of the
-  status cells; descriptions in the language files (like `code.0x…`) so they are translatable and
-  can be extended without recompiling. Ideally driven by the log definition (e.g. keys naming
-  which columns hold HTTP status / substatus / Win32 status), so it is not hard-wired to IIS.
-
-
-## Possible further memory work (not done)
-- The "original lines" export reads the whole log file into memory (`read_line_ranges`), a
-  temporary peak of ~2× the file size while exporting; could stream the file instead.
-- `filtered: Vec<usize>` could be `Vec<u32>` (8 → 4 bytes per visible row).
+  files with LF.

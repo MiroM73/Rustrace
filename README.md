@@ -625,7 +625,9 @@ The built-in languages live in `lang/*.lang` in the source tree and are embedded
 - `.github/workflows/release.yml` – builds and publishes releases on GitHub
 
 - `LICENSE` – the Unlicense (public domain)
-- `CLAUDE.md` – project notes for Claude (conventions, history, how to continue the work)
+- `CLAUDE.md` – project notes for Claude (conventions, commands, feature index)
+- `docs/architecture.md`, `docs/history.md` – internals of every feature, history and open ideas
+  (notes for Claude, linked from `CLAUDE.md`)
 
 ## License
 
