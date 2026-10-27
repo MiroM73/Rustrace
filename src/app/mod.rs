@@ -31,6 +31,7 @@ use std::time::{Duration, Instant};
 
 // The `impl App` blocks are split by area; every submodule starts with `use crate::app::*;`.
 mod bookmarks;
+mod cli;
 mod delta;
 mod details;
 mod dialogs;
@@ -46,6 +47,7 @@ mod table;
 mod toolbar;
 mod widgets;
 
+use cli::*;
 use statusbar::*;
 use strip::*;
 use table::*;
@@ -335,6 +337,8 @@ pub struct App {
     update_available: Option<Updates>,
     /// Selection and column filters of the previous version, applied after the first read.
     pending_restore: Option<SessionState>,
+    /// The row the command line asks for (#26), selected after the first read.
+    cli_select: Option<CliSelect>,
 }
 
 /// Limits of Ctrl + mouse wheel zoom.
@@ -368,13 +372,17 @@ struct ExportKey {
 }
 
 impl App {
+    /// `paths`, `view` and `lang` come from the command line (#26; `lang` is not saved),
+    /// `restore` from the previous version after an update.
     pub fn new(
         cc: &eframe::CreationContext<'_>,
-        paths: Vec<String>,
+        paths: Vec<PathBuf>,
+        view: crate::cli::ViewOptions,
+        lang: Option<String>,
         restore: Option<SessionState>,
     ) -> Self {
         let (mut cfg, existed) = Config::load();
-        let lang_code = i18n::set_language(&cfg.language);
+        let lang_code = i18n::set_language(lang.as_deref().unwrap_or(&cfg.language));
         if !existed {
             // First run: example rules named in the chosen language.
             cfg.rules = Config::default_rules();
@@ -485,6 +493,7 @@ impl App {
             show_update: false,
             update_available: None,
             pending_restore: None,
+            cli_select: None,
         };
         app.load_defs();
         app.check_def_updates();
@@ -495,9 +504,11 @@ impl App {
             .clamp(*UI_ZOOM_RANGE.start(), *UI_ZOOM_RANGE.end());
         cc.egui_ctx.set_zoom_factor(zoom);
         app.recompile_rules();
-        if !paths.is_empty() {
-            app.open_files(paths.into_iter().map(PathBuf::from).collect());
+        let has_files = !paths.is_empty();
+        if has_files {
+            app.open_files(paths);
         }
+        app.apply_cli_view(view, has_files);
         let restored = restore.is_some();
         if let Some(state) = restore {
             app.restore_session(state);

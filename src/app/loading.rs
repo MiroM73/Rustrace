@@ -169,6 +169,8 @@ impl App {
         self.cancel_loading();
         self.cancel_filter_job();
         self.data_gen += 1;
+        // A row asked for by the command line belongs to the logs opened from it.
+        self.cli_select = None;
         self.cur_path = paths.first().cloned();
         self.source = Some(LogSet::new(&paths, self.cfg.keyword_severity));
         // Recent files remember single logs.
@@ -293,6 +295,10 @@ impl App {
                 self.enforce_memory_limits();
                 if let Some(state) = self.pending_restore.take() {
                     self.restore_view(state);
+                }
+                // The whole log is read now (a full read returns everything at once).
+                if reset && let Some(sel) = self.cli_select.take() {
+                    self.apply_cli_select(sel);
                 }
                 // The interval counts from the start of the read: an unchanged result is only picked
                 // up by the next scheduled frame, which must already start the next read.

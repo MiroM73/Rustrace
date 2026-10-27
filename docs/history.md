@@ -102,6 +102,10 @@ Notes for Claude, linked from `CLAUDE.md`.
 50. #24 overview strip next to the scroll bar (errors, warnings, search, bookmarks; click to scroll).
 51. Release v0.9.5 (#22 bookmarks, #25 several selected rows, #23 Δ time column, #24 overview
     strip).
+52. #26 command-line arguments (`--line`, `--search` / `--regex` / `--case` / `--filter`,
+    `--errors` / `--warnings`, `--from` / `--to`, `--tail` / `--no-follow`, `--merge`, `--lang`,
+    `--help`, `--version`; own small parser in `src/cli.rs`, message box on Windows, `--restore`
+    unchanged).
 
 ## Ideas not done yet (offered by the owner)
 - For IIS logs, explain the status codes like the error code lookup does: HTTP `sc-status`

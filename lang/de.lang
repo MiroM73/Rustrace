@@ -398,6 +398,48 @@ about.settings = Einstellungsdatei
 about.copy = Versionsinformationen kopieren
 about.copied = Versionsinformationen in die Zwischenablage kopiert
 
+# --- Befehlszeile (rustrace --help) ---
+about.cmdline = Befehlszeile
+about.cmdline.text = rustrace.exe --help listet die Optionen auf: an einer Zeile öffnen, suchen, filtern, Zeitbereich, Logs zusammenführen, Sprache
+cli.title.help = RusTrace – Befehlszeile
+cli.title.version = RusTrace – Version
+cli.title.error = RusTrace – ungültige Befehlszeile
+cli.usage = Aufruf: rustrace [OPTIONEN] [DATEI]...
+cli.files = Mehrere DATEIEN werden als eine nach Zeit zusammengeführte Ansicht geöffnet (auch ohne --merge).
+# Placeholders of option values in the help
+cli.meta.text = TEXT
+cli.meta.time = ZEIT
+cli.meta.code = CODE
+cli.opt.line = Zeile N der (ersten) DATEI auswählen und dorthin scrollen
+cli.opt.search = Suchtext setzen und den ersten Treffer auswählen
+cli.opt.regex = --search als regulären Ausdruck behandeln
+cli.opt.case = Groß-/Kleinschreibung bei der Suche beachten
+cli.opt.filter = Filtermodus: nur die Zeilen, die --search entsprechen
+cli.opt.errors = nur Fehler anzeigen
+cli.opt.warnings = nur Fehler und Warnungen anzeigen
+cli.opt.from = Zeitbereich: ab ZEIT
+cli.opt.to = Zeitbereich: bis ZEIT (einschließlich)
+cli.opt.tail = dem Ende des Logs folgen
+cli.opt.no_follow = dem Ende des Logs nicht folgen
+cli.opt.merge = mehrere DATEIEN als eine nach Zeit zusammengeführte Ansicht öffnen
+cli.opt.lang = Sprache der Oberfläche nur für diesen Start ({languages})
+cli.opt.help = diese Hilfe anzeigen
+cli.opt.version = die Version anzeigen
+cli.opt.end = alles danach ist eine DATEI
+cli.time = ZEIT: ISO (2026-10-27 13:05:30, 2026-10-27T13:05, 2026-10-27) oder die Datumsreihenfolge der Oberflächensprache, wie beim Zeitbereich in der Symbolleiste.
+cli.example = Beispiel:
+cli.error.unknown = Unbekannte Option: {option}
+cli.error.missing_value = Die Option {option} braucht einen Wert.
+cli.error.unexpected_value = Die Option {option} nimmt keinen Wert an.
+cli.error.line = Ungültige Zeilennummer für --line: „{value}“ (eine ganze Zahl ab 1).
+cli.error.lang = Unbekannte Sprache für --lang: „{value}“. Verfügbar: {languages}
+cli.error.time = Ungültige Zeit für {option}: „{value}“
+cli.error.regex = Ungültiger regulärer Ausdruck für --search: {error}
+cli.error.needs_search = Die Option {option} braucht --search.
+cli.error.needs_file = Die Option {option} braucht eine DATEI.
+cli.error.hint = rustrace --help listet die Optionen auf.
+cli.line_not_found = Zeile {line} wurde im Log nicht gefunden
+
 # --- Startfenster ---
 splash.starting = Wird gestartet…
 

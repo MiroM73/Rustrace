@@ -87,6 +87,9 @@ impl App {
                         ui.label(t!("about.license"));
                         ui.label(t!("about.license.text"));
                         ui.end_row();
+                        ui.label(t!("about.cmdline"));
+                        ui.add(egui::Label::new(t!("about.cmdline.text")).wrap());
+                        ui.end_row();
                         ui.label(t!("about.build"));
                         ui.label(build_info());
                         ui.end_row();

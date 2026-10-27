@@ -40,9 +40,11 @@ Feature index (file → section of `docs/architecture.md`):
 - Export with context – `src/export.rs`, `dialogs/export.rs` → Export
 - Updates – `src/update.rs`, `src/http.rs`, `dialogs/update.rs` → Updates
 - Languages, settings – `src/i18n.rs`, `src/config.rs` → Localization and settings
+- Command-line arguments – `src/cli.rs`, `app/cli.rs`, `src/main.rs` → Command line
 
 ## Code layout
-- `src/main.rs` – window start-up, log path arguments, renderer choice, start-up splash.
+- `src/main.rs` – window start-up, command line (parsed by `src/cli.rs`), renderer choice,
+  start-up splash.
 - `src/splash.rs`, `src/icon.rs`, `build.rs`, `src/fileassoc.rs` – Windows-specific parts
   (details: `docs/architecture.md` → Windows modules).
 - `src/app/` – the whole UI (`App`), split by area (#19): `mod.rs` holds the `App` struct, its
@@ -77,7 +79,7 @@ Feature index (file → section of `docs/architecture.md`):
   `egui::MenuBar::new().ui(..)`, `ui.close()`, `egui::Id::unique(..)` (not `Id::new`).
 
 ## Commands
-- `cargo build --release` → `target\release\rustrace.exe`; `cargo test` (84 tests; what they
+- `cargo build --release` → `target\release\rustrace.exe`; `cargo test` (91 tests; what they
   cover: `docs/architecture.md` → Tests and benchmarks).
 - `cargo fmt` + `cargo clippy --all-targets --locked -- -D warnings` – the code is rustfmt-clean and
   clippy-clean; CI (`.github/workflows/ci.yml`) fails otherwise. Formatting-only commits go into

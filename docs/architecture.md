@@ -257,6 +257,41 @@ User-facing descriptions are in `README.md`.
   `cargo test fetch_latest_release -- --ignored` downloads + installs the real latest release into temp.
   The release notes of the GitHub release are shown in the window – write them for users.
 
+## Command line
+- **Command-line arguments** (#26, `src/cli.rs`, pure + tested; glue in `main.rs::command_line`
+  and `app/cli.rs`): `rustrace [OPTIONS] [FILE]...`, hand-written parser (no dependency) →
+  `cli::Options { files, view: ViewOptions, merge, lang, help, version, restore }`. Options
+  before or after the files, `--opt value` / `--opt=value`, `--` ends options, last repeated
+  option wins, anything else starting with `-` (or `/?`) is an option → unknown = error; a plain
+  path (file association `"%1"`) is a FILE as before. `--line`, `--regex`, `--case`, `--filter`
+  need a FILE / `--search` (empty `--search` = none). Order in `main`: `Config::load` → language
+  of the settings → parse → `--lang` checked against `i18n::available()` codes (`check_lang`) and
+  set → help / version → `--restore` → `validate` (`--from` / `--to` with
+  `export::parse_range_bound` and `format.date` of the language, the regex compiled like
+  `compile_pattern`). Help / version / errors: `cli::show_message` = stdout / stderr +
+  `MessageBoxW` on Windows (help with tabs in the box, padded on the console); errors exit 2,
+  help / version exit 0, before the splash and `update::cleanup_old`.
+- `--restore <file>` (update restart, `update::RESTORE_ARG`) is the same form as since #15, so an
+  older installed version installing this one restarts it correctly; it is accepted anywhere,
+  hidden from the help, and when present the other arguments are ignored.
+- Several FILEs: always one merged view (`App::open_files`, as Open / drop of several files and
+  the command line since #21); `--merge` only makes it explicit.
+- App side: `App::new(cc, paths, view, lang, restore)`; `lang` overrides `cfg.language` only in
+  `i18n::set_language` (never written to the config; the language menu still shows the saved
+  choice, reload language files returns to it). `apply_cli_view` sets search (+
+  `search_confirmed`, so short texts search), regex / case / filter mode, `show_sev`
+  (`Severities::show_sev`), time range texts (`apply_time_range`), `cfg.auto_scroll` for
+  `--tail` / `--no-follow` (like the toolbar checkbox, so it is remembered), then
+  `cli_select = Line(n) | FirstMatch` when files were given. `check_loading` applies it after the
+  first `Reset` (a full read returns the whole file at once), `open_files` clears it.
+  `Line(n)`: file id of the first FILE itself (`files[id].path == paths[0]` among the files of
+  log 0, else its last file – not the rotated parts), the last entry of that file with
+  `line_no ≤ n` (multi-line entries); select + `scroll_to_selected_after_filter`, follow off,
+  `after_filter.scroll_end` dropped; none → status info `cli.line_not_found`. `FirstMatch` =
+  `select_first_match` (waits for a background re-filter). `filter_done` now runs `scroll_end`
+  before `select_first`, so a pending first match wins over following the end.
+- Help → About: row "Command line" (`about.cmdline`) pointing to `rustrace.exe --help`.
+
 ## Localization and settings
 - Localization: built-in en / sk / cs / de; external `<code>.lang` files load **without recompiling**
   from `lang\` next to the exe or `%APPDATA%\RusTrace\lang`; fallback to English.
@@ -274,7 +309,7 @@ User-facing descriptions are in `README.md`.
   program), names via `AssocQueryStringW`. Test `register_and_unregister` uses its own HKCU key.
 
 ## Tests and benchmarks
-- `cargo test` (84 tests: overview buckets incremental = full / pixel runs, readable export with Δ, durations, match bits set / iterate, bookmark file id remap, update releases list / missed versions / check setting migration, merged logs (order by time, appended older rows, formats + rotated parts + re-read, single log unchanged, interleave), store copy_entry / split_off, raw lines of entries (all formats / encodings), filter (parallel = sequential, match bits), date column filter = text filter, updates (versions, release JSON, notes, sha256 file, ZIP, install, restore state), icon / .ico layout, search as you type threshold, status-bar position percentage, file association (registry in an own HKCU test key), search history, store drop_front / move to temp file, rotated parts (naming, merge on open, rotation while watching, replaced
+- `cargo test` (91 tests: command-line parsing (file association, all options, errors, `--restore`, language / time / regex checks, help text), overview buckets incremental = full / pixel runs, readable export with Δ, durations, match bits set / iterate, bookmark file id remap, update releases list / missed versions / check setting migration, merged logs (order by time, appended older rows, formats + rotated parts + re-read, single log unchanged, interleave), store copy_entry / split_off, raw lines of entries (all formats / encodings), filter (parallel = sequential, match bits), date column filter = text filter, updates (versions, release JSON, notes, sha256 file, ZIP, install, restore state), icon / .ico layout, search as you type threshold, status-bar position percentage, file association (registry in an own HKCU test key), search history, store drop_front / move to temp file, rotated parts (naming, merge on open, rotation while watching, replaced
   file), export segments by file, time range bounds, column filter syntax, parsers, chunked/ANSI/UTF-16 reading, log definitions (CBS, DISM, IIS,
   Exchange connectivity / CSV separator, choice by name/content, appending across refreshes), store (32-byte record, ISO ↔ ms, push /
   truncate / append, mapped temp file growing past 64 MB, interner), export incl. end-to-end and

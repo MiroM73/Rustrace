@@ -5,6 +5,7 @@
 )]
 
 mod app;
+mod cli;
 mod colfilter;
 mod config;
 mod errcodes;
@@ -73,10 +74,14 @@ fn block_on<F: std::future::Future>(f: F) -> F::Output {
 }
 
 /// What the program opens with: log files from the command line (several are merged into one
-/// view), or the state of the previous version after an update (`--restore <file>`).
+/// view) with the view options (#26), or the state of the previous version after an update
+/// (`--restore <file>`).
 #[derive(Clone, Default)]
 struct Startup {
-    paths: Vec<String>,
+    paths: Vec<std::path::PathBuf>,
+    view: cli::ViewOptions,
+    /// `--lang`: UI language for this run only.
+    lang: Option<String>,
     restore: Option<update::SessionState>,
 }
 
@@ -117,33 +122,25 @@ fn run(renderer: eframe::Renderer, startup: Startup, created: &Cell<bool>) -> ef
         options,
         Box::new(move |cc| {
             created.set(true);
-            Ok(Box::new(app::App::new(cc, startup.paths, startup.restore)))
+            Ok(Box::new(app::App::new(
+                cc,
+                startup.paths,
+                startup.view,
+                startup.lang,
+                startup.restore,
+            )))
         }),
     )
 }
 
 fn main() -> eframe::Result {
-    // Optional: paths of log files (e.g. .log file association; several = one merged view), or
-    // `--restore <file>` from the previous version that has just installed this one.
-    let mut args = std::env::args().skip(1);
-    let startup = match args.next() {
-        Some(a) if a == update::RESTORE_ARG => Startup {
-            paths: Vec::new(),
-            restore: args
-                .next()
-                .and_then(|f| update::SessionState::take(std::path::Path::new(&f))),
-        },
-        first => Startup {
-            paths: first.into_iter().chain(args).collect(),
-            restore: None,
-        },
-    };
-    update::cleanup_old();
-
-    // Start-up splash until the main window has drawn its first frame (#11), in the language and
-    // theme of the settings.
     let (cfg, _) = config::Config::load();
     i18n::set_language(&cfg.language);
+    let startup = command_line();
+    update::cleanup_old();
+
+    // Start-up splash until the main window has drawn its first frame (#11), in the language
+    // (or `--lang`) and theme of the settings.
     let dark = match cfg.theme.as_str() {
         "dark" => true,
         "light" => false,
@@ -153,6 +150,59 @@ fn main() -> eframe::Result {
     let res = start(startup);
     splash::close();
     res
+}
+
+/// Reads the command line (#26): log paths (e.g. the .log file association; several = one merged
+/// view) with options, or `--restore <file>` from the previous version that has just installed
+/// this one. `--help`, `--version` and invalid options show a message and end the program.
+fn command_line() -> Startup {
+    let fail = |e: cli::CliError| -> ! {
+        let msg = e.message();
+        cli::show_message(&t!("cli.title.error"), &msg, &msg, true);
+        std::process::exit(2)
+    };
+    let opts = cli::parse(std::env::args_os().skip(1)).unwrap_or_else(|e| fail(e));
+    let languages: Vec<String> = i18n::available().into_iter().map(|l| l.code).collect();
+    // The language first, so the help and the messages are already in it.
+    let lang = match opts.lang.as_deref().map(|l| cli::check_lang(l, &languages)) {
+        Some(Ok(code)) => {
+            i18n::set_language(&code);
+            Some(code)
+        }
+        Some(Err(e)) if !opts.help && !opts.version => fail(e),
+        _ => None,
+    };
+    if opts.help || opts.version {
+        if opts.help {
+            let langs = languages.join(", ");
+            // Aligned with spaces on the console, with tabs in the message box.
+            cli::show_message(
+                &t!("cli.title.help"),
+                &cli::help_text(&langs, false),
+                &cli::help_text(&langs, true),
+                false,
+            );
+        } else {
+            let text = app::base_title();
+            cli::show_message(&t!("cli.title.version"), &text, &text, false);
+        }
+        std::process::exit(0)
+    }
+    if let Some(file) = &opts.restore {
+        return Startup {
+            restore: update::SessionState::take(file),
+            ..Default::default()
+        };
+    }
+    if let Err(e) = cli::validate(&opts.view, &t!("format.date")) {
+        fail(e)
+    }
+    Startup {
+        paths: opts.files,
+        view: opts.view,
+        lang,
+        restore: None,
+    }
 }
 
 /// Opens the main window with OpenGL, or with wgpu when OpenGL fails.

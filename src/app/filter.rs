@@ -228,11 +228,12 @@ impl App {
         }
         self.sel.truncate(self.entries.len());
         let after = std::mem::take(&mut self.after_filter);
-        if after.select_first {
-            self.select_first_match();
-        }
+        // Following the end first: selecting the first match (which stops following) wins.
         if after.scroll_end {
             self.scroll_to_end_after_filter();
+        }
+        if after.select_first {
+            self.select_first_match();
         }
         if after.scroll_selected && !self.cfg.auto_scroll {
             self.scroll_to_selected_after_filter();

@@ -398,6 +398,48 @@ about.settings = Súbor nastavení
 about.copy = Kopírovať informácie o verzii
 about.copied = Informácie o verzii sú skopírované do schránky
 
+# --- Príkazový riadok (rustrace --help) ---
+about.cmdline = Príkazový riadok
+about.cmdline.text = rustrace.exe --help vypíše voľby: otvorenie na riadku, hľadanie, filter, časový rozsah, zlúčenie logov, jazyk
+cli.title.help = RusTrace – príkazový riadok
+cli.title.version = RusTrace – verzia
+cli.title.error = RusTrace – neplatný príkazový riadok
+cli.usage = Použitie: rustrace [VOĽBY] [SÚBOR]...
+cli.files = Viac SÚBOROV sa otvorí ako jedno zobrazenie zlúčené podľa času (aj bez --merge).
+# Placeholders of option values in the help
+cli.meta.text = TEXT
+cli.meta.time = ČAS
+cli.meta.code = KÓD
+cli.opt.line = vyberie riadok N (prvého) SÚBORU a posunie sa naň
+cli.opt.search = nastaví hľadaný text a vyberie prvú zhodu
+cli.opt.regex = --search je regulárny výraz
+cli.opt.case = hľadanie rozlišuje veľké a malé písmená
+cli.opt.filter = režim Filter: len riadky zodpovedajúce --search
+cli.opt.errors = len chyby
+cli.opt.warnings = len chyby a varovania
+cli.opt.from = časový rozsah: od ČASU
+cli.opt.to = časový rozsah: do ČASU (vrátane)
+cli.opt.tail = sledovať koniec logu
+cli.opt.no_follow = nesledovať koniec logu
+cli.opt.merge = otvorí viac SÚBOROV ako jedno zobrazenie zlúčené podľa času
+cli.opt.lang = jazyk rozhrania len pre toto spustenie ({languages})
+cli.opt.help = zobrazí tohto pomocníka
+cli.opt.version = zobrazí verziu
+cli.opt.end = všetko za ním je SÚBOR
+cli.time = ČAS: ISO (2026-10-27 13:05:30, 2026-10-27T13:05, 2026-10-27) alebo poradie dátumu jazyka rozhrania, rovnako ako časový rozsah na paneli nástrojov.
+cli.example = Príklad:
+cli.error.unknown = Neznáma voľba: {option}
+cli.error.missing_value = Voľba {option} potrebuje hodnotu.
+cli.error.unexpected_value = Voľba {option} nemá hodnotu.
+cli.error.line = Neplatné číslo riadku pre --line: „{value}“ (celé číslo od 1).
+cli.error.lang = Neznámy jazyk pre --lang: „{value}“. Dostupné: {languages}
+cli.error.time = Neplatný čas pre {option}: „{value}“
+cli.error.regex = Neplatný regulárny výraz pre --search: {error}
+cli.error.needs_search = Voľba {option} potrebuje --search.
+cli.error.needs_file = Voľba {option} potrebuje SÚBOR.
+cli.error.hint = rustrace --help vypíše všetky voľby.
+cli.line_not_found = Riadok {line} sa v logu nenašiel
+
 # --- Úvodné okno ---
 splash.starting = Spúšťa sa…
 

@@ -412,6 +412,48 @@ about.settings = Settings file
 about.copy = Copy version information
 about.copied = Version information copied to the clipboard
 
+# --- Command line (rustrace --help) ---
+about.cmdline = Command line
+about.cmdline.text = rustrace.exe --help lists the options: open at a line, search, filter, time range, merge logs, language
+cli.title.help = RusTrace – command line
+cli.title.version = RusTrace – version
+cli.title.error = RusTrace – invalid command line
+cli.usage = Usage: rustrace [OPTIONS] [FILE]...
+cli.files = Several FILEs are opened as one view merged by time (also without --merge).
+# Placeholders of option values in the help
+cli.meta.text = TEXT
+cli.meta.time = TIME
+cli.meta.code = CODE
+cli.opt.line = select line N of the (first) FILE and scroll to it
+cli.opt.search = set the search text and select the first match
+cli.opt.regex = treat --search as a regular expression
+cli.opt.case = case-sensitive search
+cli.opt.filter = Filter mode: show only the rows matching --search
+cli.opt.errors = show only errors
+cli.opt.warnings = show only errors and warnings
+cli.opt.from = time range: from TIME
+cli.opt.to = time range: up to TIME (inclusive)
+cli.opt.tail = follow the end of the log
+cli.opt.no_follow = do not follow the end of the log
+cli.opt.merge = open several FILEs as one view merged by time
+cli.opt.lang = UI language for this run only ({languages})
+cli.opt.help = show this help
+cli.opt.version = show the version
+cli.opt.end = everything after it is a FILE
+cli.time = TIME: ISO (2026-10-27 13:05:30, 2026-10-27T13:05, 2026-10-27) or the date order of the UI language, like in the time range of the toolbar.
+cli.example = Example:
+cli.error.unknown = Unknown option: {option}
+cli.error.missing_value = The option {option} needs a value.
+cli.error.unexpected_value = The option {option} does not take a value.
+cli.error.line = Invalid line number for --line: "{value}" (a whole number from 1).
+cli.error.lang = Unknown language for --lang: "{value}". Available: {languages}
+cli.error.time = Invalid time for {option}: "{value}"
+cli.error.regex = Invalid regular expression for --search: {error}
+cli.error.needs_search = The option {option} needs --search.
+cli.error.needs_file = The option {option} needs a FILE.
+cli.error.hint = rustrace --help lists the options.
+cli.line_not_found = Line {line} was not found in the log
+
 # --- Start-up splash ---
 splash.starting = Starting…
 
