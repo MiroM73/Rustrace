@@ -372,6 +372,7 @@ Features (all implemented, see README for user-facing details):
     #18 match count kept incrementally (`MatchBits`). Release v0.8.0.
 43. #29 details pane Message | Raw line (byte range of every entry, read from the file on demand).
 44. #21 several different logs merged into one view by time (`LogSet`), tabs still not wanted.
+    Release v0.9.0 (#21, #29), published 2026-10-27.
 
 
 ## Ideas not done yet (offered by the owner)
