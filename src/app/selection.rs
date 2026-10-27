@@ -132,11 +132,10 @@ impl App {
             out.push_str("\r\n");
         }
         for &i in &rows {
-            let e = self.entries.at(i);
-            out.push_str(&e.line_no.to_string());
+            out.push_str(&self.entries.line_no(i).to_string());
             for c in &columns {
                 out.push('\t');
-                out.push_str(&one_line(&self.cell_text(&e, c.kind)));
+                out.push_str(&one_line(&self.cell(i, c.kind)));
             }
             out.push_str("\r\n");
         }

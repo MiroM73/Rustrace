@@ -18,6 +18,19 @@ pub enum DetailsView {
     Raw,
 }
 
+/// What the Δ time column measures (#23).
+#[derive(Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Debug, Default)]
+#[serde(rename_all = "lowercase")]
+pub enum DeltaMode {
+    /// Since the previous row shown in the table (respects the filters).
+    #[default]
+    Visible,
+    /// Since the previous row of the log, whatever the filters show.
+    Log,
+    /// Since the row set as the time reference.
+    Reference,
+}
+
 /// When RusTrace looks for a new version at start-up.
 #[derive(Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Debug, Default)]
 #[serde(rename_all = "lowercase")]
@@ -189,12 +202,20 @@ pub struct Palette {
     pub search: ([u8; 4], [u8; 4]),
     /// The line number cell of a bookmarked row (#22).
     pub bookmark: ([u8; 4], [u8; 4]),
+    /// A Δ time cell with a long gap (#23).
+    pub gap: ([u8; 4], [u8; 4]),
 }
 
 impl Palette {
     /// All (text, background) pairs, in the order of `Config::palette_mut`.
-    pub fn pairs(&self) -> [([u8; 4], [u8; 4]); 4] {
-        [self.error, self.warning, self.search, self.bookmark]
+    pub fn pairs(&self) -> [([u8; 4], [u8; 4]); 5] {
+        [
+            self.error,
+            self.warning,
+            self.search,
+            self.bookmark,
+            self.gap,
+        ]
     }
 }
 
@@ -230,6 +251,10 @@ pub struct Config {
     pub bookmark_bg: [u8; 4],
     pub bookmark_fg_dark: [u8; 4],
     pub bookmark_bg_dark: [u8; 4],
+    pub gap_fg: [u8; 4],
+    pub gap_bg: [u8; 4],
+    pub gap_fg_dark: [u8; 4],
+    pub gap_bg_dark: [u8; 4],
     pub recent_files: Vec<String>,
     /// Previously used search texts, newest first.
     pub search_history: Vec<String>,
@@ -240,6 +265,11 @@ pub struct Config {
     pub show_column_filters: bool,
     /// Show the time range (from – to) filter row.
     pub show_time_range: bool,
+    /// The Δ time column, what it measures and the gap (seconds) from which it is colored.
+    pub delta_column: bool,
+    pub delta_mode: DeltaMode,
+    pub delta_highlight: bool,
+    pub delta_threshold_s: f64,
     /// "system" | "dark" | "light"
     pub theme: String,
     /// Font size of the log text (table and message in the details pane).
@@ -330,12 +360,20 @@ impl Default for Config {
             bookmark_bg: [40, 110, 220, 255],
             bookmark_fg_dark: [255, 255, 255, 255],
             bookmark_bg_dark: [50, 110, 210, 255],
+            gap_fg: [0, 0, 0, 255],
+            gap_bg: [255, 180, 90, 255],
+            gap_fg_dark: [255, 235, 210, 255],
+            gap_bg_dark: [150, 75, 20, 255],
             recent_files: Vec::new(),
             search_history: Vec::new(),
             show_details: true,
             details_view: DetailsView::Message,
             show_column_filters: false,
             show_time_range: false,
+            delta_column: false,
+            delta_mode: DeltaMode::Visible,
+            delta_highlight: true,
+            delta_threshold_s: 30.0,
             theme: "system".into(),
             font_size: 13.0,
             ui_zoom: 1.0,
@@ -464,6 +502,7 @@ impl Config {
                 warning: (self.warning_fg_dark, self.warning_bg_dark),
                 search: (self.search_fg_dark, self.search_bg_dark),
                 bookmark: (self.bookmark_fg_dark, self.bookmark_bg_dark),
+                gap: (self.gap_fg_dark, self.gap_bg_dark),
             }
         } else {
             Palette {
@@ -471,13 +510,14 @@ impl Config {
                 warning: (self.warning_fg, self.warning_bg),
                 search: (self.search_fg, self.search_bg),
                 bookmark: (self.bookmark_fg, self.bookmark_bg),
+                gap: (self.gap_fg, self.gap_bg),
             }
         }
     }
 
     /// Editable palette colors of one theme: (label key, text, background), in the order of
     /// `Palette::pairs`.
-    pub fn palette_mut(&mut self, dark: bool) -> [(&'static str, &mut [u8; 4], &mut [u8; 4]); 4] {
+    pub fn palette_mut(&mut self, dark: bool) -> [(&'static str, &mut [u8; 4], &mut [u8; 4]); 5] {
         if dark {
             [
                 (
@@ -500,6 +540,7 @@ impl Config {
                     &mut self.bookmark_fg_dark,
                     &mut self.bookmark_bg_dark,
                 ),
+                ("colors.gap", &mut self.gap_fg_dark, &mut self.gap_bg_dark),
             ]
         } else {
             [
@@ -519,6 +560,7 @@ impl Config {
                     &mut self.bookmark_fg,
                     &mut self.bookmark_bg,
                 ),
+                ("colors.gap", &mut self.gap_fg, &mut self.gap_bg),
             ]
         }
     }

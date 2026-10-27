@@ -176,6 +176,14 @@ Features (all implemented, see README for user-facing details):
   `!` negation, case-insensitive. Cleared when the columns change (other log type).
 - Error code lookup (Ctrl+E) + automatic explanation in the details pane; descriptions from language
   files (`code.0xXXXXXXXX`) + Windows `FormatMessageW` (also wininet/winhttp).
+- **Δ time column** (#23, `app/delta.rs`): `ColumnKind::Delta` inserted by `App::columns()` after
+  the date/time column when `cfg.delta_column`; `cfg.delta_mode` (`DeltaMode::Visible` = previous
+  row of `filtered` before the entry, also for hidden rows / `Log` = previous entry /
+  `Reference` = `App::time_ref` (ms, file, line)), at most `MAX_LOOK_BACK` rows back for a dated
+  one; `delta_cell` → text + long gap (`cfg.delta_threshold_s`, palette pair `gap`); never
+  filtered (`passes_columns` → true, no filter field); `App::cell(idx, kind)` for copies;
+  readable export `ReadableRow::delta` after the date/time; header context menu (header labels
+  are not selectable, otherwise they take the click).
 - **Selection of several rows** (#25, `app/selection.rs`): `selected` = cursor row, `sel: MatchBits`
   (entry indexes; `MatchBits::set / first_one / last_one / ones`), `sel_anchor` for Shift ranges.
   Every single selection goes through `select_only` (also `select_row`); `drop_front` →
@@ -274,7 +282,7 @@ Features (all implemented, see README for user-facing details):
 
 ## Commands
 - `cargo build --release` → `target\release\rustrace.exe`
-- `cargo test` (82 tests: durations, match bits set / iterate, bookmark file id remap, update releases list / missed versions / check setting migration, merged logs (order by time, appended older rows, formats + rotated parts + re-read, single log unchanged, interleave), store copy_entry / split_off, raw lines of entries (all formats / encodings), filter (parallel = sequential, match bits), date column filter = text filter, updates (versions, release JSON, notes, sha256 file, ZIP, install, restore state), icon / .ico layout, search as you type threshold, status-bar position percentage, file association (registry in an own HKCU test key), search history, store drop_front / move to temp file, rotated parts (naming, merge on open, rotation while watching, replaced
+- `cargo test` (82 tests: readable export with Δ, durations, match bits set / iterate, bookmark file id remap, update releases list / missed versions / check setting migration, merged logs (order by time, appended older rows, formats + rotated parts + re-read, single log unchanged, interleave), store copy_entry / split_off, raw lines of entries (all formats / encodings), filter (parallel = sequential, match bits), date column filter = text filter, updates (versions, release JSON, notes, sha256 file, ZIP, install, restore state), icon / .ico layout, search as you type threshold, status-bar position percentage, file association (registry in an own HKCU test key), search history, store drop_front / move to temp file, rotated parts (naming, merge on open, rotation while watching, replaced
   file), export segments by file, time range bounds, column filter syntax, parsers, chunked/ANSI/UTF-16 reading, log definitions (CBS, DISM, IIS,
   Exchange connectivity / CSV separator, choice by name/content, appending across refreshes), store (32-byte record, ISO ↔ ms, push /
   truncate / append, mapped temp file growing past 64 MB, interner), export incl. end-to-end and
@@ -400,6 +408,7 @@ Features (all implemented, see README for user-facing details):
 46. #22 bookmarks (Ctrl+F2, F2 / Shift+F2, notes, list window, filter, export criterion).
 47. #25 several selected rows (Shift / Ctrl, Ctrl+A, copy messages / table / original lines,
     export selected rows).
+48. #23 Δ time column (previous shown / previous of the log / reference row, long gaps colored).
 
 
 ## Ideas not done yet (offered by the owner)

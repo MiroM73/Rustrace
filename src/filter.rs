@@ -254,6 +254,8 @@ impl FilterSpec {
                 // The UI builds `CellFilter::Date` for this column; a text filter sees ISO text.
                 ColumnKind::Role(Role::DateTime) => f.matches(&e.datetime()),
                 ColumnKind::Extra(i) => f.matches(e.extra(*i)),
+                // Computed for display only, never filtered.
+                ColumnKind::Delta => true,
                 ColumnKind::File => f.matches(
                     self.file_labels
                         .get(e.file as usize)

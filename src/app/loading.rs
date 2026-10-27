@@ -61,9 +61,22 @@ impl App {
     }
 
     /// Table columns: the columns of the log type, plus the File column first when the log is
-    /// merged from several files (rotated parts).
+    /// merged from several files (rotated parts) and the Δ time column after the date/time.
     pub(in crate::app) fn columns(&self) -> Vec<LogColumn> {
         let mut cols = self.schema.columns.clone();
+        if self.cfg.delta_column {
+            let at = cols
+                .iter()
+                .position(|c| c.kind == ColumnKind::Role(Role::DateTime))
+                .map_or(0, |p| p + 1);
+            cols.insert(
+                at,
+                LogColumn {
+                    kind: ColumnKind::Delta,
+                    title: None,
+                },
+            );
+        }
         if self.files.len() > 1 {
             cols.insert(
                 0,
@@ -178,6 +191,7 @@ impl App {
         self.is_match.clear();
         self.committed_len = 0;
         self.select_only(None);
+        self.time_ref = None;
         self.code_cache = None;
         self.last_refresh = None;
         self.last_refresh_wall = None;

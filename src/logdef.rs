@@ -88,6 +88,8 @@ pub enum ColumnKind {
     Extra(usize),
     /// The file of the entry – added by the UI when the log is merged from rotated parts.
     File,
+    /// Time since the previous / reference row – added by the UI when turned on (#23).
+    Delta,
 }
 
 /// A table column (after the line number).

@@ -195,6 +195,7 @@ impl App {
             ColumnKind::Role(Role::Thread) => t!("column.thread"),
             ColumnKind::Extra(_) => String::new(),
             ColumnKind::File => t!("column.file"),
+            ColumnKind::Delta => t!("column.delta"),
         }
     }
 

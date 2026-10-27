@@ -1,4 +1,4 @@
-//! Durations for display: the time span of selected rows.
+//! Durations for display: the time span of selected rows and the Δ time column.
 
 /// A duration in a unit that fits its size: `0.120 s`, `12.5 s`, `3 min 05 s`, `1 h 02 min`,
 /// `2 d 03 h`. Negative durations get a minus sign.
@@ -20,6 +20,15 @@ pub fn format_duration(ms: i64) -> String {
     format!("{sign}{text}")
 }
 
+/// A time difference with its sign: `+0.120 s`, `−3 min 05 s`.
+pub fn format_delta(ms: i64) -> String {
+    if ms < 0 {
+        format_duration(ms)
+    } else {
+        format!("+{}", format_duration(ms))
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -36,5 +45,9 @@ mod tests {
         assert_eq!(format_duration(3_720_000), "1 h 02 min");
         assert_eq!(format_duration(2 * 86_400_000 + 3 * 3_600_000), "2 d 03 h");
         assert_eq!(format_duration(-185_000), "−3 min 05 s");
+        assert_eq!(format_delta(120), "+0.120 s");
+        assert_eq!(format_delta(0), "+0.000 s");
+        assert_eq!(format_delta(-12_500), "−12.5 s");
+        assert_eq!(format_delta(3_720_000), "+1 h 02 min");
     }
 }

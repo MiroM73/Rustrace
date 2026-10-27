@@ -88,6 +88,8 @@ impl App {
             ColumnKind::Role(Role::Thread) => e.thread.to_owned(),
             ColumnKind::Extra(i) => e.extra(i).to_owned(),
             ColumnKind::File => self.file_label(e.file),
+            // Needs the row position: `App::cell` / `App::delta_cell`.
+            ColumnKind::Delta => String::new(),
         }
     }
 

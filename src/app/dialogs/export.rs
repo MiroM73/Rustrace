@@ -407,6 +407,7 @@ impl App {
         let separators = self.cfg.export_separators;
         // The readable text is built here (it needs translations and date formatting);
         // the original lines are read from the files in the thread.
+        let delta = self.cfg.delta_column;
         let readable_text = readable.then(|| {
             let block_seps: Vec<String> = segs
                 .iter()
@@ -442,6 +443,7 @@ impl App {
                                     e.line_no.to_string()
                                 },
                                 datetime: self.display_dt(&e.datetime()),
+                                delta: delta.then(|| self.delta_cell(i).0),
                                 severity: match e.severity {
                                     Severity::Error => t!("severity.error"),
                                     Severity::Warning => t!("severity.warning"),
@@ -453,8 +455,15 @@ impl App {
                         .collect()
                 })
                 .collect();
-            // Extra columns of a log definition are appended with their headers.
+            // Extra columns of a log definition are appended with their headers; the Δ column
+            // follows the date/time when it is shown.
             let mut header = t!("export.header");
+            if delta {
+                let mut cols: Vec<&str> = header.split('\t').collect();
+                let delta_title = t!("column.delta");
+                cols.insert(3.min(cols.len()), &delta_title);
+                header = cols.join("\t");
+            }
             for (i, name) in self.schema.extra_names.iter().enumerate() {
                 let title = self
                     .schema

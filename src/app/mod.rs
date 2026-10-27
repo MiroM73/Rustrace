@@ -1,6 +1,6 @@
 use crate::colfilter::{ColumnFilter, DateFilter, DateLayout};
 use crate::config::{
-    Config, DetailsView, HighlightRule, HighlightScope, IntervalUnit, UpdateCheck,
+    Config, DeltaMode, DetailsView, HighlightRule, HighlightScope, IntervalUnit, UpdateCheck,
 };
 use crate::errcodes::{self, CodeInfo};
 use crate::excerpt;
@@ -31,6 +31,7 @@ use std::time::{Duration, Instant};
 
 // The `impl App` blocks are split by area; every submodule starts with `use crate::app::*;`.
 mod bookmarks;
+mod delta;
 mod details;
 mod dialogs;
 mod filter;
@@ -151,6 +152,7 @@ enum UpdateState {
 enum RowAction {
     ExplainCode(u32),
     ToggleBookmark(usize),
+    SetTimeReference(usize),
     CopyMessages,
     CopyTable,
     CopyOriginal,
@@ -233,6 +235,8 @@ pub struct App {
     /// Files of the view before it was opened again; the next full read moves the bookmarks to
     /// the new file ids.
     bookmark_files: Option<Vec<SourceFile>>,
+    /// The time reference of the Δ column (#23): (timestamp, file id, line number).
+    time_ref: Option<(i64, u16, usize)>,
 
     rules: Vec<CompiledRule>,
     rule_errors: Vec<Option<String>>,
@@ -416,6 +420,7 @@ impl App {
             bookmarks_only: false,
             show_bookmarks: false,
             bookmark_files: None,
+            time_ref: None,
             rules: Vec::new(),
             rule_errors: Vec::new(),
             show_rules: false,

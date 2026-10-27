@@ -182,6 +182,7 @@ impl App {
                 match c.kind {
                     ColumnKind::Role(Role::Message) => Column::initial(msg_width).at_least(120.0),
                     ColumnKind::Role(Role::DateTime) => Column::initial(175.0).at_least(40.0),
+                    ColumnKind::Delta => Column::initial(100.0).at_least(40.0),
                     _ => Column::initial(150.0).at_least(40.0),
                 }
             };
@@ -216,12 +217,23 @@ impl App {
         // Left edges of the first and the last header cell → natural width of the table.
         let last_col = headers.len() - 1;
         let mut edges = (0.0f32, 0.0f32);
+        // Right click on a header: the Δ time column on / off (#23).
+        let mut delta_on = self.cfg.delta_column;
+        let kinds: Vec<ColumnKind> = columns.iter().map(|c| c.kind).collect();
 
         tb.header(header_h, |mut h| {
             for (i, title) in headers.into_iter().enumerate() {
                 let (cell, _) = h.col(|ui| {
+                    // Under the widgets of the cell, so the filter field keeps its clicks.
+                    let resp =
+                        ui.interact(ui.max_rect(), ui.scope_id().with("header"), Sense::click());
+                    resp.context_menu(|ui| {
+                        ui.checkbox(&mut delta_on, t!("delta.column"))
+                            .on_hover_text(t!("delta.column.tip"));
+                        ui.weak(t!("delta.more_in_view"));
+                    });
                     ui.vertical(|ui| {
-                        ui.strong(title);
+                        ui.add(egui::Label::new(RichText::new(title).strong()).selectable(false));
                         if !show_filters {
                             return;
                         }
@@ -234,6 +246,8 @@ impl App {
                             {
                                 clear_filters = true;
                             }
+                        } else if kinds[i - 1] == ColumnKind::Delta {
+                            // Computed column: nothing to filter.
                         } else {
                             let text = &mut filter_texts[i - 1];
                             let active = ColumnFilter::parse(text).is_some();
@@ -354,6 +368,30 @@ impl App {
                                 ui.add(egui::Label::new(job).truncate().selectable(false));
                             });
                         }
+                        ColumnKind::Delta => {
+                            row.col(|ui| {
+                                let (text, long) = self.delta_cell(idx);
+                                let color = if long {
+                                    let (gfg, gbg) = self.cfg.palette(self.dark).gap;
+                                    ui.painter().rect_filled(
+                                        ui.max_rect().expand2(gap),
+                                        0.0,
+                                        c32(gbg),
+                                    );
+                                    c32(gfg)
+                                } else {
+                                    paint_bg(ui);
+                                    fg_col
+                                };
+                                ui.add(
+                                    egui::Label::new(
+                                        RichText::new(text).font(font.clone()).color(color),
+                                    )
+                                    .truncate()
+                                    .selectable(false),
+                                );
+                            });
+                        }
                         kind => {
                             row.col(|ui| simple(ui, &self.cell_text(&e, kind)));
                         }
@@ -384,6 +422,17 @@ impl App {
                         .clicked()
                     {
                         action = Some(RowAction::ToggleBookmark(idx));
+                        ui.close();
+                    }
+                    if ui
+                        .add_enabled(
+                            e.timestamp().is_some(),
+                            egui::Button::new(format!("⏱ {}", t!("context.time_reference"))),
+                        )
+                        .on_hover_text(t!("context.time_reference.tip"))
+                        .clicked()
+                    {
+                        action = Some(RowAction::SetTimeReference(idx));
                         ui.close();
                     }
                     ui.separator();
@@ -486,6 +535,10 @@ impl App {
             self.table_scroll_x = out.state.clamped_offset().x;
         }
 
+        if delta_on != self.cfg.delta_column {
+            self.cfg.delta_column = delta_on;
+            self.cfg_dirty = true;
+        }
         if let Some(i) = clicked {
             let mods = parent.input(|i| i.modifiers);
             self.click_row(i, mods);
@@ -511,6 +564,7 @@ impl App {
             match a {
                 RowAction::ExplainCode(v) => self.open_lookup(Some(v)),
                 RowAction::ToggleBookmark(i) => self.toggle_bookmark(i),
+                RowAction::SetTimeReference(i) => self.set_time_reference(i),
                 RowAction::CopyMessages => self.copy_messages(&ctx),
                 RowAction::CopyTable => self.copy_table(&ctx),
                 RowAction::CopyOriginal => self.copy_original(),

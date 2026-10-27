@@ -303,6 +303,8 @@ pub struct ReadableRow<'a> {
     /// Line number (`file:line` for logs of several files).
     pub line: String,
     pub datetime: String,
+    /// The Δ time column, when it is shown (#23).
+    pub delta: Option<String>,
     pub severity: String,
     pub entry: EntryRef<'a>,
 }
@@ -330,11 +332,17 @@ pub fn build_readable(
         }
         for r in rows {
             let msg = r.entry.message.replace("\r\n", "\n").replace('\n', " ↵ ");
+            let delta = r
+                .delta
+                .as_ref()
+                .map(|d| format!("\t{d}"))
+                .unwrap_or_default();
             out.push_str(&format!(
-                "{}\t{}\t{}\t{}\t{}\t{}\t{}",
+                "{}\t{}\t{}{}\t{}\t{}\t{}\t{}",
                 if r.highlighted { "»" } else { "" },
                 r.line,
                 r.datetime,
+                delta,
                 r.severity,
                 r.entry.component,
                 r.entry.thread,
@@ -453,6 +461,7 @@ mod tests {
             highlighted: true,
             line: "7".into(),
             datetime: "t".into(),
+            delta: None,
             severity: "Error".into(),
             entry: e.at(0),
         }]];
@@ -467,11 +476,13 @@ mod tests {
             highlighted: false,
             line: "9".into(),
             datetime: "t".into(),
+            delta: Some("+1.5 s".into()),
             severity: "Error".into(),
             entry: e2.at(0),
         }]];
         let txt = build_readable("H", &rows, &[separator(None, 9, 9)], false, 2);
-        assert_eq!(txt, "H\r\n\t9\tt\tError\t\t\tGET /\t500\t\r\n");
+        // The Δ column follows the date/time.
+        assert_eq!(txt, "H\r\n\t9\tt\t+1.5 s\tError\t\t\tGET /\t500\t\r\n");
     }
 
     /// Whole pipeline on a real file: parse, find errors, merge ±1 context, read original lines.

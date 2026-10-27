@@ -126,7 +126,8 @@ impl App {
             // Every column except the message (shown below), in the order of the table.
             for c in &self.columns() {
                 let value = match c.kind {
-                    ColumnKind::Role(Role::Message) => continue,
+                    // The Δ values follow below.
+                    ColumnKind::Role(Role::Message) | ColumnKind::Delta => continue,
                     kind => self.cell_text(&e, kind),
                 };
                 if value.is_empty() {
@@ -143,6 +144,23 @@ impl App {
                     _ => value,
                 };
                 ui.label(label);
+            }
+            // Time to the previous row and to the reference row (#23).
+            let idx = self.details_row().unwrap_or_default();
+            if let Some(d) = self.delta_ms(idx, DeltaMode::Visible) {
+                ui.separator();
+                ui.label(t!(
+                    "details.delta.previous",
+                    delta = crate::timefmt::format_delta(d)
+                ))
+                .on_hover_text(t!("delta.mode.visible"));
+            }
+            if let Some(d) = self.delta_ms(idx, DeltaMode::Reference) {
+                ui.separator();
+                ui.label(t!(
+                    "details.delta.reference",
+                    delta = crate::timefmt::format_delta(d)
+                ));
             }
         });
         // Explanation of error codes found in the message.

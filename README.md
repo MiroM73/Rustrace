@@ -245,7 +245,8 @@ the version information into the exe; this uses the resource compiler `rc.exe` o
 - optionally match the Component column as well (and the extra columns of a log definition)
 - order = priority (up/down arrows), on/off, live preview, invalid regex warning
 - import/export of rules as JSON (e.g. to share with colleagues)
-- error / warning / search match colors are configurable (Highlighting → Colors…)
+- error / warning / search match, bookmark and long-gap (Δ column) colors are configurable
+  (Highlighting → Colors…)
 - right-click a row: copy, search component, create a rule for the component, explain error code
 
 **Themes**
@@ -358,6 +359,23 @@ the version information into the exe; this uses the resource compiler `rc.exe` o
 **Position in the log** – the status bar shows where the selected row is among the rows shown in
 the table: `📍 Row 25 / 100 (25 %)`; with a filter active the numbers count only the visible rows,
 the tooltip shows the line number in the file.
+
+**Δ time column** – to find where an installation or update "hangs", the gaps between entries
+matter more than the absolute times
+- turned on in the View menu or with a right click on any column header ("Δ time column"); it
+  is shown after the date/time column and hidden by default
+- modes (View menu): **since the previous row shown** (default – respects the filters, so with
+  only errors shown it is the time between errors), **since the previous row of the log**
+  (ignores the filters), **since the reference row** (right click on a row → "Set as time
+  reference"; rows before it are negative)
+- the format adapts to the size: `+0.120 s`, `+12.5 s`, `+3 min 05 s`, `+1 h 02 min`; rows without
+  a date/time have an empty cell
+- **long gaps are colored**: from 30 s by default (View → "Color gaps of at least … s"), colors
+  "Long gap (Δ column)" per theme in Highlighting → Colors
+- the details pane shows the time to the previous row shown and to the reference row; the
+  readable-table export and "Copy as table" include the Δ column while it is shown
+- computed from the stored timestamps only for the rows drawn – no memory per row, works for
+  merged logs and rotated parts too
 
 **Selecting several rows** – like the lists in Windows Explorer
 - **Shift + click** / **Shift + ↑ ↓ PgUp PgDn Home End** select a range from the last clicked row,
@@ -560,7 +578,7 @@ The built-in languages live in `lang/*.lang` in the source tree and are embedded
   parsing, last-N blocks, output formats (+ tests)
 - `src/i18n.rs` – localization: language files, fallback, `t!()` macro (+ tests)
 - `src/config.rs` – settings and rules (serde/JSON)
-- `src/timefmt.rs` – durations for display (+ tests)
+- `src/timefmt.rs` – durations for display: selection span, Δ column (+ tests)
 - `src/app/` – user interface (`App`), one `impl App` block per area:
   - `mod.rs` – the `App` state, start-up, theme / zoom / language, the frame loop (`eframe::App`)
   - `loading.rs` – opening files, background reading, auto refresh, rotation, memory limits
@@ -571,6 +589,7 @@ The built-in languages live in `lang/*.lang` in the source tree and are embedded
   - `menu.rs`, `toolbar.rs`, `statusbar.rs` (+ tests) – menu bar, toolbar and time range row, status bar
   - `table.rs` – the log table, row colors, highlighted text, context menu
   - `details.rs` – details pane (message / raw line), error code explanation
+  - `delta.rs` – the Δ time column (modes, reference row, long gaps)
   - `selection.rs` – selection of several rows, copying them (messages, table, original lines)
   - `bookmarks.rs` – bookmarks: toggling, F2 navigation, kept on their lines through refreshes (+ tests)
   - `widgets.rs` – small shared UI helpers (color button, theme switch, …)

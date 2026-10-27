@@ -144,6 +144,8 @@ impl App {
                     self.refilter_from(0);
                 }
                 ui.separator();
+                self.delta_menu(ui);
+                ui.separator();
                 ui.label(t!("menu.view.theme"));
                 let mut theme_changed = false;
                 for (id, key) in [
