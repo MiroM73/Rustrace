@@ -18,6 +18,7 @@ mod httpstatus;
 mod i18n;
 mod icon;
 mod logdef;
+mod logset;
 mod merge;
 mod overview;
 mod parser;

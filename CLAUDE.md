@@ -27,6 +27,7 @@ Feature index (file → section of `docs/architecture.md`):
 - Formats, encodings, chunked background reading – `src/parser.rs` → Formats, Reading
 - Log definitions (`.def`, W3C, groups, update notice) – `src/logdef.rs`, `app/logdefs.rs` → Log definitions
 - Several logs merged by time – `src/merge.rs` → Merged logs
+- Log sets (File → Open log set, `.set` files, variables) – `src/logset.rs`, `dialogs/logsets.rs` → Log sets
 - Rotated parts, rotation while watching – `src/parser.rs` → Rotated logs
 - Compact store, temp file, memory limit – `src/store.rs`, `app/loading.rs` → Compact storage, Memory limits
 - Details pane message / raw line – `app/details.rs` → Raw line
@@ -62,14 +63,15 @@ Feature index (file → section of `docs/architecture.md`):
 - `src/store.rs` – `LogStore` / `EntryRef` (compact entries, text arena, interner, ISO ↔ ms).
 - `src/merge.rs` – `LogSet`, `interleave`, `apply_appended`.
 - `src/logdef.rs` – log definitions, `Schema` / `Column` / `ColumnKind` / `Role`.
+- `src/logset.rs` – log sets: `.set` parsing / loading, path variables, file checks.
 - `src/filter.rs` – `FilterSpec` / `CellFilter` / `MatchBits`; `src/colfilter.rs` – column filter syntax.
 - `src/export.rs` – pure export logic; `src/overview.rs` – overview strip buckets;
   `src/timefmt.rs` – durations; `src/excerpt.rs` – message cell text; `src/errcodes.rs` – error codes;
   `src/httpstatus.rs` – HTTP / IIS status codes.
 - `src/update.rs` / `src/http.rs` – updates; `src/i18n.rs` – `t!()`, language files;
   `src/config.rs` – `Config`, rules, per-theme palettes, serde defaults/migration.
-- `lang/*.lang` – built-in translations; `logdef/*.def` – built-in log definitions (both embedded
-  with `include_str!` and shipped next to the exe).
+- `lang/*.lang` – built-in translations; `logdef/*.def` – built-in log definitions; `logsets/*.set`
+  – built-in log sets (all embedded with `include_str!` and shipped next to the exe).
 
 ## Conventions
 - **Every user-visible string goes through `t!("key")`** (placeholders `t!("key", name = value)`).

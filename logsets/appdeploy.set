@@ -1,0 +1,21 @@
+# RusTrace log set – ConfigMgr application deployment
+#
+# Keys: name / name.<language>, description / description.<language>, file (one line per log).
+# Variables: %CCMLOGS% (ConfigMgr client logs, usually C:\Windows\CCM\Logs), %WINDIR%,
+# %PROGRAMDATA%, %SYSTEMDRIVE%. Copy this file into %APPDATA%\RusTrace\logsets to make an own set.
+
+name = Application deployment
+name.sk = Nasadenie aplikácií
+name.cs = Nasazení aplikací
+name.de = Anwendungsbereitstellung
+description = Discovery, requirement evaluation and installation of applications, download of their content.
+description.sk = Zisťovanie, vyhodnotenie požiadaviek a inštalácia aplikácií, sťahovanie ich obsahu.
+description.cs = Zjišťování, vyhodnocení požadavků a instalace aplikací, stahování jejich obsahu.
+description.de = Erkennung, Auswertung der Anforderungen und Installation von Anwendungen, Download ihres Inhalts.
+
+file = %CCMLOGS%\AppDiscovery.log
+file = %CCMLOGS%\AppEnforce.log
+file = %CCMLOGS%\AppIntentEval.log
+file = %CCMLOGS%\CAS.log
+file = %CCMLOGS%\ContentTransferManager.log
+file = %CCMLOGS%\DataTransferService.log

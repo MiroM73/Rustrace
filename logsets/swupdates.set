@@ -1,0 +1,20 @@
+# RusTrace log set – ConfigMgr software updates
+#
+# %WINDIR%\WindowsUpdate.log is not part of the set: since Windows 10 the Windows Update client
+# writes ETL traces and the file only says to run Get-WindowsUpdateLog.
+
+name = Software updates
+name.sk = Aktualizácie softvéru
+name.cs = Aktualizace softwaru
+name.de = Softwareupdates
+description = Update scan, evaluation, deployment and installation, with the Windows servicing log (CBS).
+description.sk = Vyhľadávanie, vyhodnotenie, nasadenie a inštalácia aktualizácií, s logom servisu Windows (CBS).
+description.cs = Vyhledávání, vyhodnocení, nasazení a instalace aktualizací, s logem servisu Windows (CBS).
+description.de = Suche, Auswertung, Bereitstellung und Installation von Updates, mit dem Wartungsprotokoll von Windows (CBS).
+
+file = %CCMLOGS%\WUAHandler.log
+file = %CCMLOGS%\ScanAgent.log
+file = %CCMLOGS%\UpdatesDeployment.log
+file = %CCMLOGS%\UpdatesHandler.log
+file = %CCMLOGS%\UpdatesStore.log
+file = %WINDIR%\Logs\CBS\CBS.log

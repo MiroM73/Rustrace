@@ -66,6 +66,28 @@ User-facing descriptions are in `README.md`.
   100 MB IIS (3.7 M rows): separately ~9.2 s, merged ~9.3 s (`bench_merge`). First merge keeps
   the per-log stores and the merged store at once (temporary peak).
 
+## Log sets
+- **Log sets** (#27, `src/logset.rs` pure + tested, window `app/dialogs/logsets.rs`): `.set` files
+  (`name` / `name.<lang>`, `description` / `description.<lang>`, repeated `file`; unknown keys and
+  lines without `=` ignored, no `file` = error). Translations live **in the set file** (not in
+  `.lang` keys) so own sets carry their own; `LogSetDef::name(code)` tries the code, its base
+  language, then the default. Loading like the log definitions (`logset::load_from`, same
+  `PRIO_*`): built-in (`BUILTIN`, `include_str!` of `logsets/*.set`) replaced by a same-named file in
+  `logsets\` next to the exe; own = `%APPDATA%\RusTrace\logsets` (`user_set_dir`), both offered; no
+  update notice. Loaded every time the window opens (`App::open_log_sets`), so edits need no reload.
+  `LogSetDef::key` = `predefined/<id>` | `own/<id>` → `cfg.last_log_set`.
+- Variables: `Vars` (windir, programdata, ccmlogs, systemdrive, `env` = other `%NAME%` from the
+  environment); `local_vars(ccm)` – `%CCMLOGS%` from `HKLM\SOFTWARE\Microsoft\CCM\Logging\@Global`
+  `LogDirectory` (`fileassoc::hklm_string`, Windows) else `%WINDIR%\CCM\Logs`; `resolve` →
+  `Err("%NAME%")` for an unknown variable, a lone `%` stays.
+- Window: `App::log_sets: Option<LogSetDialog>` (taken out and put back each frame). Choosing a set
+  → `start_set_check`: rows resolved on the UI thread, `logset::check_file` (metadata → `FileState`
+  Found { size, modified ISO, rotated = `parser::rotated_parts` count when `cfg.merge_rotated` } /
+  NotFound / AccessDenied / NotAFile / Error) for all rows in one `rustrace-logset` thread, result
+  over a channel + repaint; a newer check replaces the receiver (the old result is dropped). Found
+  rows are ticked; Open → `App::open_files(ticked found paths)` = the merged view of #21 (one path =
+  a normal single log).
+
 ## Rotated logs
 - **Rotated logs merged** (`cfg.merge_rotated`, default on; `parser::rotated_parts`): opening
   `service.log` also reads `service.lo_` and `service-YYYYMMDD-HHMMSS.log` first (sorted by mtime,
@@ -325,7 +347,7 @@ User-facing descriptions are in `README.md`.
   program), names via `AssocQueryStringW`. Test `register_and_unregister` uses its own HKCU key.
 
 ## Tests and benchmarks
-- `cargo test` (96 tests: HTTP status lookup / class fallback / lookup input parsing and ambiguity / cell values, status column keys of log definitions, command-line parsing (file association, all options, errors, `--restore`, language / time / regex checks, help text), overview buckets incremental = full / pixel runs, readable export with Δ, durations, match bits set / iterate, bookmark file id remap, update releases list / missed versions / check setting migration, merged logs (order by time, appended older rows, formats + rotated parts + re-read, single log unchanged, interleave), store copy_entry / split_off, raw lines of entries (all formats / encodings), filter (parallel = sequential, match bits), date column filter = text filter, updates (versions, release JSON, notes, sha256 file, ZIP, install, restore state), icon / .ico layout, search as you type threshold, status-bar position percentage, file association (registry in an own HKCU test key), search history, store drop_front / move to temp file, rotated parts (naming, merge on open, rotation while watching, replaced
+- `cargo test` (100 tests: log sets (set file parsing / translations / built-in sets, variables, loading priorities, file checks), HTTP status lookup / class fallback / lookup input parsing and ambiguity / cell values, status column keys of log definitions, command-line parsing (file association, all options, errors, `--restore`, language / time / regex checks, help text), overview buckets incremental = full / pixel runs, readable export with Δ, durations, match bits set / iterate, bookmark file id remap, update releases list / missed versions / check setting migration, merged logs (order by time, appended older rows, formats + rotated parts + re-read, single log unchanged, interleave), store copy_entry / split_off, raw lines of entries (all formats / encodings), filter (parallel = sequential, match bits), date column filter = text filter, updates (versions, release JSON, notes, sha256 file, ZIP, install, restore state), icon / .ico layout, search as you type threshold, status-bar position percentage, file association (registry in an own HKCU test key), search history, store drop_front / move to temp file, rotated parts (naming, merge on open, rotation while watching, replaced
   file), export segments by file, time range bounds, column filter syntax, parsers, chunked/ANSI/UTF-16 reading, log definitions (CBS, DISM, IIS,
   Exchange connectivity / CSV separator, choice by name/content, appending across refreshes), store (32-byte record, ISO ↔ ms, push /
   truncate / append, mapped temp file growing past 64 MB, interner), export incl. end-to-end and
@@ -351,7 +373,7 @@ User-facing descriptions are in `README.md`.
 ## Packaging and releases
 - `scripts\package.ps1` → `dist\RusTrace-v<version>-windows-x64.exe` (7-Zip SFX) and `.zip` (same
   content, for extracting manually), each with a `.sha256`; both extract to
-  `RusTrace\` with `rustrace.exe` + `lang\` + `logdef\` + `LICENSE`. Needs 7-Zip.
+  `RusTrace\` with `rustrace.exe` + `lang\` + `logdef\` + `logsets\` + `LICENSE`. Needs 7-Zip.
 - Releases: push tag `v<version>` (matching `Cargo.toml`) → GitHub Actions `release.yml` tests,
   builds, packages and creates a **draft** release; then publish it. Manual workflow run = artifact only.
   `scripts\release.ps1 <version> [-Publish] [-DryRun] [-NoWatch] [-Yes]` does all of it (checks,
@@ -373,6 +395,7 @@ User-facing descriptions are in `README.md`.
 - `src/filter.rs` – `FilterSpec` / `CellFilter` / `MatchBits`, sequential + parallel filter run.
 - `src/colfilter.rs` – column filter syntax, `DateLayout`, `DateFilter` (date column as ranges).
 - `src/export.rs` – pure export logic (range merging, time filter, date input parsing, last-N, output).
+- `src/logset.rs` – log sets: `.set` parsing, loading, variables (`Vars`, `resolve`), file checks.
 - `src/errcodes.rs` – error code detection/parsing/lookup.
 - `src/httpstatus.rs` – HTTP status + IIS substatus descriptions, lookup input (`404.3`, `HTTP 500`).
 - `src/update.rs` – update check / download / install / restart state; `src/http.rs` – WinHTTP GET.
@@ -382,3 +405,4 @@ User-facing descriptions are in `README.md`.
 - `src/config.rs` – `Config`, `HighlightRule`, per-theme palettes, serde defaults/migration.
 - `lang/*.lang` – built-in translations, embedded with `include_str!`.
 - `logdef/*.def` – built-in log definitions, embedded with `include_str!` and shipped in `logdef\`.
+- `logsets/*.set` – built-in log sets, embedded with `include_str!` and shipped in `logsets\`.

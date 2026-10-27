@@ -344,6 +344,8 @@ pub struct Config {
     /// The predefined log definitions the user has seen (file name → text): after an update of
     /// RusTrace the new / changed ones are reported against these.
     pub known_logdefs: BTreeMap<String, String>,
+    /// The log set chosen last in File → Open log set (`LogSetDef::key`, #27).
+    pub last_log_set: String,
 
     /// When to look for a new version on GitHub at start-up.
     pub update_when: UpdateCheck,
@@ -426,6 +428,7 @@ impl Default for Config {
             max_log_mb: 1000,
             logdef_sources: "all".into(),
             known_logdefs: BTreeMap::new(),
+            last_log_set: String::new(),
             update_when: UpdateCheck::Start,
             update_check_old: None,
             update_last_check: 0,

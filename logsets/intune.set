@@ -1,0 +1,20 @@
+# RusTrace log set – Intune management extension and co-management
+#
+# The Intune management extension logs are in %PROGRAMDATA%\Microsoft\IntuneManagementExtension\Logs
+# (AppWorkload.log holds the Win32 app deployments of newer versions); CoManagementHandler.log is
+# a ConfigMgr client log.
+
+name = Intune / co-management
+name.sk = Intune / spoločná správa
+name.cs = Intune / společná správa
+name.de = Intune / Co-Verwaltung
+description = Intune management extension (check-ins, Win32 apps, PowerShell scripts) and the co-management workloads of the ConfigMgr client.
+description.sk = Rozšírenie správy Intune (pripojenia, aplikácie Win32, skripty PowerShell) a úlohy spoločnej správy klienta ConfigMgr.
+description.cs = Rozšíření správy Intune (připojení, aplikace Win32, skripty PowerShell) a úlohy společné správy klienta ConfigMgr.
+description.de = Intune-Verwaltungserweiterung (Check-ins, Win32-Apps, PowerShell-Skripte) und die Co-Verwaltungs-Workloads des ConfigMgr-Clients.
+
+file = %PROGRAMDATA%\Microsoft\IntuneManagementExtension\Logs\IntuneManagementExtension.log
+file = %PROGRAMDATA%\Microsoft\IntuneManagementExtension\Logs\AppWorkload.log
+file = %PROGRAMDATA%\Microsoft\IntuneManagementExtension\Logs\AppActionProcessor.log
+file = %PROGRAMDATA%\Microsoft\IntuneManagementExtension\Logs\AgentExecutor.log
+file = %CCMLOGS%\CoManagementHandler.log

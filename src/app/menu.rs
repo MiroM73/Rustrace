@@ -24,6 +24,14 @@ impl App {
                     ui.close();
                     self.add_dialog();
                 }
+                if ui
+                    .button(format!("📑 {}", t!("menu.file.logset")))
+                    .on_hover_text(t!("menu.file.logset.tip"))
+                    .clicked()
+                {
+                    ui.close();
+                    self.open_log_sets();
+                }
                 if self.is_merged() {
                     ui.menu_button(format!("📚 {}", t!("menu.file.merged")), |ui| {
                         let mut remove = None;

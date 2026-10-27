@@ -1,0 +1,14 @@
+# RusTrace log set – ConfigMgr client policy
+
+name = Policy
+name.sk = Politiky
+name.cs = Zásady
+name.de = Richtlinien
+description = Download and evaluation of client policies and the site assignment of the client.
+description.sk = Sťahovanie a vyhodnotenie politík klienta a priradenie klienta k lokalite.
+description.cs = Stahování a vyhodnocení zásad klienta a přiřazení klienta k lokalitě.
+description.de = Download und Auswertung der Clientrichtlinien und die Standortzuweisung des Clients.
+
+file = %CCMLOGS%\PolicyAgent.log
+file = %CCMLOGS%\PolicyEvaluator.log
+file = %CCMLOGS%\ClientLocation.log

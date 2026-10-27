@@ -1,0 +1,17 @@
+# RusTrace log set – ConfigMgr client installation
+#
+# ccmsetup.log and client.msi.log are in %WINDIR%\ccmsetup\Logs (not in the client log folder).
+
+name = Client installation
+name.sk = Inštalácia klienta
+name.cs = Instalace klienta
+name.de = Clientinstallation
+description = Installation of the ConfigMgr client, its registration and the site / management point it finds.
+description.sk = Inštalácia klienta ConfigMgr, jeho registrácia a lokalita / riadiaci bod, ktorý nájde.
+description.cs = Instalace klienta ConfigMgr, jeho registrace a lokalita / bod správy, který najde.
+description.de = Installation des ConfigMgr-Clients, seine Registrierung und der gefundene Standort / Verwaltungspunkt.
+
+file = %WINDIR%\ccmsetup\Logs\ccmsetup.log
+file = %WINDIR%\ccmsetup\Logs\client.msi.log
+file = %CCMLOGS%\ClientIDManagerStartup.log
+file = %CCMLOGS%\LocationServices.log

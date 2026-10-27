@@ -342,6 +342,8 @@ pub struct App {
     pending_restore: Option<SessionState>,
     /// The row the command line asks for (#26), selected after the first read.
     cli_select: Option<CliSelect>,
+    /// File → Open log set window (#27), `None` = closed.
+    log_sets: Option<dialogs::logsets::LogSetDialog>,
 }
 
 /// Limits of Ctrl + mouse wheel zoom.
@@ -497,6 +499,7 @@ impl App {
             update_available: None,
             pending_restore: None,
             cli_select: None,
+            log_sets: None,
         };
         app.load_defs();
         app.check_def_updates();
@@ -665,6 +668,7 @@ impl eframe::App for App {
         self.assoc_window(&ctx);
         self.lookup_window(&ctx);
         self.bookmarks_window(&ctx);
+        self.log_sets_window(&ctx);
         self.export_window(&ctx);
         self.def_updates_window(&ctx);
         self.update_window(&ctx);

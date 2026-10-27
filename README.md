@@ -29,6 +29,7 @@ RusTrace\
     rustrace.exe      the program (no installation, no Visual C++ runtime needed)
     lang\*.lang       language files – edit or add translations here
     logdef\*.def      log definitions (IIS, Exchange, DISM, CBS) – edit or add your own formats here
+    logsets\*.set     log sets (groups of ConfigMgr / Intune logs opened together)
     LICENSE           the Unlicense (public domain)
 ```
 
@@ -51,7 +52,7 @@ several versions were released since yours, the window lists **all of them** wit
 release notes, newest first (the newest one open, older ones folded), so nothing that changed in
 between is missed; drafts and pre-releases are ignored. **Download and
 install** downloads the release ZIP, verifies it against the published SHA-256 checksum, replaces
-`rustrace.exe` and the files from the archive (`lang\`, `logdef\`, `LICENSE`; other files in those
+`rustrace.exe` and the files from the archive (`lang\`, `logdef\`, `logsets\`, `LICENSE`; other files in those
 folders are kept, the old program is renamed to `rustrace.exe.old` and deleted by the next start) and
 **restarts the program with the same state**: the open log, log format, search, filter, severity
 toggles, column filters, time range, selected row and the window position and size. If the program
@@ -167,6 +168,14 @@ the version information into the exe; this uses the resource compiler `rc.exe` o
   original lines writes blocks per file with the file name in the separator
 - loading three big logs merged (400 MB CMTrace + 100 MB CBS + 100 MB IIS, 3.7 million rows)
   takes about as long as loading them one after another (~9.3 s)
+
+**Log sets** – the logs of one troubleshooting scenario in one step (see [Log sets](#log-sets))
+- **File → Open log set…**: choose a set (e.g. *Application deployment* = `AppDiscovery.log`,
+  `AppEnforce.log`, `AppIntentEval.log`, `CAS.log`, `ContentTransferManager.log`,
+  `DataTransferService.log`), see which of its logs exist (✔ / ✖ with size and last write time,
+  rotated older parts), untick the ones you do not need and **Open** them as one view merged by time
+- built in: application deployment, software updates, client installation, policy, Intune /
+  co-management; your own sets are small text files
 
 **Details pane: message or raw line**
 - the details pane under the table shows the selected entry: its line number, severity, the other
@@ -520,6 +529,64 @@ Columns not used by a role (e.g. IIS `sc-status`, `c-ip`, DISM `function`) are *
 they are shown in the table and the details pane, searched by the search box and by highlight rules
 with "Also component", and appended to the readable export.
 
+## Log sets
+
+A **log set** is a named group of logs for one troubleshooting scenario. **File → Open log set…**
+opens a window: choose the set (the last one is remembered), and the window checks in the
+background which of its logs exist on this computer – ✔ *Found* with the size, the last write time
+and the number of rotated older parts that are opened with it (`AppEnforce.lo_`,
+`AppEnforce-20261027-101500.log`), ✖ *Not found*, 🔒 *Access denied*. Found logs are ticked; untick
+the ones you do not need and press **Open** – the logs are opened as **one view merged by time**
+(the same as opening several files, see [Several logs in one view](#features)). **Check again**
+repeats the check (e.g. after starting the scenario on the client).
+
+Built-in sets (`%CCMLOGS%` = the log folder of the ConfigMgr client, see below):
+
+| Set | Logs |
+|---|---|
+| Application deployment | `%CCMLOGS%\` `AppDiscovery.log`, `AppEnforce.log`, `AppIntentEval.log`, `CAS.log`, `ContentTransferManager.log`, `DataTransferService.log` |
+| Software updates | `%CCMLOGS%\` `WUAHandler.log`, `ScanAgent.log`, `UpdatesDeployment.log`, `UpdatesHandler.log`, `UpdatesStore.log`; `%WINDIR%\Logs\CBS\CBS.log` |
+| Client installation | `%WINDIR%\ccmsetup\Logs\` `ccmsetup.log`, `client.msi.log`; `%CCMLOGS%\` `ClientIDManagerStartup.log`, `LocationServices.log` |
+| Policy | `%CCMLOGS%\` `PolicyAgent.log`, `PolicyEvaluator.log`, `ClientLocation.log` |
+| Intune / co-management | `%PROGRAMDATA%\Microsoft\IntuneManagementExtension\Logs\` `IntuneManagementExtension.log`, `AppWorkload.log`, `AppActionProcessor.log`, `AgentExecutor.log`; `%CCMLOGS%\CoManagementHandler.log` |
+
+`%WINDIR%\WindowsUpdate.log` is not in the software updates set: since Windows 10 it only says to
+run `Get-WindowsUpdateLog`.
+
+**Variables** in the paths (case-insensitive): `%CCMLOGS%` = the `LogDirectory` of the ConfigMgr
+client (`HKLM\SOFTWARE\Microsoft\CCM\Logging\@Global`), or `%WINDIR%\CCM\Logs` when it is not set;
+`%WINDIR%`, `%PROGRAMDATA%`, `%SYSTEMDRIVE%`; any other environment variable works too. A path with
+an unknown variable is shown as ✖ *Unknown variable*.
+
+**Files** – like the log definitions, loaded without recompiling every time the window opens:
+- **predefined**: the built-in sets; the copies in `logsets\` next to `rustrace.exe` (shipped with
+  the program) replace the built-in ones with the same file name,
+- **your own**: every `.set` file in `%APPDATA%\RusTrace\logsets\` (button **Own sets folder** in the
+  window; Linux `~/.config/RusTrace/logsets/`), shown with "(own)"; they never replace a predefined
+  set. Files that cannot be used (no `file` line, unreadable) are listed in red in the window.
+
+**Format** – `key = value` per line, `#` starts a comment line, unknown keys and other lines are
+ignored. Names and descriptions are translated **in the set file itself** (`name.<language>`,
+`description.<language>` – the language code of the user interface, e.g. `sk`, `de`, `pt-BR`; then
+the base language, then the plain `name` / `description`), so an own set carries its own
+translations:
+
+```
+name = Application deployment
+name.sk = Nasadenie aplikácií
+description = Discovery, requirement evaluation and installation of applications.
+description.sk = Zisťovanie, vyhodnotenie požiadaviek a inštalácia aplikácií.
+file = %CCMLOGS%\AppDiscovery.log
+file = %CCMLOGS%\AppEnforce.log
+file = C:\MyApp\Logs\install.log
+```
+
+| Key | Meaning |
+|---|---|
+| `name`, `name.<language>` | name in the list (default: the file name without `.set`) |
+| `description`, `description.<language>` | one or two sentences under the name |
+| `file` | one log of the set (one line per log, in the order shown) |
+
 ## Languages
 
 Built in: **English, Slovenčina, Čeština, Deutsch**. Choose under View → Language. "Automatic" follows
@@ -637,6 +704,7 @@ rustrace --lang de AppEnforce.log
   memory-mapped temporary file, string interner, date/time as milliseconds (+ tests)
 - `src/logdef.rs` – log definitions: `.def` file format, loading, choosing by file name / content,
   parsing lines into columns (+ tests)
+- `src/logset.rs` – log sets: `.set` file format, loading, variables, file checks (+ tests)
 - `src/errcodes.rs` – error code detection and lookup (+ tests)
 - `src/httpstatus.rs` – HTTP status / IIS substatus descriptions, lookup input parsing (+ tests)
 - `src/fileassoc.rs` – Windows file association for `.log` / `.lo_` (registry, status, + tests)
@@ -665,7 +733,7 @@ rustrace --lang de AppEnforce.log
   - `bookmarks.rs` – bookmarks: toggling, F2 navigation, kept on their lines through refreshes (+ tests)
   - `widgets.rs` – small shared UI helpers (color button, theme switch, …)
   - `dialogs/` – highlight rules, colors, error code lookup, export, bookmarks, help / about,
-    default app (Windows), new versions
+    default app (Windows), new versions, open log set
 - `src/main.rs` – window start-up, command line (`src/cli.rs`), renderer choice (OpenGL, wgpu / Direct3D 12 as the fallback)
 - `src/update.rs` – new versions: GitHub release, version comparison, ZIP extraction, SHA-256 check,
   installation over the running program, state for the restart (+ tests)
@@ -675,6 +743,7 @@ rustrace --lang de AppEnforce.log
 - `build.rs` – embeds the icon and the version information into `rustrace.exe` (Windows)
 - `lang/*.lang` – built-in translations
 - `logdef/*.def` – built-in log definitions (IIS, Exchange, DISM, CBS)
+- `logsets/*.set` – built-in log sets (ConfigMgr / Intune scenarios)
 - `scripts/package.ps1` – packs the release build into the self-extracting archive and the ZIP
 - `scripts/release.ps1` – the whole GitHub release (checks, version, tests, commit, tag, build, publish)
 - `scripts/gen_testlogs.py` – generates the test logs in `testlogs/` (not in git)

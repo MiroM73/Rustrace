@@ -3,7 +3,7 @@
     Packages RusTrace as a self-extracting archive for Windows.
 
 .DESCRIPTION
-    Takes the release build of rustrace.exe, the built-in language files and log definitions and
+    Takes the release build of rustrace.exe, the built-in language files, log definitions and log sets and
     produces dist\RusTrace-<version>-windows-x64.exe - a 7-Zip self-extracting archive (7z.sfx) -
     and dist\RusTrace-<version>-windows-x64.zip with the same content, each with a .sha256 file.
     Running the .exe asks for a destination folder and extracts:
@@ -12,6 +12,7 @@
             rustrace.exe
             lang\*.lang
             logdef\*.def
+            logsets\*.set
             LICENSE
 
     Requires 7-Zip (7z.exe and the 7z.sfx module), found in PATH or in "Program Files\7-Zip".
@@ -52,9 +53,11 @@ $appDir = Join-Path $stage 'RusTrace'
 if (Test-Path $stage) { Remove-Item $stage -Recurse -Force }
 New-Item -ItemType Directory -Force (Join-Path $appDir 'lang') | Out-Null
 New-Item -ItemType Directory -Force (Join-Path $appDir 'logdef') | Out-Null
+New-Item -ItemType Directory -Force (Join-Path $appDir 'logsets') | Out-Null
 Copy-Item $exe $appDir
 Copy-Item (Join-Path $root 'lang\*.lang') (Join-Path $appDir 'lang')
 Copy-Item (Join-Path $root 'logdef\*.def') (Join-Path $appDir 'logdef')
+Copy-Item (Join-Path $root 'logsets\*.set') (Join-Path $appDir 'logsets')
 Copy-Item (Join-Path $root 'LICENSE') $appDir
 
 # Archive the RusTrace folder itself, so everything extracts into <destination>\RusTrace.

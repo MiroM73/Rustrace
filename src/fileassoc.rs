@@ -283,6 +283,12 @@ mod os {
         Some(String::from_utf16_lossy(&buf[..len]))
     }
 
+    /// A string value under `HKEY_LOCAL_MACHINE` (e.g. the log folder of the ConfigMgr client
+    /// for the log sets, #27).
+    pub fn hklm_string(key: &str, name: &str) -> Option<String> {
+        get_string(HKEY_LOCAL_MACHINE, key, name)
+    }
+
     fn delete_tree(key: &str) -> io::Result<()> {
         // SAFETY: NUL-terminated string.
         match unsafe { RegDeleteTreeW(HKEY_CURRENT_USER, wide(key).as_ptr()) } {

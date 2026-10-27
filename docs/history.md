@@ -110,9 +110,16 @@ Notes for Claude, linked from `CLAUDE.md`.
     `404.3` / `HTTP 500`; a plain 100–599 shows both meanings), driven by the new optional `.def`
     keys `http_status` / `http_substatus` / `win32_status` set in `iisweb.log.def`; descriptions
     `http.*` in all four languages (`src/httpstatus.rs`).
+54. #27 (part 1) log sets: File → Open log set…, `.set` files (built-in application deployment /
+    software updates / client installation / policy / Intune; own in `%APPDATA%\RusTrace\logsets`),
+    names / descriptions translated in the set file, `%CCMLOGS%` from the client's registry, file
+    check in a background thread, Open = merged view. Paths of the issue checked: ccmsetup logs
+    in `%WINDIR%\ccmsetup\Logs`, IME logs in `%PROGRAMDATA%\Microsoft\IntuneManagementExtension\Logs`
+    (+ `AppWorkload.log`, `AppActionProcessor.log`), `WindowsUpdate.log` left out (ETL since Win 10).
 
 ## Ideas not done yet (offered by the owner)
-(none at the moment)
+- `--set "<name>"` command-line option for log sets (#27): would need the set loading, the file
+  check (and for a remote computer its timeout) before the window starts – not done for now.
 
 
 ## Possible further memory work (not done)
