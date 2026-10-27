@@ -21,6 +21,7 @@
 //! | `timezone` | `local` (default) or `utc` (converted to local time) |
 //! | `columns` | order of the columns in the table (role names or column names); default: order in the pattern / header |
 //! | `title.<column>` | column header (`title.message = Request`) |
+//! | `http_status`, `http_substatus`, `win32_status` | columns with an HTTP status, an IIS substatus and a Win32 status code (decimal) – explained in the details pane, in the cell tooltip and in the error code lookup (#28); optional, a missing column is ignored |
 //!
 //! Columns that are not used by `role.message/component/thread/datetime` are kept as extra
 //! columns (shown in the table, searchable). Definitions are built in (`logdef/*.def` in the
@@ -108,6 +109,44 @@ pub struct Schema {
     pub columns: Vec<Column>,
     /// Names of the extra columns (`LogEntry::extra` has the values in this order).
     pub extra_names: Vec<String>,
+    /// Columns with status codes the UI explains (#28).
+    pub status: StatusFields,
+}
+
+/// Names of the columns with status codes (`.def` keys `http_status`, `http_substatus`,
+/// `win32_status`, #28). Only extra columns are explained (not columns used by a role).
+#[derive(Clone, PartialEq, Eq, Debug, Hash, Default)]
+pub struct StatusFields {
+    pub http: Option<String>,
+    pub substatus: Option<String>,
+    pub win32: Option<String>,
+}
+
+/// Extra column indexes of the status columns in a schema (`StatusFields::resolve`).
+#[derive(Clone, Copy, PartialEq, Eq, Debug, Default)]
+pub struct StatusColumns {
+    pub http: Option<usize>,
+    pub substatus: Option<usize>,
+    pub win32: Option<usize>,
+}
+
+impl StatusFields {
+    pub fn is_empty(&self) -> bool {
+        self.http.is_none() && self.substatus.is_none() && self.win32.is_none()
+    }
+
+    /// Finds the columns in the extra column names (case-insensitive); missing ones are `None`.
+    pub fn resolve(&self, extra_names: &[String]) -> StatusColumns {
+        let find = |n: &Option<String>| {
+            n.as_ref()
+                .and_then(|n| extra_names.iter().position(|x| x.eq_ignore_ascii_case(n)))
+        };
+        StatusColumns {
+            http: find(&self.http),
+            substatus: find(&self.substatus),
+            win32: find(&self.win32),
+        }
+    }
 }
 
 impl Default for Schema {
@@ -125,6 +164,7 @@ impl Default for Schema {
                 col(Role::Thread),
             ],
             extra_names: Vec::new(),
+            status: StatusFields::default(),
         }
     }
 }
@@ -251,6 +291,8 @@ pub struct LogDef {
     /// Lower-case column name → header.
     titles: HashMap<String, String>,
     default_fields: Vec<String>,
+    /// Columns with status codes (#28).
+    status: StatusFields,
 }
 
 fn build_regex(key: &str, pattern: &str, case_insensitive: bool) -> Result<Regex, String> {
@@ -335,6 +377,9 @@ impl LogDef {
                     | "datetime.format"
                     | "timezone"
                     | "columns"
+                    | "http_status"
+                    | "http_substatus"
+                    | "win32_status"
             ) {
                 return Err(format!("unknown key \"{k}\""));
             }
@@ -444,6 +489,11 @@ impl LogDef {
             columns: get("columns").map(list),
             titles,
             default_fields: get("fields").map(list).unwrap_or_default(),
+            status: StatusFields {
+                http: get("http_status").map(str::to_owned),
+                substatus: get("http_substatus").map(str::to_owned),
+                win32: get("win32_status").map(str::to_owned),
+            },
         })
     }
 
@@ -625,6 +675,7 @@ impl DefState {
             name: def.name.clone(),
             columns: Vec::new(),
             extra_names: Vec::new(),
+            status: def.status.clone(),
         };
         let names: Vec<String> = match &def.kind {
             Kind::Regex(re) => re
@@ -1204,6 +1255,13 @@ mod tests {
         assert_eq!(e[0].line_no, 4);
         assert_eq!(extra(&e[0], &s, "sc-status"), "500");
         assert_eq!(extra(&e[0], &s, "time-taken"), "15");
+        // Status columns (#28): only those in the header are found.
+        let st = s.status.resolve(&s.extra_names);
+        assert_eq!(
+            st.http.map(|i| s.extra_names[i].as_str()),
+            Some("sc-status")
+        );
+        assert_eq!((st.substatus, st.win32), (None, None));
         // UTC converted to local time.
         use chrono::TimeZone;
         let utc = chrono::NaiveDateTime::parse_from_str("2026-10-23 08:00:01", "%Y-%m-%d %H:%M:%S")
@@ -1309,6 +1367,26 @@ mod tests {
         assert!(def("format = w3c\nseparator = tab").is_ok());
         assert!(def("format = w3c\nseparator = ab").is_err());
         assert!(def("pattern = (?P<message>.*)\nseparator = ,").is_err());
+    }
+
+    /// Status column keys (#28) are optional; a named column that does not exist is ignored.
+    #[test]
+    fn status_column_keys() {
+        let def = LogDef::parse(
+            "x.def",
+            "pattern = ^(?P<code>[0-9]+) (?P<message>.*)$\nhttp_status = CODE\nwin32_status = nothere\n",
+            None,
+        )
+        .unwrap();
+        let (_, s) = parse_lines(Arc::new(def), &["404 GET /x"]);
+        assert_eq!(s.status.http.as_deref(), Some("CODE"));
+        let st = s.status.resolve(&s.extra_names);
+        assert_eq!(st.http, s.extra_names.iter().position(|n| n == "code"));
+        assert!(st.http.is_some());
+        assert_eq!((st.substatus, st.win32), (None, None));
+        // Without the keys nothing is explained.
+        let def = LogDef::parse("y.def", "pattern = ^(?P<message>.*)$\n", None).unwrap();
+        assert!(def.status.is_empty());
     }
 
     /// A second `#Fields:` header with fewer fields adds no columns but removes none either:

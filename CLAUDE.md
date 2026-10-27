@@ -37,6 +37,8 @@ Feature index (file → section of `docs/architecture.md`):
 - Δ time column – `app/delta.rs` → Delta column
 - Several selected rows, copying – `app/selection.rs` → Selection
 - Bookmarks – `app/bookmarks.rs`, `dialogs/bookmarks.rs` → Bookmarks
+- Error codes, HTTP / IIS status codes (#28) – `src/errcodes.rs`, `src/httpstatus.rs`, `app/details.rs`,
+  `dialogs/lookup.rs` → Table (error code lookup, HTTP / IIS status codes), Log definitions
 - Export with context – `src/export.rs`, `dialogs/export.rs` → Export
 - Updates – `src/update.rs`, `src/http.rs`, `dialogs/update.rs` → Updates
 - Languages, settings – `src/i18n.rs`, `src/config.rs` → Localization and settings
@@ -62,7 +64,8 @@ Feature index (file → section of `docs/architecture.md`):
 - `src/logdef.rs` – log definitions, `Schema` / `Column` / `ColumnKind` / `Role`.
 - `src/filter.rs` – `FilterSpec` / `CellFilter` / `MatchBits`; `src/colfilter.rs` – column filter syntax.
 - `src/export.rs` – pure export logic; `src/overview.rs` – overview strip buckets;
-  `src/timefmt.rs` – durations; `src/excerpt.rs` – message cell text; `src/errcodes.rs` – error codes.
+  `src/timefmt.rs` – durations; `src/excerpt.rs` – message cell text; `src/errcodes.rs` – error codes;
+  `src/httpstatus.rs` – HTTP / IIS status codes.
 - `src/update.rs` / `src/http.rs` – updates; `src/i18n.rs` – `t!()`, language files;
   `src/config.rs` – `Config`, rules, per-theme palettes, serde defaults/migration.
 - `lang/*.lang` – built-in translations; `logdef/*.def` – built-in log definitions (both embedded
@@ -79,7 +82,7 @@ Feature index (file → section of `docs/architecture.md`):
   `egui::MenuBar::new().ui(..)`, `ui.close()`, `egui::Id::unique(..)` (not `Id::new`).
 
 ## Commands
-- `cargo build --release` → `target\release\rustrace.exe`; `cargo test` (91 tests; what they
+- `cargo build --release` → `target\release\rustrace.exe`; `cargo test` (96 tests; what they
   cover: `docs/architecture.md` → Tests and benchmarks).
 - `cargo fmt` + `cargo clippy --all-targets --locked -- -D warnings` – the code is rustfmt-clean and
   clippy-clean; CI (`.github/workflows/ci.yml`) fails otherwise. Formatting-only commits go into

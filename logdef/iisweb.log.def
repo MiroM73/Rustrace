@@ -27,6 +27,12 @@ timezone = utc
 severity.error = ^5\d\d$
 severity.warning = ^4\d\d$
 
+# Columns with status codes explained in the details pane, in the cell tooltip and by the
+# error code lookup (HTTP status + IIS substatus, e.g. 404.3; Win32 status, e.g. 64).
+http_status = sc-status
+http_substatus = sc-substatus
+win32_status = sc-win32-status
+
 title.message = Request
 title.sc-status = Status
 title.sc-substatus = Substatus

@@ -272,6 +272,15 @@ the version information into the exe; this uses the resource compiler `rc.exe` o
   Win32), the facility and a description
 - descriptions: common ConfigMgr, Windows Update, MSI, WMI, WinINet and Win32 codes from the language
   files + on Windows the system message (`FormatMessage`, in the OS language, also from `wininet.dll`)
+- **HTTP status codes** (IIS logs and any log whose definition names its status columns): the details
+  pane of the selected row explains the HTTP status with the IIS substatus (e.g. `404.3` Not Found:
+  MIME type restriction) and the Win32 status (e.g. `50`, `64`, `1236` – via the Win32 lookup above);
+  hovering a status / substatus / Win32 status cell in the table shows the same explanation as a
+  tooltip. Codes without an own description show their class (e.g. "4xx – client error")
+- the lookup window also accepts HTTP statuses: `404.3`, `HTTP 500`, `http 403.14` show only the
+  HTTP meaning; a **plain number from 100 to 599** (e.g. `404`) is shown both as an error code
+  (Win32 404) and below it as an HTTP status (enter `HTTP 404` for the HTTP meaning only); other
+  numbers (`1603`, `0x80070005` …) work as before
 
 **Export highlighted rows with context** (File → Export highlighted rows with context…, Ctrl+Shift+S)
 - exports every highlighted row together with a chosen number of **lines before and after** it
@@ -432,7 +441,8 @@ file `<name>.def` that says how one line is split into columns (date/time, sever
 message, …). The table then shows exactly these columns; severity coloring, search, highlight rules,
 filters, the time filter and the export work as with CMTrace logs.
 
-Built in: `iisweb.log.def` (IIS web logs `u_ex*.log`, W3C format), `exchconnect.log.def` (Exchange
+Built in: `iisweb.log.def` (IIS web logs `u_ex*.log`, W3C format; HTTP 5xx = error, 4xx = warning;
+`sc-status` / `sc-substatus` / `sc-win32-status` explained), `exchconnect.log.def` (Exchange
 Server Transport Connectivity logs `CONNECTLOG*.LOG`, comma-separated W3C-like format),
 `dism.log.def` (`dism.log`) and `cbs.log.def` (`CBS.log`, `CbsPersist_*.log`).
 
@@ -504,6 +514,7 @@ title.severity = Level
 | `timezone` | `local` (default) or `utc` – converted to local time (IIS logs are in UTC) |
 | `columns` | order of the table columns (role or column names); default: the order in the pattern / header |
 | `title.<column>` | column header, e.g. `title.sc-status = Status`, `title.message = Request` |
+| `http_status`, `http_substatus`, `win32_status` | optional: the columns holding an HTTP status, an IIS substatus and a Win32 status code (decimal) – explained in the details pane and in the cell tooltip, e.g. `http_status = sc-status`; a named column missing in the log is ignored; only extra columns (not used by a role) are explained |
 
 Columns not used by a role (e.g. IIS `sc-status`, `c-ip`, DISM `function`) are **extra columns**:
 they are shown in the table and the details pane, searched by the search box and by highlight rules
@@ -542,6 +553,8 @@ Rules:
 - `\n` in a value is a line break,
 - error code descriptions use keys `code.0xXXXXXXXX` (8 hex digits, upper case; Win32/MSI codes as
   `0x8007xxxx`), so you can **add your own error codes** in a language file as well,
+- HTTP status descriptions use keys `http.<status>` (`http.404`), `http.<status>.<substatus>` for IIS
+  substatus codes (`http.404.3`) and `http.1xx` … `http.5xx` for codes without an own description,
 - `key.ctrl` / `key.shift` localize modifier names in shortcuts (e.g. German "Strg").
 
 The built-in languages live in `lang/*.lang` in the source tree and are embedded at compile time;
@@ -625,6 +638,7 @@ rustrace --lang de AppEnforce.log
 - `src/logdef.rs` – log definitions: `.def` file format, loading, choosing by file name / content,
   parsing lines into columns (+ tests)
 - `src/errcodes.rs` – error code detection and lookup (+ tests)
+- `src/httpstatus.rs` – HTTP status / IIS substatus descriptions, lookup input parsing (+ tests)
 - `src/fileassoc.rs` – Windows file association for `.log` / `.lo_` (registry, status, + tests)
 - `src/export.rs` – export around highlighted rows: range merging, date/time filter and input
   parsing, last-N blocks, output formats (+ tests)
@@ -644,7 +658,7 @@ rustrace --lang de AppEnforce.log
   - `input.rs` – keyboard shortcuts, drag & drop
   - `menu.rs`, `toolbar.rs`, `statusbar.rs` (+ tests) – menu bar, toolbar and time range row, status bar
   - `table.rs` – the log table, row colors, highlighted text, context menu
-  - `details.rs` – details pane (message / raw line), error code explanation
+  - `details.rs` – details pane (message / raw line), error code and status code explanation
   - `strip.rs` – the overview strip next to the scroll bar
   - `delta.rs` – the Δ time column (modes, reference row, long gaps)
   - `selection.rs` – selection of several rows, copying them (messages, table, original lines)

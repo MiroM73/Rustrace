@@ -287,6 +287,8 @@ impl App {
             }
         })
         .body(|body| {
+            let st = self.status_columns();
+            let status_cols = [st.http, st.substatus, st.win32].map(|c| c.map(ColumnKind::Extra));
             body.rows(row_h, self.filtered.len(), |mut row| {
                 let r = row.index();
                 drawn = Some(drawn.map_or((r, r), |(a, b)| (a.min(r), b.max(r))));
@@ -408,7 +410,15 @@ impl App {
                             });
                         }
                         kind => {
-                            row.col(|ui| simple(ui, &self.cell_text(&e, kind)));
+                            let (_, cell) = row.col(|ui| simple(ui, &self.cell_text(&e, kind)));
+                            // Status columns of the log definition (#28): explanation as a
+                            // tooltip, computed only while the cell is hovered.
+                            if status_cols.contains(&Some(kind))
+                                && cell.hovered()
+                                && let Some(tip) = self.status_tip(&e, kind)
+                            {
+                                cell.on_hover_text(tip);
+                            }
                         }
                     }
                 }

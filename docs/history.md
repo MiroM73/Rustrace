@@ -106,16 +106,13 @@ Notes for Claude, linked from `CLAUDE.md`.
     `--errors` / `--warnings`, `--from` / `--to`, `--tail` / `--no-follow`, `--merge`, `--lang`,
     `--help`, `--version`; own small parser in `src/cli.rs`, message box on Windows, `--restore`
     unchanged).
+53. #28 HTTP / IIS status codes explained (details pane, tooltip of the status cells, Ctrl+E accepts
+    `404.3` / `HTTP 500`; a plain 100–599 shows both meanings), driven by the new optional `.def`
+    keys `http_status` / `http_substatus` / `win32_status` set in `iisweb.log.def`; descriptions
+    `http.*` in all four languages (`src/httpstatus.rs`).
 
 ## Ideas not done yet (offered by the owner)
-- For IIS logs, explain the status codes like the error code lookup does: HTTP `sc-status`
-  (e.g. 404 Not Found, 500 Internal Server Error), together with `sc-substatus` (IIS-specific,
-  e.g. 404.3 "MIME map policy prevents this request", 401.2) and `sc-win32-status` (a Win32 error,
-  e.g. 64 "The specified network name is no longer available" – the existing Win32 lookup can be
-  reused). Show the explanation in the details pane of the selected row and as a tooltip of the
-  status cells; descriptions in the language files (like `code.0x…`) so they are translatable and
-  can be extended without recompiling. Ideally driven by the log definition (e.g. keys naming
-  which columns hold HTTP status / substatus / Win32 status), so it is not hard-wired to IIS.
+(none at the moment)
 
 
 ## Possible further memory work (not done)

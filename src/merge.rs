@@ -414,6 +414,15 @@ impl LogSet {
             }
         }
         self.schema.columns = columns;
+        // Status columns (#28) of the first log that has them; they are found by name in the
+        // united extra columns.
+        self.schema.status = self
+            .sources
+            .iter()
+            .map(|s| &s.schema().status)
+            .find(|s| !s.is_empty())
+            .cloned()
+            .unwrap_or_default();
         let mut names: Vec<&str> = Vec::new();
         for src in &self.sources {
             let n = src.schema().name.as_str();

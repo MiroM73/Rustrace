@@ -165,8 +165,14 @@ def iis_lines(r, count, start=DAY, header=True, fields=IIS_FIELDS):
         if fields == IIS_FIELDS_SHORT:
             yield f"{when:%Y-%m-%d %H:%M:%S} {method} {uri} {status} {r.randint(1, 3000)}"
         else:
+            # Typical IIS substatus / Win32 status pairs (#28), e.g. 404.3 + 50, 500.19 + 13.
+            sub, win32 = r.choice({
+                500: [(0, 64), (0, 64), (19, 13), (0, 1236)],
+                404: [(0, 2), (0, 2), (3, 50), (7, 0), (2, 1260)],
+                401: [(2, 5), (1, 1326)],
+            }.get(status, [(0, 0)]))
             yield (f"{when:%Y-%m-%d %H:%M:%S} 10.0.0.5 {method} {uri} {query} 443 {user} {client} "
-                   f"Mozilla/5.0+(Windows+NT+10.0;+Win64;+x64) - {status} 0 {64 if status == 500 else 0} "
+                   f"Mozilla/5.0+(Windows+NT+10.0;+Win64;+x64) - {status} {sub} {win32} "
                    f"{r.randint(1, 3000)}")
 
 

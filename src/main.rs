@@ -14,6 +14,7 @@ mod export;
 mod fileassoc;
 mod filter;
 mod http;
+mod httpstatus;
 mod i18n;
 mod icon;
 mod logdef;

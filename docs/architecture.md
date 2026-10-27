@@ -32,6 +32,11 @@ User-facing descriptions are in `README.md`.
   View → Log format (Auto = file name → content `detect` → built-in; CMTrace content never uses
   `detect`), reset to Auto for every newly opened file. `unmatched = append` keeps the last entry
   provisional until the next one starts (`ParserState::pending_entry`).
+- Status columns (#28): optional keys `http_status` / `http_substatus` / `win32_status` →
+  `LogDef::status` → `Schema::status` (`StatusFields`, column **names**); the UI resolves them to
+  extra column indexes by name (`StatusFields::resolve` → `StatusColumns`, `App::status_columns`), so a
+  later `#Fields:` header or a merged view (`LogSet::sync` takes the status fields of the first log
+  that has them; extra columns are united by name) needs no remapping. A missing column = `None`.
 
 ## Reading
 - Encodings: UTF-8 (BOM or not), UTF-16 LE/BE (BOM), ANSI Windows-1250 fallback.
@@ -185,6 +190,17 @@ User-facing descriptions are in `README.md`.
   `!` negation, case-insensitive. Cleared when the columns change (other log type).
 - Error code lookup (Ctrl+E) + automatic explanation in the details pane; descriptions from language
   files (`code.0xXXXXXXXX`) + Windows `FormatMessageW` (also wininet/winhttp).
+- HTTP / IIS status codes (#28, `src/httpstatus.rs`): `describe(status, substatus)` from the language
+  files – `http.<status>`, else the class `http.<n>xx` (`exact` = false), else `http.unknown`;
+  substatus `http.<status>.<sub>` (substatus 0 counts only when it has a key, e.g. `http.500.0`, so
+  `404 0` shows as `404`). `from_cells` / `win32_from_cell` parse the cell values. Details pane:
+  `App::selected_codes` → `RowCodes` (message codes, `http`, `win32` when ≠ 0; a message code equal to
+  the Win32 status is dropped), cached in `code_cache` per entry; rows with 🔎 buttons open the lookup
+  (`open_lookup_text("HTTP 404.3")`). Table: `App::status_tip` only when the status cell is hovered
+  (`cell.hovered()`), so the rows cost nothing extra. Lookup window: `httpstatus::lookup_input` –
+  `HTTP …` or a dotted `404.3` = HTTP only, a plain number 100–599 = the error code first and then
+  "also an HTTP status", anything else = the error code as before (`errcodes::parse_code`).
+  Severity of IIS rows already comes from `sc-status` via `role.severity` + `severity.error/warning`.
 
 ## Overview strip
 - **Overview strip** (#24, `src/overview.rs` pure + `app/strip.rs`): `Overview` = highest mark per
@@ -309,7 +325,7 @@ User-facing descriptions are in `README.md`.
   program), names via `AssocQueryStringW`. Test `register_and_unregister` uses its own HKCU key.
 
 ## Tests and benchmarks
-- `cargo test` (91 tests: command-line parsing (file association, all options, errors, `--restore`, language / time / regex checks, help text), overview buckets incremental = full / pixel runs, readable export with Δ, durations, match bits set / iterate, bookmark file id remap, update releases list / missed versions / check setting migration, merged logs (order by time, appended older rows, formats + rotated parts + re-read, single log unchanged, interleave), store copy_entry / split_off, raw lines of entries (all formats / encodings), filter (parallel = sequential, match bits), date column filter = text filter, updates (versions, release JSON, notes, sha256 file, ZIP, install, restore state), icon / .ico layout, search as you type threshold, status-bar position percentage, file association (registry in an own HKCU test key), search history, store drop_front / move to temp file, rotated parts (naming, merge on open, rotation while watching, replaced
+- `cargo test` (96 tests: HTTP status lookup / class fallback / lookup input parsing and ambiguity / cell values, status column keys of log definitions, command-line parsing (file association, all options, errors, `--restore`, language / time / regex checks, help text), overview buckets incremental = full / pixel runs, readable export with Δ, durations, match bits set / iterate, bookmark file id remap, update releases list / missed versions / check setting migration, merged logs (order by time, appended older rows, formats + rotated parts + re-read, single log unchanged, interleave), store copy_entry / split_off, raw lines of entries (all formats / encodings), filter (parallel = sequential, match bits), date column filter = text filter, updates (versions, release JSON, notes, sha256 file, ZIP, install, restore state), icon / .ico layout, search as you type threshold, status-bar position percentage, file association (registry in an own HKCU test key), search history, store drop_front / move to temp file, rotated parts (naming, merge on open, rotation while watching, replaced
   file), export segments by file, time range bounds, column filter syntax, parsers, chunked/ANSI/UTF-16 reading, log definitions (CBS, DISM, IIS,
   Exchange connectivity / CSV separator, choice by name/content, appending across refreshes), store (32-byte record, ISO ↔ ms, push /
   truncate / append, mapped temp file growing past 64 MB, interner), export incl. end-to-end and
@@ -358,6 +374,7 @@ User-facing descriptions are in `README.md`.
 - `src/colfilter.rs` – column filter syntax, `DateLayout`, `DateFilter` (date column as ranges).
 - `src/export.rs` – pure export logic (range merging, time filter, date input parsing, last-N, output).
 - `src/errcodes.rs` – error code detection/parsing/lookup.
+- `src/httpstatus.rs` – HTTP status + IIS substatus descriptions, lookup input (`404.3`, `HTTP 500`).
 - `src/update.rs` – update check / download / install / restart state; `src/http.rs` – WinHTTP GET.
 - `src/excerpt.rs` – text of the message cell: first line, or an excerpt around a search match.
 - `src/timefmt.rs` – durations for display (`format_duration`; Δ column, selection span).

@@ -10,6 +10,7 @@ use crate::fileassoc::{self, ExtStatus};
 use crate::filter::{
     CellFilter, FilterOutput, FilterSpec, MatchBits, entry_matches, other_columns_match,
 };
+use crate::httpstatus::{self, HttpStatus};
 use crate::i18n;
 use crate::logdef::{self, Column as LogColumn, ColumnKind, LogDef, Role, Schema};
 use crate::merge::{self, LogSet, ReadResult};
@@ -48,6 +49,7 @@ mod toolbar;
 mod widgets;
 
 use cli::*;
+use details::RowCodes;
 use statusbar::*;
 use strip::*;
 use table::*;
@@ -265,15 +267,16 @@ pub struct App {
     focus_search: bool,
     title: String,
 
-    /// Error codes found in the selected row (entry index, codes).
-    code_cache: Option<(usize, Vec<CodeInfo>)>,
+    /// Error codes found in the selected row and its status columns (entry index, codes).
+    code_cache: Option<(usize, RowCodes)>,
     /// Raw line(s) of the selected row read from the file: (entry, data generation, text or
     /// why it is not available).
     raw_cache: Option<(usize, u64, Result<Arc<str>, String>)>,
     show_lookup: bool,
     lookup_input: String,
     lookup_focus: bool,
-    lookup_cache: Option<(String, Option<CodeInfo>)>,
+    /// Lookup input → (error code, HTTP status) – see `httpstatus::lookup_input`.
+    lookup_cache: Option<(String, Option<CodeInfo>, Option<HttpStatus>)>,
 
     /// Date pattern of the current language, e.g. "{d}.{m}.{y}", and how it is displayed.
     date_format: String,

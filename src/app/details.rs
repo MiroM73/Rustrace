@@ -1,28 +1,78 @@
-//! The details pane of the selected row and error code explanations.
+//! The details pane of the selected row and error code / status code explanations.
 
 use crate::app::*;
 
+/// Codes explained for the selected row: error codes found in the message and the values of
+/// the status columns of the log definition (#28).
+#[derive(Clone, Default)]
+pub(in crate::app) struct RowCodes {
+    pub(in crate::app) codes: Vec<CodeInfo>,
+    /// HTTP status + IIS substatus (`http_status`, `http_substatus`).
+    pub(in crate::app) http: Option<HttpStatus>,
+    /// Win32 status (`win32_status`) when it is not 0.
+    pub(in crate::app) win32: Option<CodeInfo>,
+}
+
 impl App {
-    /// Error codes in the selected row (cached).
-    pub(in crate::app) fn selected_codes(&mut self) -> Vec<CodeInfo> {
+    /// Extra column indexes of the status columns of the open log (#28).
+    pub(in crate::app) fn status_columns(&self) -> logdef::StatusColumns {
+        self.schema.status.resolve(&self.schema.extra_names)
+    }
+
+    /// Error codes in the selected row and its status columns (cached).
+    pub(in crate::app) fn selected_codes(&mut self) -> RowCodes {
         let Some(i) = self.details_row() else {
-            return Vec::new();
+            return RowCodes::default();
         };
         if let Some((ci, c)) = &self.code_cache
             && *ci == i
         {
             return c.clone();
         }
-        let codes: Vec<CodeInfo> = self
-            .entries
-            .get(i)
-            .map(|e| errcodes::find_codes(e.message))
-            .unwrap_or_default()
-            .into_iter()
-            .map(errcodes::lookup)
-            .collect();
-        self.code_cache = Some((i, codes.clone()));
-        codes
+        let st = self.status_columns();
+        let row = match self.entries.get(i) {
+            Some(e) => {
+                let win32 = st
+                    .win32
+                    .and_then(|c| httpstatus::win32_from_cell(e.extra(c)))
+                    .filter(|&v| v != 0);
+                RowCodes {
+                    codes: errcodes::find_codes(e.message)
+                        .into_iter()
+                        .filter(|&v| Some(v) != win32)
+                        .map(errcodes::lookup)
+                        .collect(),
+                    http: st.http.and_then(|c| {
+                        httpstatus::from_cells(e.extra(c), st.substatus.map(|s| e.extra(s)))
+                    }),
+                    win32: win32.map(errcodes::lookup),
+                }
+            }
+            None => RowCodes::default(),
+        };
+        self.code_cache = Some((i, row.clone()));
+        row
+    }
+
+    /// Tooltip of a status cell in the table (#28) – computed only while the cell is hovered.
+    pub(in crate::app) fn status_tip(&self, e: &EntryRef, kind: ColumnKind) -> Option<String> {
+        let ColumnKind::Extra(c) = kind else {
+            return None;
+        };
+        let st = self.status_columns();
+        if st.http.is_some_and(|h| h == c) || st.substatus.is_some_and(|s| s == c) {
+            let h = httpstatus::from_cells(e.extra(st.http?), st.substatus.map(|s| e.extra(s)))?;
+            return Some(h.short());
+        }
+        if st.win32 == Some(c) {
+            let v = httpstatus::win32_from_cell(e.extra(c))?;
+            if v == 0 {
+                return Some(t!("code.success"));
+            }
+            let info = errcodes::lookup(v);
+            return Some(format!("Win32 {v}: {}\n{}", info.short(), info.forms()));
+        }
+        None
     }
 
     /// Raw line(s) of the selected entry from its file (read once per entry and data change).
@@ -62,8 +112,16 @@ impl App {
         self.lookup_focus = true;
     }
 
+    /// Opens the error code lookup with a text, e.g. "HTTP 404.3".
+    pub(in crate::app) fn open_lookup_text(&mut self, text: String) {
+        self.lookup_input = text;
+        self.show_lookup = true;
+        self.lookup_focus = true;
+    }
+
     pub(in crate::app) fn details(&mut self, ui: &mut egui::Ui) {
-        let codes = self.selected_codes();
+        let RowCodes { codes, http, win32 } = self.selected_codes();
+        let mut open_text: Option<String> = None;
         let raw = match self.cfg.details_view {
             DetailsView::Raw => self.selected_raw(),
             DetailsView::Message => None,
@@ -163,11 +221,38 @@ impl App {
                 ));
             }
         });
-        // Explanation of error codes found in the message.
-        for c in &codes {
+        // HTTP status of the status columns (#28).
+        if let Some(h) = &http {
             ui.horizontal(|ui| {
                 if ui
-                    .small_button(RichText::new(format!("🔎 {}", c.hex())).monospace())
+                    .small_button(RichText::new(format!("🔎 HTTP {}", h.code())).monospace())
+                    .on_hover_text(t!("details.code.open_tip"))
+                    .clicked()
+                {
+                    open_text = Some(format!("HTTP {}", h.code()));
+                }
+                let col = if h.exact {
+                    ui.visuals().strong_text_color()
+                } else {
+                    ui.visuals().weak_text_color()
+                };
+                ui.add(egui::Label::new(RichText::new(h.short()).color(col)).truncate())
+                    .on_hover_text(h.short());
+            });
+        }
+        // Win32 status column, then error codes found in the message.
+        for (c, is_status) in win32
+            .iter()
+            .map(|c| (c, true))
+            .chain(codes.iter().map(|c| (c, false)))
+        {
+            ui.horizontal(|ui| {
+                let label = match c.win32_code() {
+                    Some(w) if is_status => format!("🔎 Win32 {w}"),
+                    _ => format!("🔎 {}", c.hex()),
+                };
+                if ui
+                    .small_button(RichText::new(label).monospace())
                     .on_hover_text(t!("details.code.open_tip"))
                     .clicked()
                 {
@@ -237,6 +322,8 @@ impl App {
         }
         if open_code.is_some() {
             self.open_lookup(open_code);
+        } else if let Some(text) = open_text {
+            self.open_lookup_text(text);
         }
         if let Some(i) = self.details_row() {
             if toggle_bookmark {
