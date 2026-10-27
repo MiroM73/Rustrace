@@ -144,6 +144,8 @@ impl App {
                     self.refilter_from(0);
                 }
                 ui.separator();
+                self.overview_menu(ui);
+                ui.separator();
                 self.delta_menu(ui);
                 ui.separator();
                 ui.label(t!("menu.view.theme"));

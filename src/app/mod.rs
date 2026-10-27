@@ -41,11 +41,13 @@ mod logdefs;
 mod menu;
 mod selection;
 mod statusbar;
+mod strip;
 mod table;
 mod toolbar;
 mod widgets;
 
 use statusbar::*;
+use strip::*;
 use table::*;
 use widgets::*;
 
@@ -235,6 +237,10 @@ pub struct App {
     /// Files of the view before it was opened again; the next full read moves the bookmarks to
     /// the new file ids.
     bookmark_files: Option<Vec<SourceFile>>,
+    /// Marks of the overview strip (#24) and the first displayed row whose mark may have changed
+    /// (`usize::MAX` = up to date).
+    overview: crate::overview::Overview,
+    overview_dirty: usize,
     /// The time reference of the Δ column (#23): (timestamp, file id, line number).
     time_ref: Option<(i64, u16, usize)>,
 
@@ -421,6 +427,8 @@ impl App {
             show_bookmarks: false,
             bookmark_files: None,
             time_ref: None,
+            overview: Default::default(),
+            overview_dirty: 0,
             rules: Vec::new(),
             rule_errors: Vec::new(),
             show_rules: false,

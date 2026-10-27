@@ -123,6 +123,8 @@ impl App {
 
     /// Filters the entries from `start` on this thread.
     fn refilter_here(&mut self, start: usize, spec: &FilterSpec) {
+        let pos = self.filtered.partition_point(|&i| i < start);
+        self.overview_changed_from(pos);
         while self.filtered.last().is_some_and(|&i| i >= start) {
             self.filtered.pop();
         }
@@ -173,6 +175,7 @@ impl App {
         match job.rx.try_recv() {
             Ok(Some(out)) => {
                 self.filter_job = None;
+                self.overview_changed_from(0);
                 self.filter_done(out);
             }
             Ok(None) | Err(mpsc::TryRecvError::Disconnected) => {

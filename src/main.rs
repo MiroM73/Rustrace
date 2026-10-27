@@ -17,6 +17,7 @@ mod i18n;
 mod icon;
 mod logdef;
 mod merge;
+mod overview;
 mod parser;
 mod splash;
 mod store;

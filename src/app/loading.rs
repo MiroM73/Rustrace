@@ -45,6 +45,7 @@ impl App {
             *i -= k;
         }
         self.is_match.drain_front(k);
+        self.overview_changed_from(0);
         self.selected = self.selected.and_then(|s| s.checked_sub(k));
         self.selection_drop_front(k);
         self.code_cache = None;

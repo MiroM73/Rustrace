@@ -360,6 +360,17 @@ the version information into the exe; this uses the resource compiler `rc.exe` o
 the table: `📍 Row 25 / 100 (25 %)`; with a filter active the numbers count only the visible rows,
 the tooltip shows the line number in the file.
 
+**Overview strip** – a narrow strip right of the table's vertical scroll bar shows where the
+errors, warnings, search matches and bookmarks are in the whole log (the rows shown in the
+table, top to bottom), like the markers in VS Code or Notepad++
+- colors of the current theme (error / warning / search / bookmark colors); when several fall
+  into one pixel: bookmark > search match > error > warning
+- the part of the log in view is drawn as a translucent rectangle; a **click or drag** scrolls
+  there, the tooltip shows the row, its line in the file and its time
+- View → "Overview strip next to the scroll bar" turns it off and chooses the marks shown
+- the marks are computed once after a search / filter change (after a refresh only for the new
+  rows) and kept in at most 4096 buckets, so drawing costs a few hundred rectangles per frame
+
 **Δ time column** – to find where an installation or update "hangs", the gaps between entries
 matter more than the absolute times
 - turned on in the View menu or with a right click on any column header ("Δ time column"); it
@@ -578,6 +589,8 @@ The built-in languages live in `lang/*.lang` in the source tree and are embedded
   parsing, last-N blocks, output formats (+ tests)
 - `src/i18n.rs` – localization: language files, fallback, `t!()` macro (+ tests)
 - `src/config.rs` – settings and rules (serde/JSON)
+- `src/overview.rs` – marks of the overview strip in buckets, updated from the first changed
+  row on (+ tests)
 - `src/timefmt.rs` – durations for display: selection span, Δ column (+ tests)
 - `src/app/` – user interface (`App`), one `impl App` block per area:
   - `mod.rs` – the `App` state, start-up, theme / zoom / language, the frame loop (`eframe::App`)
@@ -589,6 +602,7 @@ The built-in languages live in `lang/*.lang` in the source tree and are embedded
   - `menu.rs`, `toolbar.rs`, `statusbar.rs` (+ tests) – menu bar, toolbar and time range row, status bar
   - `table.rs` – the log table, row colors, highlighted text, context menu
   - `details.rs` – details pane (message / raw line), error code explanation
+  - `strip.rs` – the overview strip next to the scroll bar
   - `delta.rs` – the Δ time column (modes, reference row, long gaps)
   - `selection.rs` – selection of several rows, copying them (messages, table, original lines)
   - `bookmarks.rs` – bookmarks: toggling, F2 navigation, kept on their lines through refreshes (+ tests)

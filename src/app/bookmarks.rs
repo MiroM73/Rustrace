@@ -65,6 +65,7 @@ impl App {
 
     fn bookmarks_changed(&mut self) {
         self.bookmarks_gen += 1;
+        self.overview_changed_from(0);
         if self.bookmarks_only {
             self.refilter_from(0);
         }

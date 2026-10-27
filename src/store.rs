@@ -775,7 +775,6 @@ impl LogStore {
         &self.text.as_str()[start..end]
     }
 
-    #[cfg(test)]
     pub fn severity(&self, i: usize) -> Severity {
         self.recs[i].severity
     }

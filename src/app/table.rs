@@ -143,13 +143,22 @@ impl App {
         // the columns do not fit (last frame's width); Shift + mouse wheel scrolls as well.
         let parent = ui;
         let full = parent.available_rect_before_wrap();
-        let max_offset = (self.table_width - full.width()).max(0.0);
+        // The overview strip (#24) sits right of the table's vertical scroll bar.
+        let strip_w = if self.strip_shown() {
+            STRIP_WIDTH + 2.0
+        } else {
+            0.0
+        };
+        let max_offset = (self.table_width - (full.width() - strip_w)).max(0.0);
         let hbar_h = if max_offset > 0.0 {
             parent.spacing().scroll.bar_width + 4.0
         } else {
             0.0
         };
-        let view = egui::Rect::from_min_max(full.min, egui::pos2(full.max.x, full.max.y - hbar_h));
+        let view = egui::Rect::from_min_max(
+            full.min,
+            egui::pos2(full.max.x - strip_w, full.max.y - hbar_h),
+        );
         if parent.rect_contains_pointer(view) {
             self.table_scroll_x -= parent.input(|i| i.smooth_scroll_delta.x);
         }
@@ -217,6 +226,9 @@ impl App {
         // Left edges of the first and the last header cell → natural width of the table.
         let last_col = headers.len() - 1;
         let mut edges = (0.0f32, 0.0f32);
+        // Bottom of the header and the displayed rows drawn (for the overview strip).
+        let mut header_bottom = view.min.y;
+        let mut drawn: Option<(usize, usize)> = None;
         // Right click on a header: the Δ time column on / off (#23).
         let mut delta_on = self.cfg.delta_column;
         let kinds: Vec<ColumnKind> = columns.iter().map(|c| c.kind).collect();
@@ -265,6 +277,7 @@ impl App {
                         }
                     });
                 });
+                header_bottom = header_bottom.max(cell.bottom());
                 if i == 0 {
                     edges.0 = cell.left();
                 }
@@ -275,7 +288,9 @@ impl App {
         })
         .body(|body| {
             body.rows(row_h, self.filtered.len(), |mut row| {
-                let idx = self.filtered[row.index()];
+                let r = row.index();
+                drawn = Some(drawn.map_or((r, r), |(a, b)| (a.min(r), b.max(r))));
+                let idx = self.filtered[r];
                 let e = self.entries.at(idx);
                 let is_sel = self.sel.get(idx);
                 row.set_selected(is_sel);
@@ -520,6 +535,15 @@ impl App {
         // fills the rest when everything fits).
         self.table_width = edges.1 - edges.0 + LAST_COLUMN_MIN;
         parent.advance_cursor_after_rect(view);
+        if strip_w > 0.0 {
+            let strip = egui::Rect::from_min_max(
+                egui::pos2(view.max.x + 2.0, header_bottom + gap.y * 2.0),
+                egui::pos2(full.max.x, view.max.y),
+            );
+            // Rows only partly in view at the edges do not count.
+            let visible = drawn.map(|(a, b)| if b > a + 2 { (a + 1, b - 1) } else { (a, b) });
+            self.overview_strip(parent, strip, visible);
+        }
         if hbar_h > 0.0 {
             let bar = egui::Rect::from_min_max(egui::pos2(full.min.x, view.max.y), full.max);
             let mut bar_ui = parent.new_child(egui::UiBuilder::new().max_rect(bar));

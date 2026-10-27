@@ -176,6 +176,15 @@ Features (all implemented, see README for user-facing details):
   `!` negation, case-insensitive. Cleared when the columns change (other log type).
 - Error code lookup (Ctrl+E) + automatic explanation in the details pane; descriptions from language
   files (`code.0xXXXXXXXX`) + Windows `FormatMessageW` (also wininet/winhttp).
+- **Overview strip** (#24, `src/overview.rs` pure + `app/strip.rs`): `Overview` = highest mark per
+  bucket of `per` displayed rows (power of two, ≤ 4096 buckets, pairs joined when it grows);
+  `update(from, len, mark)` recomputes only from the bucket of `from` (appends: the end).
+  `App::overview_dirty` = first changed displayed row (`overview_changed_from`: `refilter_here`
+  start position, full job result / `drop_front` / bookmark or mark-setting changes → 0).
+  Marks: bookmark 4 > search 3 > error 2 > warning 1 (rules not shown – a regex per row would be
+  too slow). Drawn right of the table (the table `view` is narrower by `STRIP_WIDTH` + 2) from
+  the header bottom; `runs(px)` per physical pixel; viewport = rows drawn by the table body;
+  click / drag → `scroll_to`. `cfg.overview` (`OverviewSettings`).
 - **Δ time column** (#23, `app/delta.rs`): `ColumnKind::Delta` inserted by `App::columns()` after
   the date/time column when `cfg.delta_column`; `cfg.delta_mode` (`DeltaMode::Visible` = previous
   row of `filtered` before the entry, also for hidden rows / `Log` = previous entry /
@@ -282,7 +291,7 @@ Features (all implemented, see README for user-facing details):
 
 ## Commands
 - `cargo build --release` → `target\release\rustrace.exe`
-- `cargo test` (82 tests: readable export with Δ, durations, match bits set / iterate, bookmark file id remap, update releases list / missed versions / check setting migration, merged logs (order by time, appended older rows, formats + rotated parts + re-read, single log unchanged, interleave), store copy_entry / split_off, raw lines of entries (all formats / encodings), filter (parallel = sequential, match bits), date column filter = text filter, updates (versions, release JSON, notes, sha256 file, ZIP, install, restore state), icon / .ico layout, search as you type threshold, status-bar position percentage, file association (registry in an own HKCU test key), search history, store drop_front / move to temp file, rotated parts (naming, merge on open, rotation while watching, replaced
+- `cargo test` (84 tests: overview buckets incremental = full / pixel runs, readable export with Δ, durations, match bits set / iterate, bookmark file id remap, update releases list / missed versions / check setting migration, merged logs (order by time, appended older rows, formats + rotated parts + re-read, single log unchanged, interleave), store copy_entry / split_off, raw lines of entries (all formats / encodings), filter (parallel = sequential, match bits), date column filter = text filter, updates (versions, release JSON, notes, sha256 file, ZIP, install, restore state), icon / .ico layout, search as you type threshold, status-bar position percentage, file association (registry in an own HKCU test key), search history, store drop_front / move to temp file, rotated parts (naming, merge on open, rotation while watching, replaced
   file), export segments by file, time range bounds, column filter syntax, parsers, chunked/ANSI/UTF-16 reading, log definitions (CBS, DISM, IIS,
   Exchange connectivity / CSV separator, choice by name/content, appending across refreshes), store (32-byte record, ISO ↔ ms, push /
   truncate / append, mapped temp file growing past 64 MB, interner), export incl. end-to-end and
@@ -409,6 +418,7 @@ Features (all implemented, see README for user-facing details):
 47. #25 several selected rows (Shift / Ctrl, Ctrl+A, copy messages / table / original lines,
     export selected rows).
 48. #23 Δ time column (previous shown / previous of the log / reference row, long gaps colored).
+49. #24 overview strip next to the scroll bar (errors, warnings, search, bookmarks; click to scroll).
 
 
 ## Ideas not done yet (offered by the owner)

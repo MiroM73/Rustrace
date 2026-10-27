@@ -31,6 +31,29 @@ pub enum DeltaMode {
     Reference,
 }
 
+/// The overview strip next to the table's scroll bar and the marks it shows (#24).
+#[derive(Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Debug)]
+#[serde(default)]
+pub struct OverviewSettings {
+    pub enabled: bool,
+    pub errors: bool,
+    pub warnings: bool,
+    pub search: bool,
+    pub bookmarks: bool,
+}
+
+impl Default for OverviewSettings {
+    fn default() -> Self {
+        Self {
+            enabled: true,
+            errors: true,
+            warnings: true,
+            search: true,
+            bookmarks: true,
+        }
+    }
+}
+
 /// When RusTrace looks for a new version at start-up.
 #[derive(Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Debug, Default)]
 #[serde(rename_all = "lowercase")]
@@ -270,6 +293,8 @@ pub struct Config {
     pub delta_mode: DeltaMode,
     pub delta_highlight: bool,
     pub delta_threshold_s: f64,
+    /// Overview strip next to the scroll bar.
+    pub overview: OverviewSettings,
     /// "system" | "dark" | "light"
     pub theme: String,
     /// Font size of the log text (table and message in the details pane).
@@ -374,6 +399,7 @@ impl Default for Config {
             delta_mode: DeltaMode::Visible,
             delta_highlight: true,
             delta_threshold_s: 30.0,
+            overview: OverviewSettings::default(),
             theme: "system".into(),
             font_size: 13.0,
             ui_zoom: 1.0,
