@@ -123,6 +123,14 @@ Notes for Claude, linked from `CLAUDE.md`.
     `\\localhost\c$`. Not tested on a real remote ConfigMgr client.
 56. Release v1.0.0 (#26 command line, #28 HTTP / IIS status codes, #27 log sets) – first version
     the owner considers complete for full everyday use.
+57. Guides for real situations (`docs/guides/`, linked from the README): the first one, *An
+    application deployment failed* (log set, errors only, error code explanation, Δ time,
+    bookmarks, filter by application, MSI log, export, command line, table of typical codes),
+    with annotated screenshots of v1.0.0 made on Xvfb from invented logs
+    (`scripts/gen_guide_logs.py`, fixed seed). Found while taking them: a click on a row does not
+    turn "Follow end" off (the view jumps to the end after a filter change), and the Export button
+    is disabled while an automatic refresh read is pending (`busy` = `self.loading.is_some()`; on
+    Xvfb with 6 merged logs it stayed disabled until the refresh was paused) – not fixed yet.
 
 ## Ideas not done yet (offered by the owner)
 - `--set "<name>"` command-line option for log sets (#27): would need the set loading, the file
