@@ -275,7 +275,7 @@ the version information into the exe; this uses the resource compiler `rc.exe` o
 - exports every highlighted row together with a chosen number of **lines before and after** it
   (0 – 100 000 each)
 - what counts as highlighted is selectable: rows matching enabled highlight rules, errors, warnings,
-  search matches
+  search matches, bookmarked rows
 - **overlapping or adjacent ranges are merged**, so no row is exported twice; ranges are clamped at
   the start and end of the file
 - formats:
@@ -358,6 +358,24 @@ the version information into the exe; this uses the resource compiler `rc.exe` o
 **Position in the log** – the status bar shows where the selected row is among the rows shown in
 the table: `📍 Row 25 / 100 (25 %)`; with a filter active the numbers count only the visible rows,
 the tooltip shows the line number in the file.
+
+**Bookmarks** – mark interesting rows ("download started", "install failed") and jump back to them
+- **Ctrl+F2** (or right-click → Add bookmark, or 🔖 in the details pane) bookmarks / un-bookmarks
+  the selected row; **F2 / Shift+F2** jump to the next / previous bookmarked row shown in the
+  table (wrapping around)
+- a bookmarked row has its line number cell in the bookmark color (🔖, configurable per theme in
+  Highlighting → Colors); an optional **note** is edited in the details pane or the bookmarks list
+  and shown as the tooltip of the line number
+- **View → Bookmarks…** (or the 🔖 N button in the status bar) lists every bookmark with its line,
+  time, note and message – double-click jumps to the row, ✖ removes one, "Remove all"
+- **🔖 Bookmarked** in the toolbar (also View → Show only bookmarked rows) shows only the
+  bookmarked rows, together with the other filters
+- export: **Bookmarked rows** as a "highlighted rows" criterion, so bookmarks + context lines can be
+  exported
+- bookmarks are kept by file and line number, so they stay on the same log line after refreshes,
+  filtering, merges of older rows of other logs, the removal of old records by the memory limit
+  (bookmarks of removed rows go with them), a full reload (Ctrl+F5) and adding / removing logs of a
+  merged view; they are kept over an update restart, but not saved between sessions
 
 Settings and rules are saved automatically to `%APPDATA%\RusTrace\config.json`
 (Linux: `~/.config/RusTrace/config.json`).
@@ -497,6 +515,8 @@ The built-in languages live in `lang/*.lang` in the source tree and are embedded
 | Ctrl+H | Highlight rules |
 | Ctrl+E | Error code lookup |
 | Ctrl+Shift+S | Export highlighted rows with context |
+| Ctrl+F2 | Add / remove a bookmark on the selected row |
+| F2 / Shift+F2 | Next / previous bookmark |
 | ↑ ↓ PgUp PgDn Home End | Move in the table |
 | Shift + mouse wheel | Scroll the table horizontally (when the columns do not fit; also the scroll bar below the table) |
 | Ctrl+C | Copy message of the selected row |
@@ -532,8 +552,9 @@ The built-in languages live in `lang/*.lang` in the source tree and are embedded
   - `menu.rs`, `toolbar.rs`, `statusbar.rs` (+ tests) – menu bar, toolbar and time range row, status bar
   - `table.rs` – the log table, row colors, highlighted text, context menu
   - `details.rs` – details pane (message / raw line), error code explanation
+  - `bookmarks.rs` – bookmarks: toggling, F2 navigation, kept on their lines through refreshes (+ tests)
   - `widgets.rs` – small shared UI helpers (color button, theme switch, …)
-  - `dialogs/` – highlight rules, colors, error code lookup, export, help / about,
+  - `dialogs/` – highlight rules, colors, error code lookup, export, bookmarks, help / about,
     default app (Windows), new versions
 - `src/main.rs` – window start-up, renderer choice (OpenGL, wgpu / Direct3D 12 as the fallback)
 - `src/update.rs` – new versions: GitHub release, version comparison, ZIP extraction, SHA-256 check,

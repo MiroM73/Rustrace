@@ -2,6 +2,7 @@
 
 #[cfg(windows)]
 mod assoc;
+mod bookmarks;
 mod colors;
 mod export;
 mod help;

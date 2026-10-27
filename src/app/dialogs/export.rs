@@ -10,6 +10,7 @@ impl App {
         (c.export_errors && e.severity == Severity::Error)
             || (c.export_warnings && e.severity == Severity::Warning)
             || (c.export_search && self.is_match.get(idx))
+            || (c.export_bookmarks && self.is_bookmarked(idx))
             || (c.export_rules
                 && self.rules.iter().any(|r| {
                     r.regex.is_match(e.message)
@@ -25,11 +26,13 @@ impl App {
             data_gen: self.data_gen,
             rules_gen: self.rules_gen,
             search_gen: self.search_gen,
+            bookmarks_gen: self.bookmarks_gen,
             len: self.entries.len(),
             rules: self.cfg.export_rules,
             errors: self.cfg.export_errors,
             warnings: self.cfg.export_warnings,
             search: self.cfg.export_search,
+            bookmarks: self.cfg.export_bookmarks,
         };
         if self.export_hits.as_ref().is_none_or(|(k, _)| *k != key) {
             let hits: Vec<usize> = (0..self.entries.len())
@@ -172,6 +175,12 @@ impl App {
                                 &mut self.cfg.export_search,
                                 t!("export.inc.search"),
                             ),
+                        )
+                        .changed();
+                    changed |= ui
+                        .checkbox(
+                            &mut self.cfg.export_bookmarks,
+                            t!("export.inc.bookmarks", count = self.bookmark_rows.len()),
                         )
                         .changed();
                 });

@@ -21,6 +21,8 @@ impl App {
                         ("Ctrl+L", "help.filter"),
                         ("Ctrl+H", "help.rules"),
                         ("Ctrl+E", "help.lookup"),
+                        ("Ctrl+F2", "help.bookmark"),
+                        ("F2 / Shift+F2", "help.bookmark_next"),
                         ("Ctrl+Shift+S", "help.export"),
                         ("↑ ↓ PgUp PgDn Home", "help.navigate"),
                         ("End", "help.end"),

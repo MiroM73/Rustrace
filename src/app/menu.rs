@@ -130,6 +130,20 @@ impl App {
                     self.cfg_dirty = true;
                 }
                 ui.separator();
+                if ui
+                    .button(format!("🔖 {}", t!("menu.view.bookmarks")))
+                    .clicked()
+                {
+                    ui.close();
+                    self.show_bookmarks = true;
+                }
+                if ui
+                    .checkbox(&mut self.bookmarks_only, t!("toolbar.bookmarks_only.tip"))
+                    .changed()
+                {
+                    self.refilter_from(0);
+                }
+                ui.separator();
                 ui.label(t!("menu.view.theme"));
                 let mut theme_changed = false;
                 for (id, key) in [

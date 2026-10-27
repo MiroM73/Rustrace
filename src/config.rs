@@ -182,11 +182,20 @@ impl Default for HighlightRule {
     }
 }
 
-/// Severity and search colors of one theme: (text, background).
+/// Severity, search and bookmark colors of one theme: (text, background).
 pub struct Palette {
     pub error: ([u8; 4], [u8; 4]),
     pub warning: ([u8; 4], [u8; 4]),
     pub search: ([u8; 4], [u8; 4]),
+    /// The line number cell of a bookmarked row (#22).
+    pub bookmark: ([u8; 4], [u8; 4]),
+}
+
+impl Palette {
+    /// All (text, background) pairs, in the order of `Config::palette_mut`.
+    pub fn pairs(&self) -> [([u8; 4], [u8; 4]); 4] {
+        [self.error, self.warning, self.search, self.bookmark]
+    }
 }
 
 /// How many search texts the search history keeps.
@@ -217,6 +226,10 @@ pub struct Config {
     pub warning_bg_dark: [u8; 4],
     pub search_fg_dark: [u8; 4],
     pub search_bg_dark: [u8; 4],
+    pub bookmark_fg: [u8; 4],
+    pub bookmark_bg: [u8; 4],
+    pub bookmark_fg_dark: [u8; 4],
+    pub bookmark_bg_dark: [u8; 4],
     pub recent_files: Vec<String>,
     /// Previously used search texts, newest first.
     pub search_history: Vec<String>,
@@ -244,6 +257,7 @@ pub struct Config {
     pub export_errors: bool,
     pub export_warnings: bool,
     pub export_search: bool,
+    pub export_bookmarks: bool,
     pub export_format: ExportFormat,
     pub export_separators: bool,
     /// Export only records from this date/time on (text as entered by the user).
@@ -312,6 +326,10 @@ impl Default for Config {
             warning_bg_dark: [110, 90, 10, 255],
             search_fg_dark: [0, 0, 0, 255],
             search_bg_dark: [240, 150, 30, 255],
+            bookmark_fg: [255, 255, 255, 255],
+            bookmark_bg: [40, 110, 220, 255],
+            bookmark_fg_dark: [255, 255, 255, 255],
+            bookmark_bg_dark: [50, 110, 210, 255],
             recent_files: Vec::new(),
             search_history: Vec::new(),
             show_details: true,
@@ -328,6 +346,7 @@ impl Default for Config {
             export_errors: true,
             export_warnings: true,
             export_search: false,
+            export_bookmarks: true,
             export_format: ExportFormat::Original,
             export_separators: true,
             export_since_enabled: false,
@@ -444,18 +463,21 @@ impl Config {
                 error: (self.error_fg_dark, self.error_bg_dark),
                 warning: (self.warning_fg_dark, self.warning_bg_dark),
                 search: (self.search_fg_dark, self.search_bg_dark),
+                bookmark: (self.bookmark_fg_dark, self.bookmark_bg_dark),
             }
         } else {
             Palette {
                 error: (self.error_fg, self.error_bg),
                 warning: (self.warning_fg, self.warning_bg),
                 search: (self.search_fg, self.search_bg),
+                bookmark: (self.bookmark_fg, self.bookmark_bg),
             }
         }
     }
 
-    /// Editable severity/search colors of one theme: (label key, text, background).
-    pub fn palette_mut(&mut self, dark: bool) -> [(&'static str, &mut [u8; 4], &mut [u8; 4]); 3] {
+    /// Editable palette colors of one theme: (label key, text, background), in the order of
+    /// `Palette::pairs`.
+    pub fn palette_mut(&mut self, dark: bool) -> [(&'static str, &mut [u8; 4], &mut [u8; 4]); 4] {
         if dark {
             [
                 (
@@ -473,6 +495,11 @@ impl Config {
                     &mut self.search_fg_dark,
                     &mut self.search_bg_dark,
                 ),
+                (
+                    "colors.bookmark",
+                    &mut self.bookmark_fg_dark,
+                    &mut self.bookmark_bg_dark,
+                ),
             ]
         } else {
             [
@@ -487,22 +514,25 @@ impl Config {
                     &mut self.search_fg,
                     &mut self.search_bg,
                 ),
+                (
+                    "colors.bookmark",
+                    &mut self.bookmark_fg,
+                    &mut self.bookmark_bg,
+                ),
             ]
         }
     }
 
-    /// Resets the severity/search colors of one theme to the defaults.
+    /// Resets the palette colors of one theme to the defaults.
     pub fn reset_palette(&mut self, dark: bool) {
-        let d = Config::default();
-        let src = d.palette(dark);
-        let [e, w, s] = self.palette_mut(dark);
-        for ((_, fg, bg), (dfg, dbg)) in
-            [e, w, s]
-                .into_iter()
-                .zip([src.error, src.warning, src.search])
-        {
-            *fg = dfg;
-            *bg = dbg;
+        self.set_palette(dark, &Config::default().palette(dark));
+    }
+
+    /// Sets the palette colors of one theme (reset, copy from the other theme).
+    pub fn set_palette(&mut self, dark: bool, src: &Palette) {
+        for ((_, fg, bg), (sfg, sbg)) in self.palette_mut(dark).into_iter().zip(src.pairs()) {
+            *fg = sfg;
+            *bg = sbg;
         }
     }
 

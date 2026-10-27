@@ -69,6 +69,20 @@ impl App {
             self.filter_mode = !self.filter_mode;
             self.recompile_search();
         }
+        // Bookmarks (#22): Ctrl+F2 toggles the selected row, F2 / Shift+F2 = next / previous.
+        let (ctrl_f2, f2, sh_f2) = ctx.input_mut(|i| {
+            (
+                i.consume_key(Modifiers::COMMAND, Key::F2),
+                i.consume_key(Modifiers::NONE, Key::F2),
+                i.consume_key(Modifiers::SHIFT, Key::F2),
+            )
+        });
+        if ctrl_f2 && let Some(i) = self.selected {
+            self.toggle_bookmark(i);
+        }
+        if f2 || sh_f2 {
+            self.goto_bookmark(f2);
+        }
 
         if typing || self.filtered.is_empty() {
             return;

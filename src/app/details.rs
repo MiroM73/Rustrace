@@ -70,6 +70,11 @@ impl App {
         };
         let mut open_code: Option<u32> = None;
         let mut view = self.cfg.details_view;
+        let mut note = self
+            .selected
+            .and_then(|i| self.bookmark_note(i))
+            .map(str::to_owned);
+        let (mut note_changed, mut toggle_bookmark) = (false, false);
         let Some(e) = self.selected.and_then(|i| self.entries.get(i)) else {
             ui.centered_and_justified(|ui| {
                 ui.weak(t!("details.empty"));
@@ -84,6 +89,24 @@ impl App {
                 .on_hover_text(t!("details.view.raw.tip"));
             ui.separator();
             ui.strong(t!("details.line", line = e.line_no));
+            // Bookmark of the row with its note (#22).
+            let tip = format!("{}   {}", t!("details.bookmark.tip"), kb("Ctrl+F2"));
+            if ui
+                .selectable_label(note.is_some(), "🔖")
+                .on_hover_text(tip)
+                .clicked()
+            {
+                toggle_bookmark = true;
+            }
+            if let Some(n) = &mut note {
+                note_changed = ui
+                    .add(
+                        egui::TextEdit::singleline(n)
+                            .hint_text(t!("bookmarks.note.hint"))
+                            .desired_width(220.0),
+                    )
+                    .changed();
+            }
             ui.separator();
             let (txt, col) = match e.severity {
                 Severity::Error => (
@@ -190,6 +213,13 @@ impl App {
         }
         if open_code.is_some() {
             self.open_lookup(open_code);
+        }
+        if let Some(i) = self.selected {
+            if toggle_bookmark {
+                self.toggle_bookmark(i);
+            } else if note_changed && let Some(n) = note {
+                self.set_bookmark_note(i, n);
+            }
         }
     }
 }

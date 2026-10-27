@@ -57,15 +57,7 @@ impl App {
                         .clicked()
                     {
                         let src = self.cfg.palette(!edit_dark);
-                        let [e, w, s] = self.cfg.palette_mut(edit_dark);
-                        for ((_, fg, bg), (sf, sb)) in
-                            [e, w, s]
-                                .into_iter()
-                                .zip([src.error, src.warning, src.search])
-                        {
-                            *fg = sf;
-                            *bg = sb;
-                        }
+                        self.cfg.set_palette(edit_dark, &src);
                         changed = true;
                     }
                 });

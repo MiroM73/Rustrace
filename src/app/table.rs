@@ -287,7 +287,32 @@ impl App {
                     );
                 };
 
-                row.col(|ui| simple(ui, &e.line_no.to_string()));
+                // Line number; a bookmarked row has the cell in the bookmark colors (#22).
+                let (_, line_cell) = row.col(|ui| match self.bookmark_note(idx) {
+                    Some(_) => {
+                        let (bfg, bbg) = self.cfg.palette(self.dark).bookmark;
+                        ui.painter()
+                            .rect_filled(ui.max_rect().expand2(gap), 0.0, c32(bbg));
+                        ui.add(
+                            egui::Label::new(
+                                RichText::new(format!("🔖{}", e.line_no))
+                                    .font(font.clone())
+                                    .color(c32(bfg)),
+                            )
+                            .truncate()
+                            .selectable(false),
+                        );
+                    }
+                    None => simple(ui, &e.line_no.to_string()),
+                });
+                if let Some(note) = self.bookmark_note(idx) {
+                    let tip = if note.is_empty() {
+                        t!("bookmarks.tip")
+                    } else {
+                        note.to_owned()
+                    };
+                    line_cell.on_hover_text(tip);
+                }
                 for c in &columns {
                     match c.kind {
                         ColumnKind::Role(Role::Message) => {
@@ -339,6 +364,19 @@ impl App {
                     clicked = Some(idx);
                 }
                 resp.context_menu(|ui| {
+                    let key = if self.is_bookmarked(idx) {
+                        "context.bookmark.remove"
+                    } else {
+                        "context.bookmark.add"
+                    };
+                    if ui
+                        .button(format!("🔖 {}   {}", t!(key), kb("Ctrl+F2")))
+                        .clicked()
+                    {
+                        action = Some(RowAction::ToggleBookmark(idx));
+                        ui.close();
+                    }
+                    ui.separator();
                     if ui.button(t!("context.copy_message")).clicked() {
                         action = Some(RowAction::CopyMessage(idx));
                         ui.close();
@@ -425,6 +463,7 @@ impl App {
             let ctx = ui.ctx().clone();
             match a {
                 RowAction::ExplainCode(v) => self.open_lookup(Some(v)),
+                RowAction::ToggleBookmark(i) => self.toggle_bookmark(i),
                 RowAction::CopyMessage(i) => ctx.copy_text(self.entries.at(i).message.to_owned()),
                 RowAction::CopyRow(i) => {
                     let e = self.entries.at(i);

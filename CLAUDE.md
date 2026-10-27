@@ -176,6 +176,13 @@ Features (all implemented, see README for user-facing details):
   `!` negation, case-insensitive. Cleared when the columns change (other log type).
 - Error code lookup (Ctrl+E) + automatic explanation in the details pane; descriptions from language
   files (`code.0xXXXXXXXX`) + Windows `FormatMessageW` (also wininet/winhttp).
+- **Bookmarks** (#22, `app/bookmarks.rs`, window `dialogs/bookmarks.rs`): `App::bookmarks`
+  (file id, line) → note is the truth; `bookmark_rows` = sorted entry indexes, kept like
+  `filtered` (`find_bookmarks_from(changed)` after appends, `bookmarks_drop_front`,
+  `bookmarks_after_reset` remaps file ids by path via `remap_files` – `open_files` stashes the old
+  files in `bookmark_files`, so adding a log / Ctrl+F5 keeps them). Ctrl+F2 / F2 / Shift+F2,
+  filter `FilterSpec::bookmarks` (keys), export criterion `cfg.export_bookmarks`, palette pair
+  `bookmark` (line cell), `SessionState::bookmarks` for the update restart; not saved per file.
 - Export highlighted rows with context (Ctrl+Shift+S): lines before/after, criteria (rules, errors,
   warnings, search), overlapping ranges merged (no duplicates), formats original lines / readable
   table, separators, **only records since date/time** (with presets relative to newest log record),
@@ -258,7 +265,7 @@ Features (all implemented, see README for user-facing details):
 
 ## Commands
 - `cargo build --release` → `target\release\rustrace.exe`
-- `cargo test` (79 tests: update releases list / missed versions / check setting migration, merged logs (order by time, appended older rows, formats + rotated parts + re-read, single log unchanged, interleave), store copy_entry / split_off, raw lines of entries (all formats / encodings), filter (parallel = sequential, match bits), date column filter = text filter, updates (versions, release JSON, notes, sha256 file, ZIP, install, restore state), icon / .ico layout, search as you type threshold, status-bar position percentage, file association (registry in an own HKCU test key), search history, store drop_front / move to temp file, rotated parts (naming, merge on open, rotation while watching, replaced
+- `cargo test` (80 tests: bookmark file id remap, update releases list / missed versions / check setting migration, merged logs (order by time, appended older rows, formats + rotated parts + re-read, single log unchanged, interleave), store copy_entry / split_off, raw lines of entries (all formats / encodings), filter (parallel = sequential, match bits), date column filter = text filter, updates (versions, release JSON, notes, sha256 file, ZIP, install, restore state), icon / .ico layout, search as you type threshold, status-bar position percentage, file association (registry in an own HKCU test key), search history, store drop_front / move to temp file, rotated parts (naming, merge on open, rotation while watching, replaced
   file), export segments by file, time range bounds, column filter syntax, parsers, chunked/ANSI/UTF-16 reading, log definitions (CBS, DISM, IIS,
   Exchange connectivity / CSV separator, choice by name/content, appending across refreshes), store (32-byte record, ISO ↔ ms, push /
   truncate / append, mapped temp file growing past 64 MB, interner), export incl. end-to-end and
@@ -381,6 +388,7 @@ Features (all implemented, see README for user-facing details):
     Release v0.9.0 (#21, #29), published 2026-10-27.
 45. #31 update check at every start (setting start / daily / never) and the notes of all missed
     releases in the update window. Release v0.9.1.
+46. #22 bookmarks (Ctrl+F2, F2 / Shift+F2, notes, list window, filter, export criterion).
 
 
 ## Ideas not done yet (offered by the owner)

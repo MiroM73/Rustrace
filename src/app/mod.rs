@@ -30,6 +30,7 @@ use std::sync::{Arc, mpsc};
 use std::time::{Duration, Instant};
 
 // The `impl App` blocks are split by area; every submodule starts with `use crate::app::*;`.
+mod bookmarks;
 mod details;
 mod dialogs;
 mod filter;
@@ -148,6 +149,7 @@ enum UpdateState {
 
 enum RowAction {
     ExplainCode(u32),
+    ToggleBookmark(usize),
     CopyMessage(usize),
     CopyRow(usize),
     RuleFromComponent(usize),
@@ -211,6 +213,17 @@ pub struct App {
 
     selected: Option<usize>,
     scroll_to: Option<usize>,
+
+    /// Bookmarks (#22): note by (file id, line number), the bookmarked entries (sorted), a change
+    /// counter, the "only bookmarked rows" filter and the bookmarks window.
+    bookmarks: HashMap<(u16, usize), String>,
+    bookmark_rows: Vec<usize>,
+    bookmarks_gen: u64,
+    bookmarks_only: bool,
+    show_bookmarks: bool,
+    /// Files of the view before it was opened again; the next full read moves the bookmarks to
+    /// the new file ids.
+    bookmark_files: Option<Vec<SourceFile>>,
 
     rules: Vec<CompiledRule>,
     rule_errors: Vec<Option<String>>,
@@ -324,11 +337,13 @@ struct ExportKey {
     data_gen: u64,
     rules_gen: u64,
     search_gen: u64,
+    bookmarks_gen: u64,
     len: usize,
     rules: bool,
     errors: bool,
     warnings: bool,
     search: bool,
+    bookmarks: bool,
 }
 
 impl App {
@@ -381,6 +396,12 @@ impl App {
             show_sev: [true; 3],
             selected: None,
             scroll_to: None,
+            bookmarks: HashMap::new(),
+            bookmark_rows: Vec::new(),
+            bookmarks_gen: 0,
+            bookmarks_only: false,
+            show_bookmarks: false,
+            bookmark_files: None,
             rules: Vec::new(),
             rule_errors: Vec::new(),
             show_rules: false,
@@ -601,6 +622,7 @@ impl eframe::App for App {
         #[cfg(windows)]
         self.assoc_window(&ctx);
         self.lookup_window(&ctx);
+        self.bookmarks_window(&ctx);
         self.export_window(&ctx);
         self.def_updates_window(&ctx);
         self.update_window(&ctx);

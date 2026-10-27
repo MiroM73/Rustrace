@@ -100,6 +100,7 @@ impl App {
             time_range: self.time_range,
             columns: self.col_filters.clone(),
             file_labels: self.file_labels.clone(),
+            bookmarks: self.bookmark_filter(),
         }
     }
 

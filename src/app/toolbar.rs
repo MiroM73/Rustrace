@@ -249,6 +249,16 @@ impl App {
             {
                 self.cfg_dirty = true;
             }
+            if ui
+                .toggle_value(
+                    &mut self.bookmarks_only,
+                    format!("🔖 {}", t!("toolbar.bookmarks_only")),
+                )
+                .on_hover_text(t!("toolbar.bookmarks_only.tip"))
+                .changed()
+            {
+                self.refilter_from(0);
+            }
             let label = if self.time_range_active() {
                 t!("toolbar.time_range.active")
             } else {

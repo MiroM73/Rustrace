@@ -469,6 +469,8 @@ pub struct SessionState {
     pub time_from: String,
     pub time_to: String,
     pub window: Option<WindowState>,
+    /// Bookmarks: (file id, line number, note).
+    pub bookmarks: Vec<(u16, usize, String)>,
 }
 
 /// Command line switch of the restarted program.
@@ -776,6 +778,7 @@ mod tests {
                 size: Some([800.0, 600.0]),
                 maximized: false,
             }),
+            bookmarks: vec![(0, 7, String::new()), (1, 12, "install failed".into())],
             ..Default::default()
         };
         let file = state.save_temp().unwrap();

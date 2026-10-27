@@ -8,8 +8,9 @@ use crate::logdef::{ColumnKind, Role};
 use crate::parser::Severity;
 use crate::store::{EntryRef, LogStore};
 use regex::Regex;
-use std::sync::Mutex;
+use std::collections::HashSet;
 use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
+use std::sync::{Arc, Mutex};
 
 /// Entries evaluated by one worker at a time (a multiple of 64, so the match bits of the chunks
 /// can be joined word by word).
@@ -150,6 +151,8 @@ pub struct FilterSpec {
     pub columns: Vec<(ColumnKind, CellFilter)>,
     /// Labels of the File column (index = file id).
     pub file_labels: Vec<String>,
+    /// Only bookmarked entries are displayed: their (file id, line number) (#22).
+    pub bookmarks: Option<Arc<HashSet<(u16, usize)>>>,
 }
 
 /// Result of filtering entries: indexes of the displayed ones and the search match bits.
@@ -167,6 +170,10 @@ impl FilterSpec {
         let shown = pass_search
             && self.sev_visible(e.severity)
             && self.in_time_range(e.timestamp())
+            && self
+                .bookmarks
+                .as_ref()
+                .is_none_or(|b| b.contains(&(e.file, e.line_no)))
             && self.passes_columns(e);
         (m, shown)
     }
@@ -358,12 +365,22 @@ mod tests {
                 ],
                 ..Default::default()
             },
+            FilterSpec {
+                show_sev: [true; 3],
+                bookmarks: Some(Arc::new([(0, 1), (0, 5000), (0, 3 * CHUNK)].into())),
+                ..Default::default()
+            },
         ];
         for spec in specs {
             let mut seq = FilterOutput::default();
             spec.run(&s, 0..s.len(), &mut seq);
             let par = spec.run_parallel(&s, &AtomicBool::new(false)).unwrap();
             assert_eq!(par, seq);
+            if let Some(b) = &spec.bookmarks {
+                // Only the bookmarked lines (line numbers are 1-based).
+                assert_eq!(seq.filtered, [0, 4999, 3 * CHUNK - 1]);
+                assert_eq!(b.len(), 3);
+            }
             assert_eq!(par.is_match.count(), par.is_match.recount());
         }
         assert!(

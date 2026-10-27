@@ -179,6 +179,7 @@ impl App {
             time_from: self.time_from.clone(),
             time_to: self.time_to.clone(),
             window: Some(window),
+            bookmarks: self.bookmark_state(),
         }
     }
 
@@ -219,6 +220,7 @@ impl App {
     }
 
     pub(in crate::app) fn restore_view(&mut self, state: SessionState) {
+        self.restore_bookmarks(state.bookmarks);
         if !state.col_filters.is_empty() {
             self.col_filter_text = state.col_filters.into_iter().collect();
             self.apply_column_filters();

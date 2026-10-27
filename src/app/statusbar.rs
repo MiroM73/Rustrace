@@ -93,6 +93,16 @@ impl App {
                     .on_hover_text(t!("status.position.tip", line = line));
                     ui.separator();
                 }
+                if !self.bookmark_rows.is_empty() {
+                    if ui
+                        .button(format!("🔖 {}", self.bookmark_rows.len()))
+                        .on_hover_text(t!("status.bookmarks.tip", count = self.bookmark_rows.len()))
+                        .clicked()
+                    {
+                        self.show_bookmarks = true;
+                    }
+                    ui.separator();
+                }
                 if self.cfg.auto_refresh {
                     ui.label(format!(
                         "🔄 {}",

@@ -33,6 +33,7 @@ impl App {
         let pos_selected = self
             .selected
             .and_then(|s| self.filtered.binary_search(&s).ok());
+        self.bookmarks_drop_front(k);
         self.entries_mut().drop_front(k);
         self.committed_len -= k;
         self.dropped += k;
@@ -164,6 +165,11 @@ impl App {
         self.format_choice = FormatChoice::Auto;
         self.active_def = None;
         self.schema = Schema::default();
+        // The bookmarks stay with the files that are opened again (e.g. a log added to the view).
+        if self.bookmark_files.is_none() {
+            self.bookmark_files = Some(self.files.clone());
+        }
+        self.bookmark_rows.clear();
         self.set_files(Vec::new());
         self.dropped = 0;
         self.entries = Arc::new(LogStore::new());
@@ -253,11 +259,17 @@ impl App {
                     self.schema = src.schema().clone();
                 }
                 self.active_def = src.active_def();
+                let reset = matches!(res, Ok(ReadResult::Reset { .. }));
+                let old_files = reset.then(|| {
+                    self.bookmark_files
+                        .take()
+                        .unwrap_or_else(|| self.files.clone())
+                });
                 if self.files != src.files() {
                     self.set_files(src.files().to_vec());
                 }
                 self.source = Some(src);
-                self.apply_result(res);
+                self.apply_result(res, old_files.as_deref());
                 // A log of a merged view that could not be read (the others are shown).
                 if !read_errors.is_empty() {
                     self.status_error = Some(t!("error.read", error = read_errors));
@@ -281,7 +293,12 @@ impl App {
         }
     }
 
-    pub(in crate::app) fn apply_result(&mut self, res: std::io::Result<ReadResult>) {
+    /// Takes over a read result; `old_files` = the files of the view before a full read.
+    pub(in crate::app) fn apply_result(
+        &mut self,
+        res: std::io::Result<ReadResult>,
+        old_files: Option<&[SourceFile]>,
+    ) {
         let before = self.filtered.len();
         if matches!(
             res,
@@ -308,6 +325,7 @@ impl App {
                 self.code_cache = None;
                 self.filtered.clear();
                 self.is_match.clear();
+                self.bookmarks_after_reset(old_files.unwrap_or_default());
                 self.refilter_from(0);
                 self.last_refresh_wall = Some(chrono::Local::now());
                 if let Some(p) = self.pending_recent.take() {
@@ -354,6 +372,7 @@ impl App {
                         self.scroll_to_selected_after_filter();
                     }
                 }
+                self.find_bookmarks_from(changed);
                 self.refilter_from(changed);
                 self.last_refresh_wall = Some(chrono::Local::now());
                 if self.cfg.auto_scroll
