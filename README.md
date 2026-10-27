@@ -12,6 +12,8 @@ A desktop application in Rust (egui/eframe) for watching log files like CMTrace 
 with custom color rules, regex search, adjustable automatic refresh, error code lookup, export of
 highlighted rows with their context and a translatable user interface.
 
+[![CI](https://github.com/MiroM73/Rustrace/actions/workflows/ci.yml/badge.svg?branch=master)](https://github.com/MiroM73/Rustrace/actions/workflows/ci.yml)
+
 ## Download
 
 Ready-made Windows builds are on the [Releases](https://github.com/MiroM73/Rustrace/releases) page,
@@ -83,6 +85,14 @@ Open a specific file: `rustrace.exe C:\Windows\CCM\Logs\AppEnforce.log`
 (it can also be set as the default program for `.log` files). Files can be dragged onto the window too.
 
 Tests: `cargo test`
+
+Checks before a commit / pull request (the same ones the CI runs): `cargo fmt --check`,
+`cargo clippy --all-targets --locked -- -D warnings`, `cargo test --locked`.
+The workflow `.github/workflows/ci.yml` runs them on every push to `master` and on every pull
+request – on Windows (plus a release build, downloadable as the `rustrace-windows-<commit>`
+artifact of the run) and on Linux (clippy and tests, so the build keeps working there).
+Formatting-only commits are listed in `.git-blame-ignore-revs`
+(`git config blame.ignoreRevsFile .git-blame-ignore-revs` makes a local `git blame` skip them).
 
 Test logs: `python scripts/gen_testlogs.py` (add `--small-only` to skip the big ones) creates the
 folder `testlogs\` (not in git) with small and big logs of every supported kind – CMTrace in several
@@ -474,6 +484,7 @@ The built-in languages live in `lang/*.lang` in the source tree and are embedded
 - `scripts/package.ps1` – packs the release build into the self-extracting archive and the ZIP
 - `scripts/release.ps1` – the whole GitHub release (checks, version, tests, commit, tag, build, publish)
 - `scripts/gen_testlogs.py` – generates the test logs in `testlogs/` (not in git)
+- `.github/workflows/ci.yml` – formatting, clippy, tests and a build for every push and pull request
 - `.github/workflows/release.yml` – builds and publishes releases on GitHub
 
 - `LICENSE` – the Unlicense (public domain)

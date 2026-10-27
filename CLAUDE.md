@@ -205,7 +205,10 @@ Features (all implemented, see README for user-facing details):
   bench_large_file -- --ignored --nocapture` (`RUSTRACE_BENCH_MAPPED=1` = temp file); prints load /
   search / random access times and private bytes. A realistic 400 MB CMTrace log can be generated
   with a small script (random components, threads, messages, ~1 % multi-line).
-- `cargo clippy`
+- `cargo fmt` + `cargo clippy --all-targets --locked -- -D warnings` – the code is rustfmt-clean and
+  clippy-clean; CI (`.github/workflows/ci.yml`, #20) fails otherwise. CI on every push to master and
+  every PR: Windows job fmt / clippy / test / release build (exe as artifact), Linux job clippy /
+  test. Formatting-only commits go into `.git-blame-ignore-revs`.
 - `scripts\package.ps1` → `dist\RusTrace-v<version>-windows-x64.exe` (7-Zip SFX) and `.zip` (same
   content, for extracting manually), each with a `.sha256`; both extract to
   `RusTrace\` with `rustrace.exe` + `lang\` + `logdef\` + `LICENSE`. Needs 7-Zip.
@@ -296,6 +299,9 @@ Features (all implemented, see README for user-facing details):
     of the main window from the old and new build are pixel-identical (except the clock in the
     status bar). Not run through `cargo fmt` on purpose (the code was not rustfmt-clean before and
     formatting would hide the move in the diff).
+41. #20: CI workflow `ci.yml` (Windows: fmt, clippy -D warnings, tests, release build artifact;
+    Linux: clippy, tests), the whole code formatted with `cargo fmt` in its own commit (listed in
+    `.git-blame-ignore-revs`), the one clippy warning (test in `config.rs`) fixed, CI badge.
 
 ## Ideas not done yet (offered to the owner)
 - Merge **different** logs into one view sorted by time (like CMTrace File → Open → "Merge

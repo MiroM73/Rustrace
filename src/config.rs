@@ -503,8 +503,10 @@ mod tests {
 
     #[test]
     fn palette_reset_and_copy() {
-        let mut cfg = Config::default();
-        cfg.error_bg_dark = [9, 9, 9, 255];
+        let mut cfg = Config {
+            error_bg_dark: [9, 9, 9, 255],
+            ..Config::default()
+        };
         cfg.reset_palette(true);
         assert_eq!(cfg.error_bg_dark, Config::default().error_bg_dark);
         let mut r = HighlightRule::default();
