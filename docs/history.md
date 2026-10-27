@@ -121,6 +121,8 @@ Notes for Claude, linked from `CLAUDE.md`.
     checked first with a 10 s timeout, translated messages (unreachable / no answer / access denied /
     share missing), recently used computers in the settings, UNC watching + rotation tested over
     `\\localhost\c$`. Not tested on a real remote ConfigMgr client.
+56. Release v1.0.0 (#26 command line, #28 HTTP / IIS status codes, #27 log sets) – first version
+    the owner considers complete for full everyday use.
 
 ## Ideas not done yet (offered by the owner)
 - `--set "<name>"` command-line option for log sets (#27): would need the set loading, the file
