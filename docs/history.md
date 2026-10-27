@@ -14,7 +14,9 @@ Notes for Claude, linked from `CLAUDE.md`.
 8. Release packaging (7-Zip SFX), GitHub Actions release workflow, static CRT; first release v0.1.0
    (https://github.com/MiroM73/Rustrace/releases/tag/v0.1.0, published 2026-10-23).
 9. Unlicense added, AI-authorship notice moved to the top of the README, CLAUDE.md committed.
-10. (2026-10-24) Ctrl + mouse wheel zoom: log text vs. whole UI depending on the pointer position.
+
+## History (2026-10-24)
+10. Ctrl + mouse wheel zoom: log text vs. whole UI depending on the pointer position.
 11. Release v0.2.0 (zoom; LICENSE now shipped in the archive).
 12. Export option "rows visible in the table" as the highlighted rows (context from the whole file).
 13. Log definitions (owner's idea): `logdef\*.def` files, built-in IIS (W3C) / DISM / CBS,
@@ -30,6 +32,12 @@ Notes for Claude, linked from `CLAUDE.md`.
     removes the oldest records (owner agreed to dropping old records from memory and view).
 19. Release v0.3.0 (log definitions, memory saving, column filters, time range, rotated logs,
     memory limit); the release now also contains a plain ZIP next to the self-extracting .exe.
+20. Test logs generator (`scripts/gen_testlogs.py`, `testlogs/` not in git) + `testlogs_overview`;
+    it found that a `.lo_` opened directly was merged with itself – fixed (rotated parts opened
+    directly are never merged).
+21. Release v0.3.1 (bug fix: a rotated part opened directly was read twice).
+22. Fix: a later w3c `#Fields:` header replaced the table columns, so rows of the first part lost
+    their columns; now the first header replaces the default fields, later ones only add columns.
 23. Horizontal scroll bar under the table for columns that do not fit (Shift + wheel too).
 24. Log definitions: clear priority (user folder > next to exe > built-in) instead of file-name
     order, active definition with its file shown, warning when several match (owner's report).
@@ -37,64 +45,63 @@ Notes for Claude, linked from `CLAUDE.md`.
     setting which groups are used, notice of new / changed predefined definitions after updates.
 26. Release v0.4.0 (IIS columns fix, horizontal scroll bar, log definition priority / groups /
     update notice).
-20. Test logs generator (`scripts/gen_testlogs.py`, `testlogs/` not in git) + `testlogs_overview`;
-    it found that a `.lo_` opened directly was merged with itself – fixed (rotated parts opened
-    directly are never merged).
-21. Release v0.3.1 (bug fix: a rotated part opened directly was read twice).
-22. Fix: a later w3c `#Fields:` header replaced the table columns, so rows of the first part lost
-    their columns; now the first header replaces the default fields, later ones only add columns.
 
-27. (2026-10-26) GitHub workflow with issues + PRs started. #2: match count right after the search
-    field. #1: a search match hidden in a long message → excerpt in the cell, highlighted and
+## History (2026-10-25)
+27. GitHub workflow with issues + PRs started. #2: match count right after the search
+    field.
+
+## History (2026-10-26)
+28. #1: a search match hidden in a long message → excerpt in the cell, highlighted and
     scrolled to in the details pane.
-28. #13: Exchange Server Transport Connectivity log definition; w3c definitions got `separator`
+29. #13: Exchange Server Transport Connectivity log definition; w3c definitions got `separator`
     (comma-separated `#Fields:` and values, CSV quoting, `-` kept as a value).
-29. Release v0.5.0 (#2 search match count, #1 search match in long messages, #13 Exchange
+30. Release v0.5.0 (#2 search match count, #1 search match in long messages, #13 Exchange
     Transport Connectivity log definition + w3c `separator`).
-30. `scripts/release.ps1` – the owner makes releases himself (checks, version, tests, tag, publish).
-31. #10 version in the window title, #7 Help → About, #5 search history (🕘 next to the search
+31. `scripts/release.ps1` – the owner makes releases himself (checks, version, tests, tag, publish).
+32. #10 version in the window title, #7 Help → About, #5 search history (🕘 next to the search
     field, `cfg.search_history`, max 30), #9 default app for .log / .lo_ (`src/fileassoc.rs`).
-32. Release v0.6.0 (#10, #7, #5, #9).
-33. #6 high CPU: the AMD driver spun a core with wgpu → OpenGL renderer by default with wgpu
+33. Release v0.6.0 (#10, #7, #5, #9).
+34. #6 high CPU: the AMD driver spun a core with wgpu → OpenGL renderer by default with wgpu
     fallback; fewer frames per auto refresh.
-34. Release v0.6.1 (#6 high CPU fix).
-35. #3: position of the selected row in the status bar (`📍 Row 25 / 100 (25 %)`, counted among
+35. Release v0.6.1 (#6 high CPU fix).
+36. #3: position of the selected row in the status bar (`📍 Row 25 / 100 (25 %)`, counted among
     the displayed rows `filtered`, tooltip = line in the file; `position_percent` rounds down).
-36. #4: search as you type from `INSTANT_SEARCH_MIN_CHARS` (3) characters, the first match (from the
+37. #4: search as you type from `INSTANT_SEARCH_MIN_CHARS` (3) characters, the first match (from the
     top of `filtered`) is selected; shorter texts only after Enter / F3 / history / search component
     (`search_confirmed`, cleared by typing); before, every keystroke searched even 1 character.
-37. #11: start-up splash (icon, name + version, "Starting…", rotating dots) until the main window
+38. #11: start-up splash (icon, name + version, "Starting…", rotating dots) until the main window
     shows; new program icon drawn in code, used for the window and embedded in the exe.
-38. #15: update check (Help menu + automatic once a day, can be turned off), download + install of
+39. #15: update check (Help menu + automatic once a day, can be turned off), download + install of
     the release ZIP over the running program and restart with the same log and view.
-39. Release v0.7.0 (#11 splash + icon, #15 updates). Verified end to end on the published release:
+40. Release v0.7.0 (#11 splash + icon, #15 updates). Verified end to end on the published release:
     0.7.0 started with RUSTRACE_UPDATE_AS_VERSION=0.6.0 updated itself and came back with the log,
     search and selected row; `rustrace.exe.old` was deleted by the new process.
-40. #19: `src/app.rs` (~4 450 lines) split into `src/app/` modules – a pure move of code, no
+
+## History (2026-10-27)
+41. #19: `src/app.rs` (~4 450 lines) split into `src/app/` modules – a pure move of code, no
     behaviour change. Checked: the multiset of non-blank source lines is the same apart from module
     headers / visibility, 64 tests pass, clippy shows the same warnings as before, Xvfb screenshots
     of the main window from the old and new build are pixel-identical (except the clock in the
     status bar). Not run through `cargo fmt` on purpose (the code was not rustfmt-clean before and
     formatting would hide the move in the diff).
-41. #20: CI workflow `ci.yml` (Windows: fmt, clippy -D warnings, tests, release build artifact;
+42. #20: CI workflow `ci.yml` (Windows: fmt, clippy -D warnings, tests, release build artifact;
     Linux: clippy, tests), the whole code formatted with `cargo fmt` in its own commit (listed in
     `.git-blame-ignore-revs`), the one clippy warning (test in `config.rs`) fixed, CI badge.
-42. (2026-10-27) #16 search / filters of big logs in a background thread (parallel, cancelable,
+43. #16 search / filters of big logs in a background thread (parallel, cancelable,
     previous result stays visible), #17 date/time column filter compared as time ranges,
     #18 match count kept incrementally (`MatchBits`). Release v0.8.0.
-43. #29 details pane Message | Raw line (byte range of every entry, read from the file on demand).
-44. #21 several different logs merged into one view by time (`LogSet`), tabs still not wanted.
+44. #29 details pane Message | Raw line (byte range of every entry, read from the file on demand).
+45. #21 several different logs merged into one view by time (`LogSet`), tabs still not wanted.
     Release v0.9.0 (#21, #29), published 2026-10-27.
-45. #31 update check at every start (setting start / daily / never) and the notes of all missed
+46. #31 update check at every start (setting start / daily / never) and the notes of all missed
     releases in the update window. Release v0.9.1.
-46. #22 bookmarks (Ctrl+F2, F2 / Shift+F2, notes, list window, filter, export criterion).
-47. #25 several selected rows (Shift / Ctrl, Ctrl+A, copy messages / table / original lines,
+47. #22 bookmarks (Ctrl+F2, F2 / Shift+F2, notes, list window, filter, export criterion).
+48. #25 several selected rows (Shift / Ctrl, Ctrl+A, copy messages / table / original lines,
     export selected rows).
-48. #23 Δ time column (previous shown / previous of the log / reference row, long gaps colored).
-49. #24 overview strip next to the scroll bar (errors, warnings, search, bookmarks; click to scroll).
-50. Release v0.9.5 (#22 bookmarks, #25 several selected rows, #23 Δ time column, #24 overview
+49. #23 Δ time column (previous shown / previous of the log / reference row, long gaps colored).
+50. #24 overview strip next to the scroll bar (errors, warnings, search, bookmarks; click to scroll).
+51. Release v0.9.5 (#22 bookmarks, #25 several selected rows, #23 Δ time column, #24 overview
     strip).
-
 
 ## Ideas not done yet (offered by the owner)
 - For IIS logs, explain the status codes like the error code lookup does: HTTP `sc-status`
