@@ -450,7 +450,18 @@ The built-in languages live in `lang/*.lang` in the source tree and are embedded
   parsing, last-N blocks, output formats (+ tests)
 - `src/i18n.rs` – localization: language files, fallback, `t!()` macro (+ tests)
 - `src/config.rs` – settings and rules (serde/JSON)
-- `src/app.rs` – user interface
+- `src/app/` – user interface (`App`), one `impl App` block per area:
+  - `mod.rs` – the `App` state, start-up, theme / zoom / language, the frame loop (`eframe::App`)
+  - `loading.rs` – opening files, background reading, auto refresh, rotation, memory limits
+  - `filter.rs` – search, filter mode, severity toggles, time range, column filters (+ tests)
+  - `logdefs.rs` – log definitions, update notice, the log format menu
+  - `input.rs` – keyboard shortcuts, drag & drop
+  - `menu.rs`, `toolbar.rs`, `statusbar.rs` (+ tests) – menu bar, toolbar and time range row, status bar
+  - `table.rs` – the log table, row colors, highlighted text, context menu
+  - `details.rs` – details pane, error code explanation
+  - `widgets.rs` – small shared UI helpers (color button, theme switch, …)
+  - `dialogs/` – highlight rules, colors, error code lookup, export, help / about,
+    default app (Windows), new versions
 - `src/main.rs` – window start-up, renderer choice (OpenGL, wgpu / Direct3D 12 as the fallback)
 - `src/update.rs` – new versions: GitHub release, version comparison, ZIP extraction, SHA-256 check,
   installation over the running program, state for the restart (+ tests)

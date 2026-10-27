@@ -148,7 +148,15 @@ Features (all implemented, see README for user-facing details):
   `App::ui` on the second frame (`splash::close`, safe before the window exists).
 - `src/icon.rs` – program icon drawn in code (`rgba(size)`, `ico(sizes)`); `build.rs` includes it
   with `#[path]` and embeds the .ico + version info with `winresource` (needs `rc.exe`).
-- `src/app.rs` – the whole UI (`App`), background loading, export dialog, windows.
+- `src/app/` – the whole UI (`App`), split by area (#19): `mod.rs` holds the `App` struct, its
+  helper types/consts, `App::new` and the frame loop; every other file is an `impl App` block for
+  one area (`loading`, `filter`, `logdefs`, `input`, `menu`, `toolbar`, `statusbar`, `table`,
+  `details`, `widgets`, `dialogs/*`). Conventions: each submodule starts with
+  `use crate::app::*;` (gets the parent's imports, private types and consts – child modules may use
+  private items of their ancestors); methods used outside their own file are
+  `pub(in crate::app) fn`; shared free helpers are `pub(in crate::app)` and glob-imported in
+  `mod.rs` (`use table::*;` …). A new window → `dialogs/<name>.rs` + `mod <name>;` in
+  `dialogs/mod.rs`; keep files under ~800 lines.
 - `src/parser.rs` – `LogSource::poll()` chunked incremental reading, encodings, format parsing,
   `read_line_ranges()` for original-line export. Dates stored as ISO `YYYY-MM-DD HH:MM:SS.mmm`,
   formatted for display by the UI (`format.date` in the language file).
@@ -175,7 +183,7 @@ Features (all implemented, see README for user-facing details):
   the test `i18n::tests::builtin_languages_are_complete` enforces this.
 - Keep heavy work (file reading, export writing) off the UI thread (see `start_poll`, `start_export`).
 - New settings: add to `Config` with a default (`#[serde(default)]` keeps old config files loading).
-- Prefer pure, unit-tested functions in modules (`export.rs`, `parser.rs`), thin UI code in `app.rs`.
+- Prefer pure, unit-tested functions in modules (`export.rs`, `parser.rs`), thin UI code in `src/app/`.
 - egui 0.37 API notes: `eframe::App::ui(&mut self, ui, frame)`, `egui::Panel::top/bottom(..).show(ui, ..)`,
   `egui::MenuBar::new().ui(..)`, `ui.close()`, `egui::Id::unique(..)` (not `Id::new`).
 
@@ -279,6 +287,12 @@ Features (all implemented, see README for user-facing details):
     shows; new program icon drawn in code, used for the window and embedded in the exe.
 38. #15: update check (Help menu + automatic once a day, can be turned off), download + install of
     the release ZIP over the running program and restart with the same log and view.
+39. #19: `src/app.rs` (~4 450 lines) split into `src/app/` modules – a pure move of code, no
+    behaviour change. Checked: the multiset of non-blank source lines is the same apart from module
+    headers / visibility, 64 tests pass, clippy shows the same warnings as before, Xvfb screenshots
+    of the main window from the old and new build are pixel-identical (except the clock in the
+    status bar). Not run through `cargo fmt` on purpose (the code was not rustfmt-clean before and
+    formatting would hide the move in the diff).
 
 ## Ideas not done yet (offered to the owner)
 - Merge **different** logs into one view sorted by time (like CMTrace File → Open → "Merge
