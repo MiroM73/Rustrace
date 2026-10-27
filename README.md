@@ -16,7 +16,8 @@ highlighted rows with their context and a translatable user interface.
 
 **Guides** – step-by-step help for real situations with annotated screenshots and command-line
 examples: [docs/guides](docs/guides/README.md), e.g.
-[An application deployment failed](docs/guides/failed-app-install.md).
+[An application deployment failed](docs/guides/failed-app-install.md),
+[Software updates do not install](docs/guides/software-updates.md).
 
 ## Download
 
@@ -782,7 +783,7 @@ rustrace --lang de AppEnforce.log
 - `scripts/package.ps1` – packs the release build into the self-extracting archive and the ZIP
 - `scripts/release.ps1` – the whole GitHub release (checks, version, tests, commit, tag, build, publish)
 - `scripts/gen_testlogs.py` – generates the test logs in `testlogs/` (not in git)
-- `scripts/gen_guide_logs.py` – generates the sample logs of the guide *An application deployment failed*
+- `scripts/gen_guide_logs.py` – generates the sample logs of the guides in `docs/guides` (one script per guide in `scripts/guide_logs/`)
 - `.github/workflows/ci.yml` – formatting, clippy, tests and a build for every push and pull request
 - `.github/workflows/release.yml` – builds and publishes releases on GitHub
 

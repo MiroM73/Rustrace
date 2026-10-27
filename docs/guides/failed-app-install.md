@@ -10,7 +10,7 @@ need nothing else. For a remote client you need admin rights on it (the logs are
 `\\<computer>\admin$`).
 
 > The screenshots use invented sample logs. To follow the guide step by step on your own PC,
-> create the same logs with `python scripts/gen_guide_logs.py` (they are written to
+> create the same logs with `python scripts/gen_guide_logs.py failed-app-install` (they are written to
 > `testlogs\guides\failed-app-install\`) and open them as in [step 1, option B](#option-b-open-the-files).
 
 ## The logs involved
