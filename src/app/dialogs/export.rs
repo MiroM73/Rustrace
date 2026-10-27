@@ -80,7 +80,9 @@ impl App {
         };
         // "Rows visible in the table": every row shown in the table is a highlighted row
         // (the criteria are not used); the context still comes from the whole file.
-        let all_hits = if self.cfg.export_visible_only {
+        let all_hits = if self.export_selected {
+            self.sel.ones().collect()
+        } else if self.cfg.export_visible_only {
             self.filtered.clone()
         } else {
             self.export_hits().to_vec()
@@ -150,15 +152,32 @@ impl App {
                 ui.separator();
                 ui.label(t!("export.include"));
                 let (visible, total) = (self.filtered.len(), self.entries.len());
+                // Selected rows (row context menu → Export selected rows…).
+                let selected = self.sel.count();
+                if selected == 0 {
+                    self.export_selected = false;
+                }
+                ui.add_enabled(
+                    selected > 0,
+                    egui::Checkbox::new(
+                        &mut self.export_selected,
+                        t!("export.selected_only", count = selected),
+                    ),
+                )
+                .on_hover_text(t!("export.selected_only.tip"));
+                let fixed = self.export_selected;
                 changed |= ui
-                    .checkbox(
-                        &mut self.cfg.export_visible_only,
-                        t!("export.visible_only", visible = visible, total = total),
+                    .add_enabled(
+                        !fixed,
+                        egui::Checkbox::new(
+                            &mut self.cfg.export_visible_only,
+                            t!("export.visible_only", visible = visible, total = total),
+                        ),
                     )
                     .on_hover_text(t!("export.visible_only.tip"))
                     .changed();
                 // The criteria are not used while every visible row counts as highlighted.
-                ui.add_enabled_ui(!self.cfg.export_visible_only, |ui| {
+                ui.add_enabled_ui(!self.cfg.export_visible_only && !fixed, |ui| {
                     changed |= ui
                         .checkbox(&mut self.cfg.export_rules, t!("export.inc.rules"))
                         .changed();
@@ -337,6 +356,10 @@ impl App {
             self.start_export();
         }
         self.show_export = open;
+        if !open {
+            // Ctrl+Shift+S opens the export with the criteria again.
+            self.export_selected = false;
+        }
     }
 
     /// Asks for the target file and writes the export in a background thread.

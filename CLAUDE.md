@@ -176,6 +176,14 @@ Features (all implemented, see README for user-facing details):
   `!` negation, case-insensitive. Cleared when the columns change (other log type).
 - Error code lookup (Ctrl+E) + automatic explanation in the details pane; descriptions from language
   files (`code.0xXXXXXXXX`) + Windows `FormatMessageW` (also wininet/winhttp).
+- **Selection of several rows** (#25, `app/selection.rs`): `selected` = cursor row, `sel: MatchBits`
+  (entry indexes; `MatchBits::set / first_one / last_one / ones`), `sel_anchor` for Shift ranges.
+  Every single selection goes through `select_only` (also `select_row`); `drop_front` →
+  `selection_drop_front`; merged older rows before the selection keep only the cursor row.
+  Click modifiers in `click_row`, Shift + keys in `extend_selection`, Ctrl+A, Ctrl+C messages,
+  Ctrl+Shift+C table (`columns()` + header), original lines via `parser::read_raw_many` in a
+  thread (`copy_job`), `export_selected` (export dialog, reset when it closes). Details pane =
+  `details_row()` (first selected row); summary with `timefmt::format_duration`.
 - **Bookmarks** (#22, `app/bookmarks.rs`, window `dialogs/bookmarks.rs`): `App::bookmarks`
   (file id, line) → note is the truth; `bookmark_rows` = sorted entry indexes, kept like
   `filtered` (`find_bookmarks_from(changed)` after appends, `bookmarks_drop_front`,
@@ -248,6 +256,7 @@ Features (all implemented, see README for user-facing details):
   program), names via `AssocQueryStringW`. Test `register_and_unregister` uses its own HKCU key.
 - `src/update.rs` – update check / download / install / restart state; `src/http.rs` – WinHTTP GET.
 - `src/excerpt.rs` – text of the message cell: first line, or an excerpt around a search match.
+- `src/timefmt.rs` – durations for display (`format_duration`; Δ column, selection span).
 - `src/i18n.rs` – language files, `t!()` macro, fallback, external language folders.
 - `src/config.rs` – `Config`, `HighlightRule`, per-theme palettes, serde defaults/migration.
 - `lang/*.lang` – built-in translations, embedded with `include_str!`.
@@ -265,7 +274,7 @@ Features (all implemented, see README for user-facing details):
 
 ## Commands
 - `cargo build --release` → `target\release\rustrace.exe`
-- `cargo test` (80 tests: bookmark file id remap, update releases list / missed versions / check setting migration, merged logs (order by time, appended older rows, formats + rotated parts + re-read, single log unchanged, interleave), store copy_entry / split_off, raw lines of entries (all formats / encodings), filter (parallel = sequential, match bits), date column filter = text filter, updates (versions, release JSON, notes, sha256 file, ZIP, install, restore state), icon / .ico layout, search as you type threshold, status-bar position percentage, file association (registry in an own HKCU test key), search history, store drop_front / move to temp file, rotated parts (naming, merge on open, rotation while watching, replaced
+- `cargo test` (82 tests: durations, match bits set / iterate, bookmark file id remap, update releases list / missed versions / check setting migration, merged logs (order by time, appended older rows, formats + rotated parts + re-read, single log unchanged, interleave), store copy_entry / split_off, raw lines of entries (all formats / encodings), filter (parallel = sequential, match bits), date column filter = text filter, updates (versions, release JSON, notes, sha256 file, ZIP, install, restore state), icon / .ico layout, search as you type threshold, status-bar position percentage, file association (registry in an own HKCU test key), search history, store drop_front / move to temp file, rotated parts (naming, merge on open, rotation while watching, replaced
   file), export segments by file, time range bounds, column filter syntax, parsers, chunked/ANSI/UTF-16 reading, log definitions (CBS, DISM, IIS,
   Exchange connectivity / CSV separator, choice by name/content, appending across refreshes), store (32-byte record, ISO ↔ ms, push /
   truncate / append, mapped temp file growing past 64 MB, interner), export incl. end-to-end and
@@ -389,6 +398,8 @@ Features (all implemented, see README for user-facing details):
 45. #31 update check at every start (setting start / daily / never) and the notes of all missed
     releases in the update window. Release v0.9.1.
 46. #22 bookmarks (Ctrl+F2, F2 / Shift+F2, notes, list window, filter, export criterion).
+47. #25 several selected rows (Shift / Ctrl, Ctrl+A, copy messages / table / original lines,
+    export selected rows).
 
 
 ## Ideas not done yet (offered by the owner)

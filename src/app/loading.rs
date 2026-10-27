@@ -46,6 +46,7 @@ impl App {
         }
         self.is_match.drain_front(k);
         self.selected = self.selected.and_then(|s| s.checked_sub(k));
+        self.selection_drop_front(k);
         self.code_cache = None;
         // Keep the selected row in view (the rows above it disappeared).
         if !self.cfg.auto_scroll
@@ -176,7 +177,7 @@ impl App {
         self.filtered.clear();
         self.is_match.clear();
         self.committed_len = 0;
-        self.selected = None;
+        self.select_only(None);
         self.code_cache = None;
         self.last_refresh = None;
         self.last_refresh_wall = None;
@@ -321,7 +322,7 @@ impl App {
                 entries.append(provisional);
                 self.cancel_filter_job();
                 self.entries = Arc::new(entries);
-                self.selected = None;
+                self.select_only(None);
                 self.code_cache = None;
                 self.filtered.clear();
                 self.is_match.clear();
@@ -364,10 +365,12 @@ impl App {
                 if self.selected.is_some_and(|s| s >= changed) {
                     self.code_cache = None;
                     let entries = &self.entries;
-                    self.selected = sel_id.and_then(|id| {
+                    let sel = sel_id.and_then(|id| {
                         (changed..committed_len)
                             .find(|&i| (entries.file(i), entries.line_no(i)) == id)
                     });
+                    // Rows merged in before the selection: only the cursor row is kept.
+                    self.select_only(sel);
                     if !self.cfg.auto_scroll {
                         self.scroll_to_selected_after_filter();
                     }

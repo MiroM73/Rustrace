@@ -20,6 +20,7 @@ mod merge;
 mod parser;
 mod splash;
 mod store;
+mod timefmt;
 mod update;
 
 use std::cell::Cell;

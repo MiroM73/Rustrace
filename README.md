@@ -359,6 +359,21 @@ the version information into the exe; this uses the resource compiler `rc.exe` o
 the table: `📍 Row 25 / 100 (25 %)`; with a filter active the numbers count only the visible rows,
 the tooltip shows the line number in the file.
 
+**Selecting several rows** – like the lists in Windows Explorer
+- **Shift + click** / **Shift + ↑ ↓ PgUp PgDn Home End** select a range from the last clicked row,
+  **Ctrl + click** adds / removes one row, **Ctrl + Shift + click** adds a range, **Ctrl+A**
+  selects every row shown in the table
+- the selection belongs to the log rows, not to the table positions: it stays when the filters
+  change (hidden selected rows come back selected) and after refreshes
+- **Ctrl+C** copies the messages of all selected rows, **Ctrl+Shift+C** (context menu "Copy as
+  table") copies them tab-separated with the columns of the table and a header line, the context
+  menu "Copy original lines" copies their lines exactly as they are in the log file (read in the
+  background); with one selected row everything works as before
+- context menu **"Export selected rows…"** opens the export with the selected rows as the
+  highlighted rows, so context lines can be added
+- the status bar and the details pane show "N rows selected, span 3 min 05 s" (time between the
+  first and the last selected row); the details pane shows the first selected row
+
 **Bookmarks** – mark interesting rows ("download started", "install failed") and jump back to them
 - **Ctrl+F2** (or right-click → Add bookmark, or 🔖 in the details pane) bookmarks / un-bookmarks
   the selected row; **F2 / Shift+F2** jump to the next / previous bookmarked row shown in the
@@ -519,7 +534,10 @@ The built-in languages live in `lang/*.lang` in the source tree and are embedded
 | F2 / Shift+F2 | Next / previous bookmark |
 | ↑ ↓ PgUp PgDn Home End | Move in the table |
 | Shift + mouse wheel | Scroll the table horizontally (when the columns do not fit; also the scroll bar below the table) |
-| Ctrl+C | Copy message of the selected row |
+| Shift + ↑ ↓ PgUp PgDn Home End, Shift + click | Extend the selection |
+| Ctrl + click / Ctrl+A | Add / remove a row / select all rows shown |
+| Ctrl+C | Copy the messages of the selected rows |
+| Ctrl+Shift+C | Copy the selected rows as a table (tab-separated) |
 | Ctrl + mouse wheel | Over the log: log font size; elsewhere: zoom the whole window |
 | Ctrl+plus / Ctrl+minus / Ctrl+0 | Zoom the whole window in / out / reset |
 
@@ -542,6 +560,7 @@ The built-in languages live in `lang/*.lang` in the source tree and are embedded
   parsing, last-N blocks, output formats (+ tests)
 - `src/i18n.rs` – localization: language files, fallback, `t!()` macro (+ tests)
 - `src/config.rs` – settings and rules (serde/JSON)
+- `src/timefmt.rs` – durations for display (+ tests)
 - `src/app/` – user interface (`App`), one `impl App` block per area:
   - `mod.rs` – the `App` state, start-up, theme / zoom / language, the frame loop (`eframe::App`)
   - `loading.rs` – opening files, background reading, auto refresh, rotation, memory limits
@@ -552,6 +571,7 @@ The built-in languages live in `lang/*.lang` in the source tree and are embedded
   - `menu.rs`, `toolbar.rs`, `statusbar.rs` (+ tests) – menu bar, toolbar and time range row, status bar
   - `table.rs` – the log table, row colors, highlighted text, context menu
   - `details.rs` – details pane (message / raw line), error code explanation
+  - `selection.rs` – selection of several rows, copying them (messages, table, original lines)
   - `bookmarks.rs` – bookmarks: toggling, F2 navigation, kept on their lines through refreshes (+ tests)
   - `widgets.rs` – small shared UI helpers (color button, theme switch, …)
   - `dialogs/` – highlight rules, colors, error code lookup, export, bookmarks, help / about,

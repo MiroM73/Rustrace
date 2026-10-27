@@ -226,7 +226,7 @@ impl App {
             self.apply_column_filters();
         }
         if let Some(sel) = state.selected.filter(|&s| s < self.entries.len()) {
-            self.selected = Some(sel);
+            self.select_only(Some(sel));
             if !self.cfg.auto_scroll {
                 self.scroll_to_selected_after_filter();
             }

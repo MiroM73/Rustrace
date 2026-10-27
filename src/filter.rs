@@ -58,6 +58,51 @@ impl MatchBits {
         *self = Self::default();
     }
 
+    /// Sets bit `i` (the set grows as needed, new bits are 0).
+    pub fn set(&mut self, i: usize, b: bool) {
+        if i >= self.len {
+            if !b {
+                return;
+            }
+            self.len = i + 1;
+            self.words.resize(self.len.div_ceil(64), 0);
+        }
+        let (w, m) = (i / 64, 1u64 << (i % 64));
+        if (self.words[w] & m != 0) != b {
+            self.words[w] ^= m;
+            if b {
+                self.ones += 1;
+            } else {
+                self.ones -= 1;
+            }
+        }
+    }
+
+    /// Index of the first / last set bit.
+    pub fn first_one(&self) -> Option<usize> {
+        let w = self.words.iter().position(|&w| w != 0)?;
+        Some(w * 64 + self.words[w].trailing_zeros() as usize)
+    }
+
+    pub fn last_one(&self) -> Option<usize> {
+        let w = self.words.iter().rposition(|&w| w != 0)?;
+        Some(w * 64 + 63 - self.words[w].leading_zeros() as usize)
+    }
+
+    /// Indexes of the set bits, in order.
+    pub fn ones(&self) -> impl Iterator<Item = usize> + '_ {
+        self.words.iter().enumerate().flat_map(|(w, &word)| {
+            let mut word = word;
+            std::iter::from_fn(move || {
+                (word != 0).then(|| {
+                    let b = word.trailing_zeros() as usize;
+                    word &= word - 1;
+                    w * 64 + b
+                })
+            })
+        })
+    }
+
     /// Keeps the first `n` bits; costs O(removed bits).
     pub fn truncate(&mut self, n: usize) {
         if n >= self.len {
@@ -321,6 +366,28 @@ mod tests {
                 assert_eq!(d.count(), d.recount());
             }
         }
+    }
+
+    #[test]
+    fn match_bits_set_and_iterate() {
+        let mut b = MatchBits::default();
+        assert_eq!((b.first_one(), b.last_one()), (None, None));
+        b.set(5, false);
+        assert_eq!(b.len(), 0);
+        for i in [3, 64, 200, 63] {
+            b.set(i, true);
+        }
+        b.set(64, true);
+        assert_eq!(b.count(), 4);
+        assert_eq!(b.ones().collect::<Vec<_>>(), [3, 63, 64, 200]);
+        assert_eq!((b.first_one(), b.last_one()), (Some(3), Some(200)));
+        b.set(3, false);
+        b.set(200, false);
+        assert_eq!(b.count(), b.recount());
+        assert_eq!(b.ones().collect::<Vec<_>>(), [63, 64]);
+        assert_eq!((b.first_one(), b.last_one()), (Some(63), Some(64)));
+        b.drain_front(63);
+        assert_eq!(b.ones().collect::<Vec<_>>(), [0, 1]);
     }
 
     fn store(n: usize) -> LogStore {

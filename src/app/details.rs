@@ -5,7 +5,7 @@ use crate::app::*;
 impl App {
     /// Error codes in the selected row (cached).
     pub(in crate::app) fn selected_codes(&mut self) -> Vec<CodeInfo> {
-        let Some(i) = self.selected else {
+        let Some(i) = self.details_row() else {
             return Vec::new();
         };
         if let Some((ci, c)) = &self.code_cache
@@ -27,7 +27,7 @@ impl App {
 
     /// Raw line(s) of the selected entry from its file (read once per entry and data change).
     pub(in crate::app) fn selected_raw(&mut self) -> Option<Result<Arc<str>, String>> {
-        let i = self.selected?;
+        let i = self.details_row()?;
         if let Some((ci, gen_, r)) = &self.raw_cache
             && *ci == i
             && *gen_ == self.data_gen
@@ -71,17 +71,23 @@ impl App {
         let mut open_code: Option<u32> = None;
         let mut view = self.cfg.details_view;
         let mut note = self
-            .selected
+            .details_row()
             .and_then(|i| self.bookmark_note(i))
             .map(str::to_owned);
         let (mut note_changed, mut toggle_bookmark) = (false, false);
-        let Some(e) = self.selected.and_then(|i| self.entries.get(i)) else {
+        let Some(e) = self.details_row().and_then(|i| self.entries.get(i)) else {
             ui.centered_and_justified(|ui| {
                 ui.weak(t!("details.empty"));
             });
             return;
         };
+        let summary = self.selection_summary();
         ui.horizontal_wrapped(|ui| {
+            if let Some(s) = summary {
+                ui.colored_label(ui.visuals().strong_text_color(), format!("☑ {s}"))
+                    .on_hover_text(t!("selection.details.tip"));
+                ui.separator();
+            }
             // Message | Raw – the same setting as View → Details pane shows.
             ui.selectable_value(&mut view, DetailsView::Message, t!("details.view.message"))
                 .on_hover_text(t!("details.view.message.tip"));
@@ -172,7 +178,7 @@ impl App {
             None => e.message,
         };
         let font = FontId::monospace(self.cfg.font_size);
-        let idx = self.selected.unwrap_or_default();
+        let idx = self.details_row().unwrap_or_default();
         let hit = self.is_match.get(idx);
         // Scroll to the first search match once per selected row, search and view.
         let scroll_key = (idx, self.search_gen, view);
@@ -214,7 +220,7 @@ impl App {
         if open_code.is_some() {
             self.open_lookup(open_code);
         }
-        if let Some(i) = self.selected {
+        if let Some(i) = self.details_row() {
             if toggle_bookmark {
                 self.toggle_bookmark(i);
             } else if note_changed && let Some(n) = note {

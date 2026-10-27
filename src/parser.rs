@@ -663,27 +663,42 @@ fn line_ends(bytes: &[u8], enc: Encoding) -> Vec<usize> {
 
 /// Reads bytes `start..end` of a log file and decodes them like the file was read; the line
 /// break at the end is removed. Shows the raw lines of an entry.
-pub fn read_raw(path: &Path, (start, end): (u64, u64), enc: Encoding) -> std::io::Result<String> {
+pub fn read_raw(path: &Path, range: (u64, u64), enc: Encoding) -> std::io::Result<String> {
+    Ok(read_raw_many(path, &[range], enc)?.remove(0))
+}
+
+/// `read_raw` for several byte ranges of one file (opened once): the original lines of the
+/// selected rows.
+pub fn read_raw_many(
+    path: &Path,
+    ranges: &[(u64, u64)],
+    enc: Encoding,
+) -> std::io::Result<Vec<String>> {
     let mut f = File::open(path)?;
-    if f.metadata()?.len() < end {
-        return Err(std::io::Error::new(
-            std::io::ErrorKind::UnexpectedEof,
-            "the file is shorter than when it was read",
-        ));
+    let len = f.metadata()?.len();
+    let mut out = Vec::with_capacity(ranges.len());
+    for &(start, end) in ranges {
+        if len < end {
+            return Err(std::io::Error::new(
+                std::io::ErrorKind::UnexpectedEof,
+                "the file is shorter than when it was read",
+            ));
+        }
+        f.seek(SeekFrom::Start(start))?;
+        let mut buf = vec![0u8; (end - start) as usize];
+        f.read_exact(&mut buf)?;
+        // The first line of a file that changed to ANSI later was read as UTF-8.
+        let enc = if enc == Encoding::Utf8 && std::str::from_utf8(&buf).is_err() {
+            Encoding::Ansi
+        } else {
+            enc
+        };
+        let mut text = decode(&buf, enc);
+        let l = text.trim_end_matches(['\r', '\n']).len();
+        text.truncate(l);
+        out.push(text);
     }
-    f.seek(SeekFrom::Start(start))?;
-    let mut buf = vec![0u8; (end - start) as usize];
-    f.read_exact(&mut buf)?;
-    // The first line of a file that changed to ANSI later was read as UTF-8.
-    let enc = if enc == Encoding::Utf8 && std::str::from_utf8(&buf).is_err() {
-        Encoding::Ansi
-    } else {
-        enc
-    };
-    let mut text = decode(&buf, enc);
-    let len = text.trim_end_matches(['\r', '\n']).len();
-    text.truncate(len);
-    Ok(text)
+    Ok(out)
 }
 
 fn decode(bytes: &[u8], enc: Encoding) -> String {

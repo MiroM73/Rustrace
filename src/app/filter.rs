@@ -221,6 +221,7 @@ impl App {
         {
             self.selected = None;
         }
+        self.sel.truncate(self.entries.len());
         let after = std::mem::take(&mut self.after_filter);
         if after.select_first {
             self.select_first_match();
@@ -326,7 +327,7 @@ impl App {
     /// Selects a row by its position in the displayed (filtered) list.
     pub(in crate::app) fn select_row(&mut self, pos: usize) {
         if let Some(&idx) = self.filtered.get(pos) {
-            self.selected = Some(idx);
+            self.select_only(Some(idx));
             self.scroll_to = Some(pos);
             // Manual navigation stops following the end, otherwise the table would jump.
             if pos + 1 < self.filtered.len() {

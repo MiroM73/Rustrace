@@ -92,7 +92,7 @@ impl App {
         let cur = self
             .selected
             .and_then(|s| self.filtered.binary_search(&s).ok());
-        let (up, down, pgup, pgdn, home, end, copy) = ctx.input(|i| {
+        let (up, down, pgup, pgdn, home, end, copy, shift) = ctx.input(|i| {
             (
                 i.key_pressed(Key::ArrowUp),
                 i.key_pressed(Key::ArrowDown),
@@ -101,8 +101,19 @@ impl App {
                 i.key_pressed(Key::Home),
                 i.key_pressed(Key::End),
                 i.events.iter().any(|e| matches!(e, egui::Event::Copy)),
+                i.modifiers.shift,
             )
         });
+        // Several rows (#25): Ctrl+A = all shown rows, Ctrl+Shift+C = copy as a table.
+        let (all, copy_table) = ctx.input_mut(|i| {
+            (
+                i.consume_key(Modifiers::COMMAND, Key::A),
+                i.consume_key(Modifiers::COMMAND | Modifiers::SHIFT, Key::C),
+            )
+        });
+        if all {
+            self.select_all_visible();
+        }
         let target = if up {
             Some(cur.map_or(n - 1, |p| p.saturating_sub(1)))
         } else if down {
@@ -120,10 +131,20 @@ impl App {
             None
         };
         if let Some(t) = target {
-            self.select_row(t);
+            // Shift + arrows / PgUp / PgDn / Home / End extend the selection from the anchor.
+            if shift {
+                self.extend_selection(t, false);
+            } else {
+                self.select_row(t);
+            }
         }
-        if copy && let Some(e) = self.selected.and_then(|i| self.entries.get(i)) {
-            ctx.copy_text(e.message.to_owned());
+        if self.selected.is_some() {
+            if copy {
+                self.copy_messages(ctx);
+            }
+            if copy_table {
+                self.copy_table(ctx);
+            }
         }
     }
 }

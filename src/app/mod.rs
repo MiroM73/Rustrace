@@ -38,6 +38,7 @@ mod input;
 mod loading;
 mod logdefs;
 mod menu;
+mod selection;
 mod statusbar;
 mod table;
 mod toolbar;
@@ -150,8 +151,10 @@ enum UpdateState {
 enum RowAction {
     ExplainCode(u32),
     ToggleBookmark(usize),
-    CopyMessage(usize),
-    CopyRow(usize),
+    CopyMessages,
+    CopyTable,
+    CopyOriginal,
+    ExportSelected,
     RuleFromComponent(usize),
     SearchComponent(usize),
 }
@@ -211,7 +214,13 @@ pub struct App {
     search_err: Option<String>,
     show_sev: [bool; 3], // info, warning, error
 
+    /// The cursor row (last clicked / moved to), the selected rows (#25, entry indexes, so they
+    /// survive filter changes) and the start of Shift ranges.
     selected: Option<usize>,
+    sel: MatchBits,
+    sel_anchor: Option<usize>,
+    /// Original lines of the selected rows being read for the clipboard: (text, rows).
+    copy_job: Option<mpsc::Receiver<Result<(String, usize), String>>>,
     scroll_to: Option<usize>,
 
     /// Bookmarks (#22): note by (file id, line number), the bookmarked entries (sorted), a change
@@ -271,6 +280,8 @@ pub struct App {
     rules_gen: u64,
     search_gen: u64,
     show_export: bool,
+    /// The export uses the selected rows as the highlighted rows (row context menu).
+    export_selected: bool,
     /// Cached highlighted entry indexes for the export: (key, hits).
     export_hits: Option<(ExportKey, Vec<usize>)>,
     /// Export running in a background thread; the result is a status message.
@@ -395,6 +406,9 @@ impl App {
             search_err: None,
             show_sev: [true; 3],
             selected: None,
+            sel: MatchBits::default(),
+            sel_anchor: None,
+            copy_job: None,
             scroll_to: None,
             bookmarks: HashMap::new(),
             bookmark_rows: Vec::new(),
@@ -432,6 +446,7 @@ impl App {
             rules_gen: 0,
             search_gen: 0,
             show_export: false,
+            export_selected: false,
             export_hits: None,
             export_job: None,
             latest_ts: None,
@@ -628,6 +643,7 @@ impl eframe::App for App {
         self.update_window(&ctx);
         self.poll_update(&ctx);
         self.check_export();
+        self.check_copy_job(&ctx);
 
         // The window becomes visible after its first frame; the splash goes with the second one.
         if self.frames < 2 {

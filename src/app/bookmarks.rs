@@ -174,7 +174,7 @@ impl App {
         match self.filtered.binary_search(&i) {
             Ok(pos) => self.select_row(pos),
             Err(_) => {
-                self.selected = Some(i);
+                self.select_only(Some(i));
                 self.info(t!("bookmarks.hidden"));
             }
         }

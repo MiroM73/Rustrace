@@ -93,6 +93,10 @@ impl App {
                     .on_hover_text(t!("status.position.tip", line = line));
                     ui.separator();
                 }
+                if let Some(s) = self.selection_summary() {
+                    ui.label(format!("☑ {s}"));
+                    ui.separator();
+                }
                 if !self.bookmark_rows.is_empty() {
                     if ui
                         .button(format!("🔖 {}", self.bookmark_rows.len()))

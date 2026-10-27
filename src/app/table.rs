@@ -192,6 +192,7 @@ impl App {
         }
 
         let mut clicked: Option<usize> = None;
+        let mut right_clicked: Option<usize> = None;
         let mut action: Option<RowAction> = None;
         let headers: Vec<String> = std::iter::once(t!("column.line"))
             .chain(columns.iter().map(Self::column_title))
@@ -262,7 +263,7 @@ impl App {
             body.rows(row_h, self.filtered.len(), |mut row| {
                 let idx = self.filtered[row.index()];
                 let e = self.entries.at(idx);
-                let is_sel = self.selected == Some(idx);
+                let is_sel = self.sel.get(idx);
                 row.set_selected(is_sel);
 
                 let (fg, bg) = if is_sel {
@@ -363,7 +364,16 @@ impl App {
                 if resp.clicked() {
                     clicked = Some(idx);
                 }
+                // Right click on a row outside the selection selects it (like Explorer).
+                if resp.secondary_clicked() && !is_sel {
+                    right_clicked = Some(idx);
+                }
+                let multi = self.multi_selected() && is_sel;
                 resp.context_menu(|ui| {
+                    if multi {
+                        ui.weak(t!("selection.summary", count = self.sel.count()));
+                        ui.separator();
+                    }
                     let key = if self.is_bookmarked(idx) {
                         "context.bookmark.remove"
                     } else {
@@ -377,12 +387,45 @@ impl App {
                         ui.close();
                     }
                     ui.separator();
-                    if ui.button(t!("context.copy_message")).clicked() {
-                        action = Some(RowAction::CopyMessage(idx));
+                    let copy_key = if multi {
+                        "context.copy_messages"
+                    } else {
+                        "context.copy_message"
+                    };
+                    if ui
+                        .button(format!("{}   {}", t!(copy_key), kb("Ctrl+C")))
+                        .clicked()
+                    {
+                        action = Some(RowAction::CopyMessages);
                         ui.close();
                     }
-                    if ui.button(t!("context.copy_row")).clicked() {
-                        action = Some(RowAction::CopyRow(idx));
+                    if ui
+                        .button(format!(
+                            "{}   {}",
+                            t!("context.copy_row"),
+                            kb("Ctrl+Shift+C")
+                        ))
+                        .clicked()
+                    {
+                        action = Some(RowAction::CopyTable);
+                        ui.close();
+                    }
+                    if ui
+                        .add_enabled(
+                            self.copy_job.is_none(),
+                            egui::Button::new(t!("context.copy_original")),
+                        )
+                        .on_hover_text(t!("context.copy_original.tip"))
+                        .clicked()
+                    {
+                        action = Some(RowAction::CopyOriginal);
+                        ui.close();
+                    }
+                    if ui
+                        .button(format!("📤 {}", t!("context.export_selected")))
+                        .clicked()
+                    {
+                        action = Some(RowAction::ExportSelected);
                         ui.close();
                     }
                     let codes = errcodes::find_codes(e.message);
@@ -444,7 +487,11 @@ impl App {
         }
 
         if let Some(i) = clicked {
-            self.selected = Some(i);
+            let mods = parent.input(|i| i.modifiers);
+            self.click_row(i, mods);
+        }
+        if let Some(i) = right_clicked {
+            self.select_only(Some(i));
         }
         if clear_filters {
             self.col_filter_text.clear();
@@ -464,12 +511,12 @@ impl App {
             match a {
                 RowAction::ExplainCode(v) => self.open_lookup(Some(v)),
                 RowAction::ToggleBookmark(i) => self.toggle_bookmark(i),
-                RowAction::CopyMessage(i) => ctx.copy_text(self.entries.at(i).message.to_owned()),
-                RowAction::CopyRow(i) => {
-                    let e = self.entries.at(i);
-                    let cells: Vec<String> =
-                        columns.iter().map(|c| self.cell_text(&e, c.kind)).collect();
-                    ctx.copy_text(cells.join("\t"));
+                RowAction::CopyMessages => self.copy_messages(&ctx),
+                RowAction::CopyTable => self.copy_table(&ctx),
+                RowAction::CopyOriginal => self.copy_original(),
+                RowAction::ExportSelected => {
+                    self.export_selected = true;
+                    self.show_export = true;
                 }
                 RowAction::SearchComponent(i) => {
                     self.search_text = self.entries.at(i).component.to_owned();

@@ -26,7 +26,11 @@ impl App {
                         ("Ctrl+Shift+S", "help.export"),
                         ("↑ ↓ PgUp PgDn Home", "help.navigate"),
                         ("End", "help.end"),
+                        ("Shift + ↑ ↓ PgUp PgDn", "help.extend"),
+                        ("Ctrl / Shift + click", "help.select_click"),
+                        ("Ctrl+A", "help.select_all"),
                         ("Ctrl+C", "help.copy"),
+                        ("Ctrl+Shift+C", "help.copy_table"),
                         ("Ctrl + / Ctrl −", "help.zoom"),
                     ] {
                         ui.monospace(kb(k));
