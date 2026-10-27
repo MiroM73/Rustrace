@@ -12,7 +12,11 @@ impl App {
                     ui.label(self.encoding_name);
                     ui.separator();
                 }
-                let warn = if self.competing_defs().is_empty() { "" } else { " ⚠" };
+                let warn = if self.competing_defs().is_empty() {
+                    ""
+                } else {
+                    " ⚠"
+                };
                 ui.label(format!("📐 {}{warn}", self.format_name()))
                     .on_hover_text(self.format_tip());
                 ui.separator();
@@ -21,13 +25,19 @@ impl App {
                     ui.separator();
                 }
                 if self.dropped > 0 {
-                    ui.colored_label(ORANGE, format!("✂ {}", t!("status.dropped", count = self.dropped)))
-                        .on_hover_text(t!("status.dropped.tip", limit = self.cfg.max_log_mb));
+                    ui.colored_label(
+                        ORANGE,
+                        format!("✂ {}", t!("status.dropped", count = self.dropped)),
+                    )
+                    .on_hover_text(t!("status.dropped.tip", limit = self.cfg.max_log_mb));
                     ui.separator();
                 }
                 if self.files.len() > 1 {
-                    ui.label(format!("📚 {}", t!("status.parts", count = self.files.len())))
-                        .on_hover_text(self.file_labels.join("\n"));
+                    ui.label(format!(
+                        "📚 {}",
+                        t!("status.parts", count = self.files.len())
+                    ))
+                    .on_hover_text(self.file_labels.join("\n"));
                     ui.separator();
                 }
                 if self.entries.is_mapped() {
@@ -88,7 +98,9 @@ impl App {
                 ui.separator();
                 let version = r.version.clone();
                 if ui
-                    .button(RichText::new(format!("⬆ {version}")).color(Color32::from_rgb(60, 170, 80)))
+                    .button(
+                        RichText::new(format!("⬆ {version}")).color(Color32::from_rgb(60, 170, 80)),
+                    )
                     .on_hover_text(t!("update.available", version = version))
                     .clicked()
                 {

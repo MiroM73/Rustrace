@@ -17,5 +17,6 @@ fn main() {
     res.set_icon(out.to_str().unwrap());
     res.set("FileDescription", "RusTrace log viewer");
     res.set("ProductName", "RusTrace");
-    res.compile().expect("compiling the Windows resources (rc.exe from the Windows SDK)");
+    res.compile()
+        .expect("compiling the Windows resources (rc.exe from the Windows SDK)");
 }

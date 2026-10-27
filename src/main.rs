@@ -1,5 +1,8 @@
 // In release builds on Windows, do not open a console window.
-#![cfg_attr(all(not(debug_assertions), target_os = "windows"), windows_subsystem = "windows")]
+#![cfg_attr(
+    all(not(debug_assertions), target_os = "windows"),
+    windows_subsystem = "windows"
+)]
 
 mod app;
 mod colfilter;
@@ -29,7 +32,7 @@ use eframe::egui;
 /// only). Without DX12, or when `WGPU_BACKEND` is set, the defaults are kept.
 #[cfg(windows)]
 fn prefer_dx12() -> eframe::egui_wgpu::WgpuConfiguration {
-    use eframe::egui_wgpu::{wgpu, WgpuConfiguration, WgpuSetup, WgpuSetupCreateNew};
+    use eframe::egui_wgpu::{WgpuConfiguration, WgpuSetup, WgpuSetupCreateNew, wgpu};
     let mut setup = WgpuSetupCreateNew::without_display_handle();
     if std::env::var_os("WGPU_BACKEND").is_none() {
         let instance = wgpu::Instance::new(wgpu::InstanceDescriptor {
@@ -122,9 +125,14 @@ fn main() -> eframe::Result {
     let startup = match args.next() {
         Some(a) if a == update::RESTORE_ARG => Startup {
             path: None,
-            restore: args.next().and_then(|f| update::SessionState::take(std::path::Path::new(&f))),
+            restore: args
+                .next()
+                .and_then(|f| update::SessionState::take(std::path::Path::new(&f))),
         },
-        path => Startup { path, restore: None },
+        path => Startup {
+            path,
+            restore: None,
+        },
     };
     update::cleanup_old();
 
@@ -161,7 +169,9 @@ fn start(startup: Startup) -> eframe::Result {
     // eframe's OpenGL start-up can also panic (e.g. no matching pixel format), so a panic before
     // the app exists falls back too; later panics and errors are passed on.
     let created = Cell::new(false);
-    let res = std::panic::catch_unwind(AssertUnwindSafe(|| run(renderer, startup.clone(), &created)));
+    let res = std::panic::catch_unwind(AssertUnwindSafe(|| {
+        run(renderer, startup.clone(), &created)
+    }));
     match res {
         Ok(Err(e)) if !created.get() => {
             eprintln!("OpenGL renderer failed ({e}), using wgpu");

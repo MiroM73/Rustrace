@@ -13,7 +13,12 @@ pub(in crate::app) fn color_button(ui: &mut egui::Ui, color: &mut [u8; 4]) -> bo
 }
 
 /// Sample text drawn on the background of the given theme.
-pub(in crate::app) fn preview(ui: &mut egui::Ui, dark: bool, fg: Option<[u8; 4]>, bg: Option<[u8; 4]>) {
+pub(in crate::app) fn preview(
+    ui: &mut egui::Ui,
+    dark: bool,
+    fg: Option<[u8; 4]>,
+    bg: Option<[u8; 4]>,
+) {
     let v = if dark {
         egui::Visuals::dark()
     } else {

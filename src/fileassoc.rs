@@ -62,17 +62,33 @@ pub fn registration_values(root: &str, exe: &str, type_name: &str) -> Vec<RegVal
     let app = format!("{classes}\\Applications\\rustrace.exe");
     let mut v = vec![
         value(format!("{classes}\\{PROG_ID}"), "", type_name),
-        value(format!("{classes}\\{PROG_ID}\\DefaultIcon"), "", &format!("\"{exe}\",0")),
-        value(format!("{classes}\\{PROG_ID}\\shell\\open\\command"), "", &open_command(exe)),
+        value(
+            format!("{classes}\\{PROG_ID}\\DefaultIcon"),
+            "",
+            &format!("\"{exe}\",0"),
+        ),
+        value(
+            format!("{classes}\\{PROG_ID}\\shell\\open\\command"),
+            "",
+            &open_command(exe),
+        ),
         value(app.clone(), "FriendlyAppName", APP_NAME),
-        value(format!("{app}\\shell\\open\\command"), "", &open_command(exe)),
+        value(
+            format!("{app}\\shell\\open\\command"),
+            "",
+            &open_command(exe),
+        ),
         value(caps.clone(), "ApplicationName", APP_NAME),
         value(caps.clone(), "ApplicationDescription", type_name),
         value(format!("{root}\\RegisteredApplications"), APP_NAME, &caps),
     ];
     for ext in EXTENSIONS {
         v.push(value(format!("{classes}\\{ext}"), "", PROG_ID));
-        v.push(value(format!("{classes}\\{ext}\\OpenWithProgids"), PROG_ID, ""));
+        v.push(value(
+            format!("{classes}\\{ext}\\OpenWithProgids"),
+            PROG_ID,
+            "",
+        ));
         v.push(value(format!("{app}\\SupportedTypes"), ext, ""));
         v.push(value(format!("{caps}\\FileAssociations"), ext, PROG_ID));
     }
@@ -146,7 +162,13 @@ mod os {
         fn RegDeleteTreeW(key: Hkey, subkey: *const u16) -> i32;
         fn RegDeleteKeyValueW(key: Hkey, subkey: *const u16, name: *const u16) -> i32;
         fn RegCloseKey(key: Hkey) -> i32;
-        fn RegOpenKeyExW(key: Hkey, subkey: *const u16, options: u32, sam: u32, result: *mut Hkey) -> i32;
+        fn RegOpenKeyExW(
+            key: Hkey,
+            subkey: *const u16,
+            options: u32,
+            sam: u32,
+            result: *mut Hkey,
+        ) -> i32;
         fn RegQueryInfoKeyW(
             key: Hkey,
             class: *mut u16,
@@ -215,7 +237,11 @@ mod os {
         let res = check(unsafe {
             RegSetValueExW(
                 key,
-                if v.name.is_empty() { std::ptr::null() } else { name.as_ptr() },
+                if v.name.is_empty() {
+                    std::ptr::null()
+                } else {
+                    name.as_ptr()
+                },
                 0,
                 REG_SZ,
                 data.as_ptr().cast(),
@@ -236,7 +262,11 @@ mod os {
             RegGetValueW(
                 root,
                 wide(key).as_ptr(),
-                if name.is_empty() { std::ptr::null() } else { name_w.as_ptr() },
+                if name.is_empty() {
+                    std::ptr::null()
+                } else {
+                    name_w.as_ptr()
+                },
                 RRF_RT_REG_SZ,
                 std::ptr::null_mut(),
                 buf.as_mut_ptr().cast(),
@@ -301,7 +331,11 @@ mod os {
             RegDeleteKeyValueW(
                 HKEY_CURRENT_USER,
                 wide(key).as_ptr(),
-                if name.is_empty() { std::ptr::null() } else { name_w.as_ptr() },
+                if name.is_empty() {
+                    std::ptr::null()
+                } else {
+                    name_w.as_ptr()
+                },
             )
         } {
             0 | ERROR_FILE_NOT_FOUND => Ok(()),
@@ -377,7 +411,8 @@ mod os {
 
     /// Which program opens files with the extension `ext` (".log").
     pub fn status(ext: &str) -> ExtStatus {
-        let exts = format!("Software\\Microsoft\\Windows\\CurrentVersion\\Explorer\\FileExts\\{ext}");
+        let exts =
+            format!("Software\\Microsoft\\Windows\\CurrentVersion\\Explorer\\FileExts\\{ext}");
         // Newer Windows 11 builds keep the choice in "UserChoiceLatest\ProgId".
         let choice = [r"UserChoiceLatest\ProgId", "UserChoiceLatest", "UserChoice"]
             .iter()
@@ -433,7 +468,9 @@ mod os {
 
     /// Opens Windows Settings → Default apps (on Windows 11 directly the page of RusTrace).
     pub fn open_default_apps_settings() -> io::Result<()> {
-        open::that_detached(format!("ms-settings:defaultapps?registeredAppUser={APP_NAME}"))
+        open::that_detached(format!(
+            "ms-settings:defaultapps?registeredAppUser={APP_NAME}"
+        ))
     }
 
     #[cfg(test)]
@@ -461,8 +498,12 @@ mod os {
             register_under(&root, exe, "Log file").unwrap();
             let hk = HKEY_CURRENT_USER;
             assert_eq!(
-                get_string(hk, &format!("{root}\\Classes\\{PROG_ID}\\shell\\open\\command"), "")
-                    .as_deref(),
+                get_string(
+                    hk,
+                    &format!("{root}\\Classes\\{PROG_ID}\\shell\\open\\command"),
+                    ""
+                )
+                .as_deref(),
                 Some(r#""C:\Tools\RusTrace\rustrace.exe" "%1""#)
             );
             assert_eq!(
@@ -488,8 +529,14 @@ mod os {
                 get_string(hk, &format!("{root}\\Classes\\.log"), "").as_deref(),
                 Some("txtfile")
             );
-            assert_eq!(get_string(hk, &format!("{root}\\Classes\\{PROG_ID}"), ""), None);
-            assert_eq!(get_string(hk, &format!("{root}\\RegisteredApplications"), APP_NAME), None);
+            assert_eq!(
+                get_string(hk, &format!("{root}\\Classes\\{PROG_ID}"), ""),
+                None
+            );
+            assert_eq!(
+                get_string(hk, &format!("{root}\\RegisteredApplications"), APP_NAME),
+                None
+            );
             delete_tree(&root).unwrap();
             assert_eq!(get_string(hk, &format!("{root}\\Classes\\.log"), ""), None);
         }
@@ -514,7 +561,10 @@ mod tests {
         );
         for ext in EXTENSIONS {
             assert_eq!(find(&format!(r"Software\Classes\{ext}"), ""), Some(PROG_ID));
-            assert_eq!(find(&format!(r"Software\Classes\{ext}\OpenWithProgids"), PROG_ID), Some(""));
+            assert_eq!(
+                find(&format!(r"Software\Classes\{ext}\OpenWithProgids"), PROG_ID),
+                Some("")
+            );
             assert_eq!(
                 find(r"Software\RusTrace\Capabilities\FileAssociations", ext),
                 Some(PROG_ID)
@@ -529,11 +579,23 @@ mod tests {
     #[test]
     fn classify_status() {
         // The user's choice wins over the default type.
-        assert_eq!(classify(Some("txtfilelegacy"), Some(PROG_ID)), ExtStatus::Other("txtfilelegacy".into()));
-        assert_eq!(classify(Some("rustrace.logfile"), None), ExtStatus::RusTrace);
-        assert_eq!(classify(Some(r"Applications\RusTrace.exe"), None), ExtStatus::RusTrace);
+        assert_eq!(
+            classify(Some("txtfilelegacy"), Some(PROG_ID)),
+            ExtStatus::Other("txtfilelegacy".into())
+        );
+        assert_eq!(
+            classify(Some("rustrace.logfile"), None),
+            ExtStatus::RusTrace
+        );
+        assert_eq!(
+            classify(Some(r"Applications\RusTrace.exe"), None),
+            ExtStatus::RusTrace
+        );
         assert_eq!(classify(None, Some(PROG_ID)), ExtStatus::RusTrace);
-        assert_eq!(classify(None, Some("txtfile")), ExtStatus::Other("txtfile".into()));
+        assert_eq!(
+            classify(None, Some("txtfile")),
+            ExtStatus::Other("txtfile".into())
+        );
         assert_eq!(classify(None, None), ExtStatus::None);
         assert_eq!(classify(None, Some("")), ExtStatus::None);
     }

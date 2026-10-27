@@ -13,9 +13,8 @@ impl App {
         }
 
         let typing = ctx.egui_wants_keyboard_input();
-        let export_key = ctx.input_mut(|i| {
-            i.consume_key(Modifiers::COMMAND | Modifiers::SHIFT, Key::S)
-        });
+        let export_key =
+            ctx.input_mut(|i| i.consume_key(Modifiers::COMMAND | Modifiers::SHIFT, Key::S));
         if export_key && self.cur_path.is_some() {
             self.show_export = true;
         }

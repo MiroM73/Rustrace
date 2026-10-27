@@ -395,15 +395,35 @@ impl Config {
     pub fn palette_mut(&mut self, dark: bool) -> [(&'static str, &mut [u8; 4], &mut [u8; 4]); 3] {
         if dark {
             [
-                ("severity.error", &mut self.error_fg_dark, &mut self.error_bg_dark),
-                ("severity.warning", &mut self.warning_fg_dark, &mut self.warning_bg_dark),
-                ("colors.search_match", &mut self.search_fg_dark, &mut self.search_bg_dark),
+                (
+                    "severity.error",
+                    &mut self.error_fg_dark,
+                    &mut self.error_bg_dark,
+                ),
+                (
+                    "severity.warning",
+                    &mut self.warning_fg_dark,
+                    &mut self.warning_bg_dark,
+                ),
+                (
+                    "colors.search_match",
+                    &mut self.search_fg_dark,
+                    &mut self.search_bg_dark,
+                ),
             ]
         } else {
             [
                 ("severity.error", &mut self.error_fg, &mut self.error_bg),
-                ("severity.warning", &mut self.warning_fg, &mut self.warning_bg),
-                ("colors.search_match", &mut self.search_fg, &mut self.search_bg),
+                (
+                    "severity.warning",
+                    &mut self.warning_fg,
+                    &mut self.warning_bg,
+                ),
+                (
+                    "colors.search_match",
+                    &mut self.search_fg,
+                    &mut self.search_bg,
+                ),
             ]
         }
     }
@@ -413,7 +433,11 @@ impl Config {
         let d = Config::default();
         let src = d.palette(dark);
         let [e, w, s] = self.palette_mut(dark);
-        for ((_, fg, bg), (dfg, dbg)) in [e, w, s].into_iter().zip([src.error, src.warning, src.search]) {
+        for ((_, fg, bg), (dfg, dbg)) in
+            [e, w, s]
+                .into_iter()
+                .zip([src.error, src.warning, src.search])
+        {
             *fg = dfg;
             *bg = dbg;
         }

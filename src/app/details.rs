@@ -5,7 +5,9 @@ use crate::app::*;
 impl App {
     /// Error codes in the selected row (cached).
     pub(in crate::app) fn selected_codes(&mut self) -> Vec<CodeInfo> {
-        let Some(i) = self.selected else { return Vec::new() };
+        let Some(i) = self.selected else {
+            return Vec::new();
+        };
         if let Some((ci, c)) = &self.code_cache
             && *ci == i
         {
@@ -48,7 +50,10 @@ impl App {
             ui.strong(t!("details.line", line = e.line_no));
             ui.separator();
             let (txt, col) = match e.severity {
-                Severity::Error => (t!("severity.error"), c32(self.cfg.palette(self.dark).error.1)),
+                Severity::Error => (
+                    t!("severity.error"),
+                    c32(self.cfg.palette(self.dark).error.1),
+                ),
                 Severity::Warning => (t!("severity.warning"), Color32::from_rgb(200, 160, 0)),
                 Severity::Info => (t!("severity.info"), ui.visuals().text_color()),
             };

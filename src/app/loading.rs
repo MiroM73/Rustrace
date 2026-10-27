@@ -30,7 +30,9 @@ impl App {
         if k == 0 {
             return;
         }
-        let pos_selected = self.selected.and_then(|s| self.filtered.binary_search(&s).ok());
+        let pos_selected = self
+            .selected
+            .and_then(|s| self.filtered.binary_search(&s).ok());
         self.entries.drop_front(k);
         self.committed_len -= k;
         self.dropped += k;
@@ -71,7 +73,9 @@ impl App {
 
     pub(in crate::app) fn set_files(&mut self, files: Vec<SourceFile>) {
         self.files = files;
-        self.file_labels = (0..self.files.len() as u16).map(|i| self.file_label(i)).collect();
+        self.file_labels = (0..self.files.len() as u16)
+            .map(|i| self.file_label(i))
+            .collect();
     }
 
     /// Name of a file of the log ("(overwritten)" when a later rotation replaced it).
@@ -131,7 +135,9 @@ impl App {
         if self.loading.is_some() {
             return;
         }
-        let Some(mut src) = self.source.take() else { return };
+        let Some(mut src) = self.source.take() else {
+            return;
+        };
         src.keyword_severity = self.cfg.keyword_severity;
         src.defs = self.defs.clone();
         src.format = self.format_choice.clone();
@@ -217,7 +223,10 @@ impl App {
         let before = self.filtered.len();
         // Provisional entries belong to the active file (the last one).
         let active = self.files.len().saturating_sub(1) as u16;
-        if matches!(res, Ok(PollResult::Reset { .. }) | Ok(PollResult::Appended { .. })) {
+        if matches!(
+            res,
+            Ok(PollResult::Reset { .. }) | Ok(PollResult::Appended { .. })
+        ) {
             self.data_gen += 1;
         }
         match res {
@@ -327,7 +336,11 @@ impl App {
             return;
         }
         let elapsed = self.last_refresh.map(|t| t.elapsed()).unwrap_or_default();
-        ctx.request_repaint_after(interval.saturating_sub(elapsed).max(Duration::from_millis(10)));
+        ctx.request_repaint_after(
+            interval
+                .saturating_sub(elapsed)
+                .max(Duration::from_millis(10)),
+        );
     }
 
     /// Loading progress: big (middle of the window) or compact (status bar).

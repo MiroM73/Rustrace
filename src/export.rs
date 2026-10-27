@@ -4,7 +4,7 @@
 //! Overlapping or touching ranges are merged, so every entry is exported at most once.
 //! The result is a list of blocks; blocks can be separated in the output.
 
-use crate::store::{iso_to_ms, EntryRef, LogStore};
+use crate::store::{EntryRef, LogStore, iso_to_ms};
 use serde::{Deserialize, Serialize};
 
 /// Output format of the export.
@@ -18,7 +18,12 @@ pub enum ExportFormat {
 
 /// Merges `[hit - before, hit + after]` ranges of entry indexes into non-overlapping
 /// inclusive blocks. `hits` must be sorted ascending; `len` is the number of entries.
-pub fn merge_ranges(hits: &[usize], before: usize, after: usize, len: usize) -> Vec<(usize, usize)> {
+pub fn merge_ranges(
+    hits: &[usize],
+    before: usize,
+    after: usize,
+    len: usize,
+) -> Vec<(usize, usize)> {
     let mut blocks: Vec<(usize, usize)> = Vec::new();
     if len == 0 {
         return blocks;
@@ -88,7 +93,13 @@ pub fn parse_datetime_input(input: &str, date_pattern: &str) -> Option<String> {
     for (part, kind) in nums.iter().zip(&order) {
         let v: u32 = part.parse().ok()?;
         match kind {
-            'y' => y = if part.len() == 2 { 2000 + v as i32 } else { v as i32 },
+            'y' => {
+                y = if part.len() == 2 {
+                    2000 + v as i32
+                } else {
+                    v as i32
+                }
+            }
             'm' => m = v,
             _ => d = v,
         }
@@ -133,7 +144,10 @@ pub fn parse_range_bound(input: &str, date_pattern: &str, end: bool) -> Option<i
     if !end {
         return Some(ms);
     }
-    let time = input.trim().split_once(['T', ' ']).map_or("", |(_, t)| t.trim());
+    let time = input
+        .trim()
+        .split_once(['T', ' '])
+        .map_or("", |(_, t)| t.trim());
     let rest = if time.is_empty() {
         86_400_000
     } else if time.contains(['.', ',']) {
@@ -150,10 +164,20 @@ pub fn parse_range_bound(input: &str, date_pattern: &str, end: bool) -> Option<i
 
 /// ISO timestamp `hours` before the given ISO timestamp (for "last hour" style presets).
 pub fn hours_before(iso: &str, hours: i64) -> Option<String> {
-    let t = chrono::NaiveDateTime::parse_from_str(&iso[..iso.len().min(23)], "%Y-%m-%d %H:%M:%S%.3f")
-        .or_else(|_| chrono::NaiveDateTime::parse_from_str(&iso[..iso.len().min(19)], "%Y-%m-%d %H:%M:%S"))
-        .ok()?;
-    Some((t - chrono::Duration::hours(hours)).format("%Y-%m-%d %H:%M:%S%.3f").to_string())
+    let t =
+        chrono::NaiveDateTime::parse_from_str(&iso[..iso.len().min(23)], "%Y-%m-%d %H:%M:%S%.3f")
+            .or_else(|_| {
+                chrono::NaiveDateTime::parse_from_str(
+                    &iso[..iso.len().min(19)],
+                    "%Y-%m-%d %H:%M:%S",
+                )
+            })
+            .ok()?;
+    Some(
+        (t - chrono::Duration::hours(hours))
+            .format("%Y-%m-%d %H:%M:%S%.3f")
+            .to_string(),
+    )
 }
 
 /// Keeps only hits at or after `since` (milliseconds). Entries without a timestamp are dropped
@@ -177,7 +201,9 @@ pub fn clip_blocks_since(
     store: &LogStore,
     since: Option<i64>,
 ) -> Vec<(usize, usize)> {
-    let Some(since) = since else { return blocks.to_vec() };
+    let Some(since) = since else {
+        return blocks.to_vec();
+    };
     blocks
         .iter()
         .filter_map(|&(a, b)| {
@@ -227,7 +253,10 @@ pub fn segments(store: &LogStore, block: (usize, usize)) -> Vec<Segment> {
         }
         // The last line: just before the next entry of the same file, or the end of the message.
         let last = if end + 1 < store.len() && store.file(end + 1) == file {
-            store.line_no(end + 1).saturating_sub(1).max(store.line_no(end))
+            store
+                .line_no(end + 1)
+                .saturating_sub(1)
+                .max(store.line_no(end))
         } else {
             store.line_no(end) + store.message(end).lines().count().max(1) - 1
         };
@@ -342,7 +371,10 @@ mod tests {
     #[test]
     fn merge_overlapping_and_adjacent() {
         // hits 5 and 8 with ±2 overlap → one block; 20 is separate; clamped at both ends.
-        assert_eq!(merge_ranges(&[5, 8, 20], 2, 2, 100), vec![(3, 10), (18, 22)]);
+        assert_eq!(
+            merge_ranges(&[5, 8, 20], 2, 2, 100),
+            vec![(3, 10), (18, 22)]
+        );
         // adjacent blocks (3..=5 and 6..=8) are merged too
         assert_eq!(merge_ranges(&[4, 7], 1, 1, 100), vec![(3, 8)]);
         // clamping
@@ -357,7 +389,12 @@ mod tests {
     #[test]
     fn line_ranges_with_multiline_entries() {
         // entry 1 spans lines 2-4 (multi-line message)
-        let e = LogStore::from_entries([entry(1, "a"), entry(2, "b\nc\nd"), entry(5, "e"), entry(6, "f\ng")]);
+        let e = LogStore::from_entries([
+            entry(1, "a"),
+            entry(2, "b\nc\nd"),
+            entry(5, "e"),
+            entry(6, "f\ng"),
+        ]);
         let lines = |b| segments(&e, b).iter().map(|s| s.lines).collect::<Vec<_>>();
         assert_eq!(lines((0, 1)), [(1, 4)]);
         assert_eq!(lines((2, 3)), [(5, 7)]);
@@ -374,12 +411,30 @@ mod tests {
         assert_eq!(
             segments(&s, (0, 3)),
             [
-                Segment { file: 0, entries: (0, 1), lines: (9, 11) },
-                Segment { file: 1, entries: (2, 3), lines: (1, 2) },
+                Segment {
+                    file: 0,
+                    entries: (0, 1),
+                    lines: (9, 11)
+                },
+                Segment {
+                    file: 1,
+                    entries: (2, 3),
+                    lines: (1, 2)
+                },
             ]
         );
-        assert_eq!(segments(&s, (2, 2)), [Segment { file: 1, entries: (2, 2), lines: (1, 1) }]);
-        assert_eq!(separator(Some("x.lo_"), 9, 11), "-------- x.lo_: 9 – 11 --------");
+        assert_eq!(
+            segments(&s, (2, 2)),
+            [Segment {
+                file: 1,
+                entries: (2, 2),
+                lines: (1, 1)
+            }]
+        );
+        assert_eq!(
+            separator(Some("x.lo_"), 9, 11),
+            "-------- x.lo_: 9 – 11 --------"
+        );
     }
 
     #[test]
@@ -426,7 +481,9 @@ mod tests {
         std::fs::create_dir_all(&dir).unwrap();
         let p = dir.join("x.log");
         let cm = |m: &str, t: u8| {
-            format!("<![LOG[{m}]LOG]!><time=\"10:00:00.000+000\" date=\"10-23-2026\" component=\"C\" context=\"\" type=\"{t}\" thread=\"1\" file=\"\">")
+            format!(
+                "<![LOG[{m}]LOG]!><time=\"10:00:00.000+000\" date=\"10-23-2026\" component=\"C\" context=\"\" type=\"{t}\" thread=\"1\" file=\"\">"
+            )
         };
         let lines = [
             cm("one", 1),                // line 1, entry 0
@@ -443,7 +500,9 @@ mod tests {
         std::fs::write(&p, lines.join("\r\n") + "\r\n").unwrap();
 
         let mut src = LogSource::new(&p, false);
-        let PollResult::Reset { committed: entries, .. } = src.poll(&Progress::default()).unwrap()
+        let PollResult::Reset {
+            committed: entries, ..
+        } = src.poll(&Progress::default()).unwrap()
         else {
             panic!()
         };
@@ -455,11 +514,18 @@ mod tests {
 
         let blocks = merge_ranges(&hits, 1, 1, entries.len());
         assert_eq!(blocks, vec![(1, 5), (7, 8)]); // entry 3 is shared by A and B only once
-        let ranges: Vec<_> = blocks.iter().map(|&b| segments(&entries, b)[0].lines).collect();
+        let ranges: Vec<_> = blocks
+            .iter()
+            .map(|&b| segments(&entries, b)[0].lines)
+            .collect();
         assert_eq!(ranges, vec![(2, 7), (9, 10)]);
 
         let raw = crate::parser::read_line_ranges(&p, &ranges).unwrap();
-        let parts: Vec<_> = ranges.iter().zip(raw).map(|(r, l)| (separator(None, r.0, r.1), l)).collect();
+        let parts: Vec<_> = ranges
+            .iter()
+            .zip(raw)
+            .map(|(r, l)| (separator(None, r.0, r.1), l))
+            .collect();
         let out = build_original(&parts, false);
         let expected: Vec<String> = [&lines[1..7], &lines[8..10]].concat();
         assert_eq!(out, expected.join("\r\n") + "\r\n");
@@ -468,12 +534,25 @@ mod tests {
         let q = dir.join("out.log");
         std::fs::write(&q, &out).unwrap();
         let mut src2 = LogSource::new(&q, false);
-        let PollResult::Reset { committed: again, .. } = src2.poll(&Progress::default()).unwrap()
+        let PollResult::Reset {
+            committed: again, ..
+        } = src2.poll(&Progress::default()).unwrap()
         else {
             panic!()
         };
         let msgs: Vec<&str> = (0..again.len()).map(|i| again.message(i)).collect();
-        assert_eq!(msgs, ["two", "ERR A", "four", "ERR B", "multi\nline", "nine", "ERR C"]);
+        assert_eq!(
+            msgs,
+            [
+                "two",
+                "ERR A",
+                "four",
+                "ERR B",
+                "multi\nline",
+                "nine",
+                "ERR C"
+            ]
+        );
         std::fs::remove_dir_all(&dir).ok();
     }
 
@@ -487,7 +566,9 @@ mod tests {
         }
         let e = LogStore::from_entries(v);
         // The table shows only errors → these are the highlighted rows.
-        let visible: Vec<usize> = (0..e.len()).filter(|&i| e.severity(i) == Severity::Error).collect();
+        let visible: Vec<usize> = (0..e.len())
+            .filter(|&i| e.severity(i) == Severity::Error)
+            .collect();
         let blocks = merge_ranges(&visible, 5, 5, e.len());
         assert_eq!(blocks, vec![(0, 17), (20, 38)]); // 25 and 33 overlap → one block
         // Only the last block (around the newest errors); context rows of any severity.
@@ -514,13 +595,31 @@ mod tests {
         let sk = "{d}.{m}.{y}";
         let ms = |s: &str| iso_to_ms(s).unwrap();
         // The start is exactly what was entered.
-        assert_eq!(parse_range_bound("23.10.2026 10:30", sk, false), Some(ms("2026-10-23 10:30:00.000")));
+        assert_eq!(
+            parse_range_bound("23.10.2026 10:30", sk, false),
+            Some(ms("2026-10-23 10:30:00.000"))
+        );
         // The end includes the whole entered day / hour / minute / second.
-        assert_eq!(parse_range_bound("23.10.2026", sk, true), Some(ms("2026-10-23 23:59:59.999")));
-        assert_eq!(parse_range_bound("23.10.2026 10", sk, true), Some(ms("2026-10-23 10:59:59.999")));
-        assert_eq!(parse_range_bound("23.10.2026 10:30", sk, true), Some(ms("2026-10-23 10:30:59.999")));
-        assert_eq!(parse_range_bound("2026-10-23T10:30:15", sk, true), Some(ms("2026-10-23 10:30:15.999")));
-        assert_eq!(parse_range_bound("2026-10-23 10:30:15.250", sk, true), Some(ms("2026-10-23 10:30:15.250")));
+        assert_eq!(
+            parse_range_bound("23.10.2026", sk, true),
+            Some(ms("2026-10-23 23:59:59.999"))
+        );
+        assert_eq!(
+            parse_range_bound("23.10.2026 10", sk, true),
+            Some(ms("2026-10-23 10:59:59.999"))
+        );
+        assert_eq!(
+            parse_range_bound("23.10.2026 10:30", sk, true),
+            Some(ms("2026-10-23 10:30:59.999"))
+        );
+        assert_eq!(
+            parse_range_bound("2026-10-23T10:30:15", sk, true),
+            Some(ms("2026-10-23 10:30:15.999"))
+        );
+        assert_eq!(
+            parse_range_bound("2026-10-23 10:30:15.250", sk, true),
+            Some(ms("2026-10-23 10:30:15.250"))
+        );
         assert_eq!(parse_range_bound("nonsense", sk, true), None);
     }
 
@@ -528,15 +627,33 @@ mod tests {
     fn datetime_input_parsing() {
         let sk = "{d}.{m}.{y}";
         let en = "{y}-{m}-{d}";
-        assert_eq!(parse_datetime_input("23.10.2026 13:05", sk).unwrap(), "2026-10-23 13:05:00.000");
-        assert_eq!(parse_datetime_input("2026-10-23", sk).unwrap(), "2026-10-23 00:00:00.000");
-        assert_eq!(parse_datetime_input("2026-10-23T13:05:30.5", en).unwrap(), "2026-10-23 13:05:30.500");
-        assert_eq!(parse_datetime_input(" 3.1.26 7:08:09 ", sk).unwrap(), "2026-01-03 07:08:09.000");
-        assert_eq!(parse_datetime_input("10/23/2026 1:02", "{m}/{d}/{y}").unwrap(), "2026-10-23 01:02:00.000");
+        assert_eq!(
+            parse_datetime_input("23.10.2026 13:05", sk).unwrap(),
+            "2026-10-23 13:05:00.000"
+        );
+        assert_eq!(
+            parse_datetime_input("2026-10-23", sk).unwrap(),
+            "2026-10-23 00:00:00.000"
+        );
+        assert_eq!(
+            parse_datetime_input("2026-10-23T13:05:30.5", en).unwrap(),
+            "2026-10-23 13:05:30.500"
+        );
+        assert_eq!(
+            parse_datetime_input(" 3.1.26 7:08:09 ", sk).unwrap(),
+            "2026-01-03 07:08:09.000"
+        );
+        assert_eq!(
+            parse_datetime_input("10/23/2026 1:02", "{m}/{d}/{y}").unwrap(),
+            "2026-10-23 01:02:00.000"
+        );
         assert!(parse_datetime_input("31.02.2026", sk).is_none());
         assert!(parse_datetime_input("23.10.2026 25:00", sk).is_none());
         assert!(parse_datetime_input("yesterday", sk).is_none());
-        assert_eq!(hours_before("2026-10-23 00:30:00.000", 1).unwrap(), "2026-10-22 23:30:00.000");
+        assert_eq!(
+            hours_before("2026-10-23 00:30:00.000", 1).unwrap(),
+            "2026-10-22 23:30:00.000"
+        );
     }
 
     #[test]
@@ -550,7 +667,10 @@ mod tests {
         assert_eq!(filter_hits_since(&[2, 5, 8, 10], &e, since), vec![5, 8]);
         assert_eq!(filter_hits_since(&[2, 5], &e, None), vec![2, 5]);
         // block 3..=7 is clipped to start at entry 5; block 0..=2 disappears completely
-        assert_eq!(clip_blocks_since(&[(0, 2), (3, 7), (8, 10)], &e, since), vec![(5, 7), (8, 10)]);
+        assert_eq!(
+            clip_blocks_since(&[(0, 2), (3, 7), (8, 10)], &e, since),
+            vec![(5, 7), (8, 10)]
+        );
         assert_eq!(latest_timestamp(&e), iso_to_ms("2026-10-23 10:00:09.000"));
 
         let b = vec![(0, 1), (3, 4), (6, 7)];

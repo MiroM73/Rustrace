@@ -143,7 +143,15 @@ mod imp {
         fn GetMonitorInfoW(monitor: Handle, info: *mut MONITORINFO) -> i32;
         fn SetThreadDpiAwarenessContext(ctx: isize) -> isize;
         fn GetDpiForWindow(hwnd: Handle) -> u32;
-        fn SetWindowPos(hwnd: Handle, after: Handle, x: i32, y: i32, w: i32, h: i32, flags: u32) -> i32;
+        fn SetWindowPos(
+            hwnd: Handle,
+            after: Handle,
+            x: i32,
+            y: i32,
+            w: i32,
+            h: i32,
+            flags: u32,
+        ) -> i32;
         fn ShowWindow(hwnd: Handle, cmd: i32) -> i32;
         fn LoadCursorW(instance: Handle, name: *const u16) -> Handle;
         fn DrawTextW(hdc: Handle, text: *const u16, len: i32, rect: *mut RECT, format: u32) -> i32;
@@ -163,7 +171,17 @@ mod imp {
         fn SelectObject(hdc: Handle, obj: Handle) -> Handle;
         fn DeleteObject(obj: Handle) -> i32;
         fn DeleteDC(hdc: Handle) -> i32;
-        fn BitBlt(dst: Handle, x: i32, y: i32, w: i32, h: i32, src: Handle, sx: i32, sy: i32, rop: u32) -> i32;
+        fn BitBlt(
+            dst: Handle,
+            x: i32,
+            y: i32,
+            w: i32,
+            h: i32,
+            src: Handle,
+            sx: i32,
+            sy: i32,
+            rop: u32,
+        ) -> i32;
         fn SetBkMode(hdc: Handle, mode: i32) -> i32;
         fn SetTextColor(hdc: Handle, color: u32) -> u32;
         fn GdiFlush() -> i32;
@@ -357,9 +375,22 @@ mod imp {
             }
             let scale = GetDpiForWindow(hwnd).max(96) as f32 / 96.0;
             let (w, h) = ((WIDTH * scale) as i32, (HEIGHT * scale) as i32);
-            SetWindowPos(hwnd, 0, cx - w / 2, cy - h / 2, w, h, SWP_NOZORDER | SWP_NOACTIVATE);
+            SetWindowPos(
+                hwnd,
+                0,
+                cx - w / 2,
+                cy - h / 2,
+                w,
+                h,
+                SWP_NOZORDER | SWP_NOACTIVATE,
+            );
             let round = DWMWCP_ROUND;
-            DwmSetWindowAttribute(hwnd, DWMWA_WINDOW_CORNER_PREFERENCE, (&raw const round).cast(), 4);
+            DwmSetWindowAttribute(
+                hwnd,
+                DWMWA_WINDOW_CORNER_PREFERENCE,
+                (&raw const round).cast(),
+                4,
+            );
             let icon_size = (64.0 * scale).round() as u32;
             PAINTER.with_borrow_mut(|p| {
                 *p = Some(Painter {
@@ -388,7 +419,12 @@ mod imp {
         }
     }
 
-    unsafe extern "system" fn wnd_proc(hwnd: Handle, msg: u32, wparam: usize, lparam: isize) -> isize {
+    unsafe extern "system" fn wnd_proc(
+        hwnd: Handle,
+        msg: u32,
+        wparam: usize,
+        lparam: isize,
+    ) -> isize {
         unsafe {
             match msg {
                 WM_TIMER => {
@@ -498,7 +534,13 @@ mod imp {
                     right,
                     bottom: (bottom * s) as i32,
                 };
-                DrawTextW(mem, text.as_ptr(), -1, &mut rc, DT_SINGLELINE | DT_VCENTER | DT_END_ELLIPSIS);
+                DrawTextW(
+                    mem,
+                    text.as_ptr(),
+                    -1,
+                    &mut rc,
+                    DT_SINGLELINE | DT_VCENTER | DT_END_ELLIPSIS,
+                );
                 SelectObject(mem, old_font);
                 DeleteObject(font);
             }
@@ -512,8 +554,16 @@ mod imp {
 
     /// Background, border, icon and the ring of dots into BGRA pixels.
     fn draw_pixels(p: &Painter, px: &mut [u8], w: i32, h: i32) {
-        let bg: [f32; 3] = if p.dark { [32.0, 32.0, 32.0] } else { [250.0, 250.0, 250.0] };
-        let border: [f32; 3] = if p.dark { [70.0, 70.0, 70.0] } else { [200.0, 200.0, 200.0] };
+        let bg: [f32; 3] = if p.dark {
+            [32.0, 32.0, 32.0]
+        } else {
+            [250.0, 250.0, 250.0]
+        };
+        let border: [f32; 3] = if p.dark {
+            [70.0, 70.0, 70.0]
+        } else {
+            [200.0, 200.0, 200.0]
+        };
         let put = |px: &mut [u8], x: i32, y: i32, c: [f32; 3], a: f32| {
             if x < 0 || y < 0 || x >= w || y >= h || a <= 0.0 {
                 return;
@@ -551,7 +601,8 @@ mod imp {
         let (cx, cy) = (w as f32 - 44.0 * s, h as f32 / 2.0);
         let (ring, r) = (14.0 * s, 3.4 * s);
         for i in 0..DOTS {
-            let angle = i as f32 / DOTS as f32 * std::f32::consts::TAU - std::f32::consts::FRAC_PI_2;
+            let angle =
+                i as f32 / DOTS as f32 * std::f32::consts::TAU - std::f32::consts::FRAC_PI_2;
             let (dx, dy) = (cx + ring * angle.cos(), cy + ring * angle.sin());
             let behind = (p.frame + DOTS - i) % DOTS;
             let strength = [1.0, 0.75, 0.55, 0.4, 0.3, 0.22, 0.18, 0.15][behind];

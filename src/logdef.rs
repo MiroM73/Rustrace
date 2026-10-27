@@ -28,7 +28,7 @@
 //! with the same name replaces the built-in one) and from `<config dir>/RusTrace/logdef/` (the
 //! user's own definitions – they replace nothing, see `load_from`).
 
-use crate::parser::{keyword_sev, LogEntry, Severity};
+use crate::parser::{LogEntry, Severity, keyword_sev};
 use regex::{Regex, RegexBuilder};
 use std::borrow::Cow;
 use std::collections::{BTreeMap, HashMap};
@@ -39,7 +39,10 @@ use std::sync::Arc;
 const BUILTIN: &[(&str, &str)] = &[
     ("cbs.log.def", include_str!("../logdef/cbs.log.def")),
     ("dism.log.def", include_str!("../logdef/dism.log.def")),
-    ("exchconnect.log.def", include_str!("../logdef/exchconnect.log.def")),
+    (
+        "exchconnect.log.def",
+        include_str!("../logdef/exchconnect.log.def"),
+    ),
     ("iisweb.log.def", include_str!("../logdef/iisweb.log.def")),
 ];
 
@@ -72,7 +75,9 @@ impl Role {
     }
 
     fn from_key(s: &str) -> Option<Role> {
-        Role::ALL.into_iter().find(|r| r.key().eq_ignore_ascii_case(s))
+        Role::ALL
+            .into_iter()
+            .find(|r| r.key().eq_ignore_ascii_case(s))
     }
 }
 
@@ -124,7 +129,11 @@ impl Default for Schema {
 
 impl Schema {
     fn extra_index(&mut self, name: &str) -> usize {
-        match self.extra_names.iter().position(|n| n.eq_ignore_ascii_case(name)) {
+        match self
+            .extra_names
+            .iter()
+            .position(|n| n.eq_ignore_ascii_case(name))
+        {
             Some(i) => i,
             None => {
                 self.extra_names.push(name.to_owned());
@@ -342,9 +351,15 @@ impl LogDef {
                 }
             }
         };
-        let kind = match get("format").unwrap_or("regex").to_ascii_lowercase().as_str() {
+        let kind = match get("format")
+            .unwrap_or("regex")
+            .to_ascii_lowercase()
+            .as_str()
+        {
             "w3c" => Kind::W3c(separator),
-            _ if get("separator").is_some() => return Err("separator: only for format = w3c".into()),
+            _ if get("separator").is_some() => {
+                return Err("separator: only for format = w3c".into());
+            }
             "regex" => {
                 let p = get("pattern").ok_or("missing key \"pattern\"")?;
                 let re = build_regex("pattern", p, false)?;
@@ -356,14 +371,30 @@ impl LogDef {
             other => return Err(format!("format: unknown value \"{other}\" (regex, w3c)")),
         };
         // w3c lines never continue on the next line, so entries need not wait for the next one.
-        let default_unmatched = if matches!(kind, Kind::W3c(_)) { "entry" } else { "append" };
-        let unmatched = match get("unmatched").unwrap_or(default_unmatched).to_ascii_lowercase().as_str() {
+        let default_unmatched = if matches!(kind, Kind::W3c(_)) {
+            "entry"
+        } else {
+            "append"
+        };
+        let unmatched = match get("unmatched")
+            .unwrap_or(default_unmatched)
+            .to_ascii_lowercase()
+            .as_str()
+        {
             "append" => Unmatched::Append,
             "entry" => Unmatched::Entry,
             "skip" => Unmatched::Skip,
-            other => return Err(format!("unmatched: unknown value \"{other}\" (append, entry, skip)")),
+            other => {
+                return Err(format!(
+                    "unmatched: unknown value \"{other}\" (append, entry, skip)"
+                ));
+            }
         };
-        let utc = match get("timezone").unwrap_or("local").to_ascii_lowercase().as_str() {
+        let utc = match get("timezone")
+            .unwrap_or("local")
+            .to_ascii_lowercase()
+            .as_str()
+        {
             "local" => false,
             "utc" => true,
             other => return Err(format!("timezone: unknown value \"{other}\" (local, utc)")),
@@ -400,7 +431,12 @@ impl LogDef {
                 true,
             )?,
             dt_formats: get("datetime.format")
-                .map(|f| f.split('|').map(|x| x.trim().to_owned()).filter(|x| !x.is_empty()).collect())
+                .map(|f| {
+                    f.split('|')
+                        .map(|x| x.trim().to_owned())
+                        .filter(|x| !x.is_empty())
+                        .collect()
+                })
                 .unwrap_or_default(),
             utc,
             columns: get("columns").map(list),
@@ -446,10 +482,14 @@ impl LogDef {
     /// show the columns of every part of the file).
     fn mapping(&self, names: &[String], schema: &mut Schema, merge: bool) -> Mapping {
         let roles = Role::ALL.map(|r| self.role_fields(r, names));
-        let role_of = |i: usize| Role::ALL.into_iter().find(|r| roles[*r as usize].contains(&i));
-        let severity = names
-            .iter()
-            .position(|f| f.eq_ignore_ascii_case(self.severity_field.as_deref().unwrap_or("severity")));
+        let role_of = |i: usize| {
+            Role::ALL
+                .into_iter()
+                .find(|r| roles[*r as usize].contains(&i))
+        };
+        let severity = names.iter().position(|f| {
+            f.eq_ignore_ascii_case(self.severity_field.as_deref().unwrap_or("severity"))
+        });
         let mut extra = Vec::new();
         for (i, n) in names.iter().enumerate() {
             if !n.is_empty() && role_of(i).is_none() {
@@ -458,7 +498,11 @@ impl LogDef {
         }
 
         let title = |name: &str| self.titles.get(&name.to_lowercase()).cloned();
-        let mut columns: Vec<Column> = if merge { schema.columns.clone() } else { Vec::new() };
+        let mut columns: Vec<Column> = if merge {
+            schema.columns.clone()
+        } else {
+            Vec::new()
+        };
         let mut push = |kind: ColumnKind, t: Option<String>| {
             if !columns.iter().any(|c| c.kind == kind) {
                 columns.push(Column { kind, title: t });
@@ -469,7 +513,10 @@ impl LogDef {
             None => {
                 let e = extra.iter().find(|(f, _)| *f == i).map_or(0, |(_, e)| *e);
                 let name = &schema.extra_names[e];
-                (ColumnKind::Extra(e), Some(title(name).unwrap_or_else(|| name.clone())))
+                (
+                    ColumnKind::Extra(e),
+                    Some(title(name).unwrap_or_else(|| name.clone())),
+                )
             }
         };
         match &self.columns {
@@ -519,7 +566,11 @@ impl LogDef {
         if s.is_empty() {
             return String::new();
         }
-        let formats = self.dt_formats.iter().map(String::as_str).chain(DEFAULT_DT_FORMATS.iter().copied());
+        let formats = self
+            .dt_formats
+            .iter()
+            .map(String::as_str)
+            .chain(DEFAULT_DT_FORMATS.iter().copied());
         for f in formats {
             if let Ok(dt) = chrono::NaiveDateTime::parse_from_str(s, f) {
                 let dt = if self.utc {
@@ -574,7 +625,10 @@ impl DefState {
             extra_names: Vec::new(),
         };
         let names: Vec<String> = match &def.kind {
-            Kind::Regex(re) => re.capture_names().map(|n| n.unwrap_or("").to_owned()).collect(),
+            Kind::Regex(re) => re
+                .capture_names()
+                .map(|n| n.unwrap_or("").to_owned())
+                .collect(),
             Kind::W3c(_) => def.default_fields.clone(),
         };
         let map = def.mapping(&names, schema, false);
@@ -638,7 +692,9 @@ impl DefState {
                 DefLine::Entry(self.build(line_no, line, kw, |i| vals.get(i).map(|v| v.as_ref())))
             }
             Kind::Regex(re) => match re.captures(line) {
-                Some(c) => DefLine::Entry(self.build(line_no, line, kw, |i| c.get(i).map(|m| m.as_str()))),
+                Some(c) => {
+                    DefLine::Entry(self.build(line_no, line, kw, |i| c.get(i).map(|m| m.as_str())))
+                }
                 None => DefLine::Unmatched,
             },
         }
@@ -653,7 +709,11 @@ impl DefState {
     ) -> LogEntry {
         let join = |fields: &[usize]| -> String {
             let mut out = String::new();
-            for v in fields.iter().filter_map(|&i| get(i)).filter(|v| !v.is_empty()) {
+            for v in fields
+                .iter()
+                .filter_map(|&i| get(i))
+                .filter(|v| !v.is_empty())
+            {
                 if !out.is_empty() {
                     out.push(' ');
                 }
@@ -680,7 +740,9 @@ impl DefState {
         LogEntry {
             line_no,
             component: join(&m.roles[Role::Component as usize]),
-            datetime: self.def.parse_datetime(&join(&m.roles[Role::DateTime as usize])),
+            datetime: self
+                .def
+                .parse_datetime(&join(&m.roles[Role::DateTime as usize])),
             thread: join(&m.roles[Role::Thread as usize]),
             severity,
             message,
@@ -748,14 +810,21 @@ impl LogDef {
 
 /// `.def` files of a folder: (file name, text, path); unreadable files go to `errors`.
 fn read_def_files(dir: &Path, errors: &mut Vec<String>) -> Vec<(String, String, PathBuf)> {
-    let Ok(rd) = std::fs::read_dir(dir) else { return Vec::new() };
+    let Ok(rd) = std::fs::read_dir(dir) else {
+        return Vec::new();
+    };
     let mut out = Vec::new();
     for e in rd.flatten() {
         let p = e.path();
-        if p.extension().and_then(|x| x.to_str()).is_none_or(|x| !x.eq_ignore_ascii_case("def")) {
+        if p.extension()
+            .and_then(|x| x.to_str())
+            .is_none_or(|x| !x.eq_ignore_ascii_case("def"))
+        {
             continue;
         }
-        let Some(id) = p.file_name().and_then(|s| s.to_str()).map(str::to_owned) else { continue };
+        let Some(id) = p.file_name().and_then(|s| s.to_str()).map(str::to_owned) else {
+            continue;
+        };
         match std::fs::read_to_string(&p) {
             Ok(t) => out.push((id, t, p)),
             Err(err) => errors.push(format!("{}: {err}", p.display())),
@@ -817,7 +886,11 @@ pub fn definition_updates(
     predefined: &BTreeMap<String, String>,
     own: &BTreeMap<String, (PathBuf, String)>,
 ) -> Vec<DefUpdate> {
-    let name_of = |id: &str, text: &str| key_values(text).remove("name").unwrap_or_else(|| id.to_owned());
+    let name_of = |id: &str, text: &str| {
+        key_values(text)
+            .remove("name")
+            .unwrap_or_else(|| id.to_owned())
+    };
     let mut out = Vec::new();
     for (id, text) in predefined {
         let own_copy = own.get(id);
@@ -830,7 +903,8 @@ pub fn definition_updates(
         let changes = match known.get(id) {
             Some(old) => {
                 let (old, new) = (key_values(old), key_values(text));
-                let keys: std::collections::BTreeSet<&String> = old.keys().chain(new.keys()).collect();
+                let keys: std::collections::BTreeSet<&String> =
+                    old.keys().chain(new.keys()).collect();
                 keys.into_iter()
                     .filter(|k| old.get(*k) != new.get(*k))
                     .map(|k| KeyChange {
@@ -899,7 +973,12 @@ pub fn load_from(dirs: &[PathBuf], filter: SourceFilter) -> DefSet {
     let mut set = DefSet::default();
     let mut predefined: BTreeMap<String, (String, String, Option<PathBuf>, u8)> = BUILTIN
         .iter()
-        .map(|(id, t)| (id.to_lowercase(), ((*id).to_owned(), (*t).to_owned(), None, PRIO_BUILTIN)))
+        .map(|(id, t)| {
+            (
+                id.to_lowercase(),
+                ((*id).to_owned(), (*t).to_owned(), None, PRIO_BUILTIN),
+            )
+        })
         .collect();
     let mut errors = Vec::new();
     if let Some(dir) = dirs.first() {
@@ -914,7 +993,10 @@ pub fn load_from(dirs: &[PathBuf], filter: SourceFilter) -> DefSet {
             own.insert(id.to_lowercase(), (id, text, Some(path), PRIO_USER));
         }
     }
-    set.predefined = predefined.iter().map(|(k, (_, t, _, _))| (k.clone(), t.clone())).collect();
+    set.predefined = predefined
+        .iter()
+        .map(|(k, (_, t, _, _))| (k.clone(), t.clone()))
+        .collect();
     set.own = own
         .iter()
         .filter_map(|(k, (_, t, p, _))| p.clone().map(|p| (k.clone(), (p, t.clone()))))
@@ -930,7 +1012,9 @@ pub fn load_from(dirs: &[PathBuf], filter: SourceFilter) -> DefSet {
         groups.push(own);
     }
     for (id, text, path, priority) in groups.into_iter().flat_map(BTreeMap::into_values) {
-        let shown = path.as_ref().map_or_else(|| id.clone(), |p| p.display().to_string());
+        let shown = path
+            .as_ref()
+            .map_or_else(|| id.clone(), |p| p.display().to_string());
         match LogDef::parse(&id, &text, path) {
             Ok(d) => set.defs.push(Arc::new(LogDef { priority, ..d })),
             Err(e) => set.errors.push(format!("{shown}: {e}")),
@@ -955,8 +1039,13 @@ pub fn by_file_name(defs: &[Arc<LogDef>], path: &Path) -> Option<Arc<LogDef>> {
 
 /// All definitions whose `files` patterns match the file name, in priority order.
 pub fn matching_by_name(defs: &[Arc<LogDef>], path: &Path) -> Vec<Arc<LogDef>> {
-    let Some(name) = path.file_name().map(|n| n.to_string_lossy()) else { return Vec::new() };
-    defs.iter().filter(|d| d.matches_file(&name)).cloned().collect()
+    let Some(name) = path.file_name().map(|n| n.to_string_lossy()) else {
+        return Vec::new();
+    };
+    defs.iter()
+        .filter(|d| d.matches_file(&name))
+        .cloned()
+        .collect()
 }
 
 /// The definition for a file by its first lines (`detect`).
@@ -1002,7 +1091,15 @@ mod tests {
         let set = load_from(&[], SourceFilter::All);
         assert!(set.errors.is_empty(), "{:?}", set.errors);
         let ids: Vec<&str> = set.defs.iter().map(|d| d.id.as_str()).collect();
-        assert_eq!(ids, ["cbs.log.def", "dism.log.def", "exchconnect.log.def", "iisweb.log.def"]);
+        assert_eq!(
+            ids,
+            [
+                "cbs.log.def",
+                "dism.log.def",
+                "exchconnect.log.def",
+                "iisweb.log.def"
+            ]
+        );
     }
 
     #[test]
@@ -1023,7 +1120,10 @@ mod tests {
         assert_eq!(e[0].message, "Starting TrustedInstaller initialization.");
         assert_eq!(e[0].severity, Severity::Info);
         assert_eq!(e[1].severity, Severity::Error);
-        assert!(e[1].message.ends_with("0x80073712]\n   continuation of the dump"));
+        assert!(
+            e[1].message
+                .ends_with("0x80073712]\n   continuation of the dump")
+        );
         assert_eq!(e[2].severity, Severity::Warning);
         assert_eq!(e[2].message, "");
         assert_eq!(extra(&e[1], &s, "severity"), "Error");
@@ -1063,7 +1163,10 @@ mod tests {
             extra(&e[1], &s, "function"),
             "CDISMPackageManager::Internal_Finalize(hr:0x800f081f)"
         );
-        assert_eq!(e[2].message, "DISM.EXE: <----- Starting Dism.exe session ----->");
+        assert_eq!(
+            e[2].message,
+            "DISM.EXE: <----- Starting Dism.exe session ----->"
+        );
         assert_eq!(e[2].thread, "");
     }
 
@@ -1100,11 +1203,19 @@ mod tests {
         assert_eq!(extra(&e[0], &s, "time-taken"), "15");
         // UTC converted to local time.
         use chrono::TimeZone;
-        let utc = chrono::NaiveDateTime::parse_from_str("2026-10-23 08:00:01", "%Y-%m-%d %H:%M:%S").unwrap();
+        let utc = chrono::NaiveDateTime::parse_from_str("2026-10-23 08:00:01", "%Y-%m-%d %H:%M:%S")
+            .unwrap();
         let local = chrono::Local.from_utc_datetime(&utc).naive_local();
-        assert_eq!(e[0].datetime, local.format("%Y-%m-%d %H:%M:%S%.3f").to_string());
+        assert_eq!(
+            e[0].datetime,
+            local.format("%Y-%m-%d %H:%M:%S%.3f").to_string()
+        );
         // The header defines the columns; fields used by roles are not separate columns.
-        let titles: Vec<&str> = s.columns.iter().filter_map(|c| c.title.as_deref()).collect();
+        let titles: Vec<&str> = s
+            .columns
+            .iter()
+            .filter_map(|c| c.title.as_deref())
+            .collect();
         assert_eq!(titles, ["Server IP", "Request", "Status", "Time (ms)"]);
         assert_eq!(s.columns[0].kind, ColumnKind::Role(Role::DateTime));
     }
@@ -1143,26 +1254,51 @@ mod tests {
         assert_eq!(extra(&e[1], &s, "direction"), "-");
         assert_eq!(e[1].message, "");
         // A quoted value keeps its commas and doubled quotes.
-        assert_eq!(e[2].message, "Failed connection to 10.0.0.5:25 (TimedOut:10060, \"x\")");
+        assert_eq!(
+            e[2].message,
+            "Failed connection to 10.0.0.5:25 (TimedOut:10060, \"x\")"
+        );
         assert_eq!(
             [e[0].severity, e[2].severity, e[3].severity],
             [Severity::Info, Severity::Error, Severity::Warning]
         );
         // UTC with "T" and "Z" converted to local time.
         use chrono::TimeZone;
-        let utc = chrono::NaiveDateTime::parse_from_str("2026-09-26 23:59:49.511", "%Y-%m-%d %H:%M:%S%.3f").unwrap();
+        let utc = chrono::NaiveDateTime::parse_from_str(
+            "2026-09-26 23:59:49.511",
+            "%Y-%m-%d %H:%M:%S%.3f",
+        )
+        .unwrap();
         let local = chrono::Local.from_utc_datetime(&utc).naive_local();
-        assert_eq!(e[0].datetime, local.format("%Y-%m-%d %H:%M:%S%.3f").to_string());
-        let titles: Vec<&str> = s.columns.iter().filter_map(|c| c.title.as_deref()).collect();
-        assert_eq!(titles, ["Session", "Source", "Dir", "Destination", "Description"]);
+        assert_eq!(
+            e[0].datetime,
+            local.format("%Y-%m-%d %H:%M:%S%.3f").to_string()
+        );
+        let titles: Vec<&str> = s
+            .columns
+            .iter()
+            .filter_map(|c| c.title.as_deref())
+            .collect();
+        assert_eq!(
+            titles,
+            ["Session", "Source", "Dir", "Destination", "Description"]
+        );
         assert_eq!(s.columns[0].kind, ColumnKind::Role(Role::DateTime));
     }
 
     #[test]
     fn separator_values() {
-        let v = |l: &str, s: Option<char>| split_values(l, s).into_iter().map(|c| c.into_owned()).collect::<Vec<_>>();
+        let v = |l: &str, s: Option<char>| {
+            split_values(l, s)
+                .into_iter()
+                .map(|c| c.into_owned())
+                .collect::<Vec<_>>()
+        };
         assert_eq!(v("a - c", None), ["a", "", "c"]);
-        assert_eq!(v("a,-,,\"b,\"\"c\"\"\",d\r", Some(',')), ["a", "-", "", "b,\"c\"", "d"]);
+        assert_eq!(
+            v("a,-,,\"b,\"\"c\"\"\",d\r", Some(',')),
+            ["a", "-", "", "b,\"c\"", "d"]
+        );
         assert_eq!(v("x\ty", Some('\t')), ["x", "y"]);
         assert_eq!(v("\"unclosed,z", Some(',')), ["unclosed,z"]);
         let def = |extra: &str| LogDef::parse("t.def", &format!("name = T\n{extra}"), None);
@@ -1192,14 +1328,33 @@ mod tests {
             .collect();
         assert_eq!(
             titles,
-            ["Role(DateTime)", "Server IP", "Request", "Client IP", "Status", "Time (ms)"]
+            [
+                "Role(DateTime)",
+                "Server IP",
+                "Request",
+                "Client IP",
+                "Status",
+                "Time (ms)"
+            ]
         );
         // Only the fields of the actual headers are extra columns (not the definition's defaults).
         assert_eq!(s.extra_names, ["s-ip", "c-ip", "sc-status", "time-taken"]);
-        assert_eq!((extra(&e[0], &s, "s-ip"), extra(&e[0], &s, "c-ip")), ("10.0.0.5", "10.0.0.9"));
+        assert_eq!(
+            (extra(&e[0], &s, "s-ip"), extra(&e[0], &s, "c-ip")),
+            ("10.0.0.5", "10.0.0.9")
+        );
         assert_eq!(extra(&e[0], &s, "time-taken"), "");
-        assert_eq!((e[1].message.as_str(), extra(&e[1], &s, "s-ip")), ("POST /b", ""));
-        assert_eq!((extra(&e[1], &s, "sc-status"), extra(&e[1], &s, "time-taken")), ("500", "15"));
+        assert_eq!(
+            (e[1].message.as_str(), extra(&e[1], &s, "s-ip")),
+            ("POST /b", "")
+        );
+        assert_eq!(
+            (
+                extra(&e[1], &s, "sc-status"),
+                extra(&e[1], &s, "time-taken")
+            ),
+            ("500", "15")
+        );
         assert_eq!(e[1].severity, Severity::Error);
     }
 
@@ -1221,13 +1376,19 @@ mod tests {
         let set = load_from(&dirs, SourceFilter::All);
         assert!(set.errors.is_empty(), "{:?}", set.errors);
         let matching = matching_by_name(&set.defs, Path::new("u_ex261023.log"));
-        let names: Vec<&str> = matching
-            .iter()
-            .map(|d| d.name.as_str())
-            .collect();
+        let names: Vec<&str> = matching.iter().map(|d| d.name.as_str()).collect();
         assert_eq!(names, ["own iisweb", "user zzz", "exe aaa", "next to exe"]);
-        assert_eq!(by_file_name(&set.defs, Path::new("x/u_ex1.log")).unwrap().name, "own iisweb");
-        let prio: Vec<(&str, u8)> = set.defs.iter().map(|d| (d.id.as_str(), d.priority)).collect();
+        assert_eq!(
+            by_file_name(&set.defs, Path::new("x/u_ex1.log"))
+                .unwrap()
+                .name,
+            "own iisweb"
+        );
+        let prio: Vec<(&str, u8)> = set
+            .defs
+            .iter()
+            .map(|d| (d.id.as_str(), d.priority))
+            .collect();
         assert_eq!(
             prio,
             [
@@ -1242,25 +1403,40 @@ mod tests {
         );
         assert!(set.defs[0].is_own() && !set.defs[0].same_as(&set.defs[3]));
         // Only the predefined or only the own definitions.
-        let ids = |f| -> Vec<String> { load_from(&dirs, f).defs.iter().map(|d| d.name.clone()).collect() };
+        let ids = |f| -> Vec<String> {
+            load_from(&dirs, f)
+                .defs
+                .iter()
+                .map(|d| d.name.clone())
+                .collect()
+        };
         assert_eq!(ids(SourceFilter::Own), ["own iisweb", "user zzz"]);
-        assert_eq!(ids(SourceFilter::Predefined), [
+        assert_eq!(
+            ids(SourceFilter::Predefined),
+            [
                 "exe aaa",
                 "next to exe",
                 "Windows CBS log",
                 "DISM log",
                 "Exchange Transport Connectivity log"
-            ]);
+            ]
+        );
         // The texts for the notice are there whatever the filter is.
         let set = load_from(&dirs, SourceFilter::Own);
-        assert_eq!(set.predefined.keys().collect::<Vec<_>>(), [
+        assert_eq!(
+            set.predefined.keys().collect::<Vec<_>>(),
+            [
                 "aaa.def",
                 "cbs.log.def",
                 "dism.log.def",
                 "exchconnect.log.def",
                 "iisweb.log.def"
-            ]);
-        assert_eq!(set.own.keys().collect::<Vec<_>>(), ["iisweb.log.def", "zzz.def"]);
+            ]
+        );
+        assert_eq!(
+            set.own.keys().collect::<Vec<_>>(),
+            ["iisweb.log.def", "zzz.def"]
+        );
         std::fs::remove_dir_all(&base).ok();
     }
 
@@ -1269,28 +1445,47 @@ mod tests {
     #[test]
     fn updates_of_predefined_definitions() {
         let map = |items: &[(&str, &str)]| -> BTreeMap<String, String> {
-            items.iter().map(|(k, v)| ((*k).to_owned(), (*v).to_owned())).collect()
+            items
+                .iter()
+                .map(|(k, v)| ((*k).to_owned(), (*v).to_owned()))
+                .collect()
         };
         let known = map(&[
-            ("iis.def", "name = IIS\nfiles = u_ex*.log\nrole.message = cs-method cs-uri-stem\ntitle.a = A"),
+            (
+                "iis.def",
+                "name = IIS\nfiles = u_ex*.log\nrole.message = cs-method cs-uri-stem\ntitle.a = A",
+            ),
             ("same.def", "name = Same\nfiles = s.log"),
             ("old.def", "name = Old one\nfiles = o.log"),
         ]);
         let predefined = map(&[
-            ("iis.def", "# new comment\nname = IIS\nfiles = u_ex*.log; u_in*.log\nrole.message = cs-method cs-uri-stem\ntitle.b = B"),
-            ("same.def", "# only a comment differs\nname = Same\nfiles = s.log"),
+            (
+                "iis.def",
+                "# new comment\nname = IIS\nfiles = u_ex*.log; u_in*.log\nrole.message = cs-method cs-uri-stem\ntitle.b = B",
+            ),
+            (
+                "same.def",
+                "# only a comment differs\nname = Same\nfiles = s.log",
+            ),
             ("new.def", "name = Brand new\nfiles = n.log"),
         ]);
         let own: BTreeMap<String, (PathBuf, String)> = [(
             "iis.def".to_owned(),
-            (PathBuf::from("own/iis.def"), "name = IIS\nfiles = u_ex*.log\nrole.message = cs-uri-stem\ntitle.b = B".to_owned()),
+            (
+                PathBuf::from("own/iis.def"),
+                "name = IIS\nfiles = u_ex*.log\nrole.message = cs-uri-stem\ntitle.b = B".to_owned(),
+            ),
         )]
         .into();
         let u = definition_updates(&known, &predefined, &own);
         let kinds: Vec<(&str, UpdateKind)> = u.iter().map(|d| (d.id.as_str(), d.kind)).collect();
         assert_eq!(
             kinds,
-            [("iis.def", UpdateKind::Changed), ("new.def", UpdateKind::New), ("old.def", UpdateKind::Removed)]
+            [
+                ("iis.def", UpdateKind::Changed),
+                ("new.def", UpdateKind::New),
+                ("old.def", UpdateKind::Removed)
+            ]
         );
         assert_eq!(u[1].name, "Brand new");
         assert_eq!(u[2].name, "Old one");
@@ -1299,9 +1494,24 @@ mod tests {
         assert_eq!(
             u[0].changes,
             [
-                KeyChange { key: "files".into(), old: s("u_ex*.log"), new: s("u_ex*.log; u_in*.log"), own: Some(s("u_ex*.log")) },
-                KeyChange { key: "title.a".into(), old: s("A"), new: None, own: Some(None) },
-                KeyChange { key: "title.b".into(), old: None, new: s("B"), own: Some(s("B")) },
+                KeyChange {
+                    key: "files".into(),
+                    old: s("u_ex*.log"),
+                    new: s("u_ex*.log; u_in*.log"),
+                    own: Some(s("u_ex*.log"))
+                },
+                KeyChange {
+                    key: "title.a".into(),
+                    old: s("A"),
+                    new: None,
+                    own: Some(None)
+                },
+                KeyChange {
+                    key: "title.b".into(),
+                    old: None,
+                    new: s("B"),
+                    own: Some(s("B"))
+                },
             ]
         );
         assert!(definition_updates(&predefined, &predefined, &BTreeMap::new()).is_empty());

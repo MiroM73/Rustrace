@@ -1,26 +1,26 @@
-use crate::config::{Config, HighlightRule, HighlightScope, IntervalUnit};
 use crate::colfilter::ColumnFilter;
+use crate::config::{Config, HighlightRule, HighlightScope, IntervalUnit};
 use crate::errcodes::{self, CodeInfo};
-use crate::export::{self, ExportFormat, ReadableRow};
 use crate::excerpt;
+use crate::export::{self, ExportFormat, ReadableRow};
 #[cfg(windows)]
 use crate::fileassoc::{self, ExtStatus};
 use crate::i18n;
 use crate::logdef::{self, Column as LogColumn, ColumnKind, LogDef, Role, Schema};
 use crate::parser::{FormatChoice, LogSource, PollResult, Progress, Severity, SourceFile};
-use crate::store::{iso_to_ms, ms_to_iso, EntryRef, LogStore};
+use crate::store::{EntryRef, LogStore, iso_to_ms, ms_to_iso};
 use crate::t;
 use crate::update::{self, FormatState, Release, SessionState, WindowState};
 use eframe::egui::{
-    self, text::LayoutJob, Align, Color32, FontId, Key, Layout, Modifiers, RichText, Sense,
-    TextFormat, TextStyle,
+    self, Align, Color32, FontId, Key, Layout, Modifiers, RichText, Sense, TextFormat, TextStyle,
+    text::LayoutJob,
 };
 use egui_extras::{Column, TableBuilder};
 use regex::{Regex, RegexBuilder};
 use std::collections::HashMap;
 use std::path::PathBuf;
 use std::sync::atomic::Ordering;
-use std::sync::{mpsc, Arc};
+use std::sync::{Arc, mpsc};
 use std::time::{Duration, Instant};
 
 // The `impl App` blocks are split by area; every submodule starts with `use crate::app::*;`.
@@ -287,7 +287,11 @@ struct ExportKey {
 }
 
 impl App {
-    pub fn new(cc: &eframe::CreationContext<'_>, path: Option<String>, restore: Option<SessionState>) -> Self {
+    pub fn new(
+        cc: &eframe::CreationContext<'_>,
+        path: Option<String>,
+        restore: Option<SessionState>,
+    ) -> Self {
         let (mut cfg, existed) = Config::load();
         let lang_code = i18n::set_language(&cfg.language);
         if !existed {
@@ -382,7 +386,10 @@ impl App {
         app.load_defs();
         app.check_def_updates();
         app.apply_theme(&cc.egui_ctx);
-        let zoom = app.cfg.ui_zoom.clamp(*UI_ZOOM_RANGE.start(), *UI_ZOOM_RANGE.end());
+        let zoom = app
+            .cfg
+            .ui_zoom
+            .clamp(*UI_ZOOM_RANGE.start(), *UI_ZOOM_RANGE.end());
         cc.egui_ctx.set_zoom_factor(zoom);
         app.recompile_rules();
         if let Some(p) = path {
@@ -418,8 +425,8 @@ impl App {
                 self.cfg.font_size = (self.cfg.font_size * delta)
                     .clamp(*FONT_SIZE_RANGE.start(), *FONT_SIZE_RANGE.end());
             } else {
-                let zoom = (ctx.zoom_factor() * delta)
-                    .clamp(*UI_ZOOM_RANGE.start(), *UI_ZOOM_RANGE.end());
+                let zoom =
+                    (ctx.zoom_factor() * delta).clamp(*UI_ZOOM_RANGE.start(), *UI_ZOOM_RANGE.end());
                 ctx.set_zoom_factor(zoom);
             }
             self.cfg_dirty = true;
@@ -484,8 +491,16 @@ impl App {
 
 /// Target platform and build profile, e.g. "windows x86_64, release".
 fn build_info() -> String {
-    let profile = if cfg!(debug_assertions) { "debug" } else { "release" };
-    format!("{} {}, {profile}", std::env::consts::OS, std::env::consts::ARCH)
+    let profile = if cfg!(debug_assertions) {
+        "debug"
+    } else {
+        "release"
+    };
+    format!(
+        "{} {}, {profile}",
+        std::env::consts::OS,
+        std::env::consts::ARCH
+    )
 }
 
 impl eframe::App for App {

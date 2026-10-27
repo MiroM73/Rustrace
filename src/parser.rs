@@ -22,8 +22,8 @@ use crate::store::LogStore;
 use std::fs::File;
 use std::io::{Read, Seek, SeekFrom};
 use std::path::{Path, PathBuf};
-use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::Arc;
+use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub enum Severity {
@@ -162,29 +162,48 @@ pub fn rotated_parts(active: &Path) -> Vec<PathBuf> {
         return Vec::new();
     }
     // "log" → "lo_"
-    let rotated_ext = format!("{}_", &ext[..ext.len() - ext.chars().last().map_or(0, char::len_utf8)]);
+    let rotated_ext = format!(
+        "{}_",
+        &ext[..ext.len() - ext.chars().last().map_or(0, char::len_utf8)]
+    );
     let is_part = |name: &str| {
         let name = name.to_lowercase();
         if name == format!("{stem}.{rotated_ext}") {
             return true;
         }
         // stem-YYYYMMDD-HHMMSS.ext
-        let Some(rest) = name.strip_prefix(&format!("{stem}-")) else { return false };
-        let Some(stamp) = rest.strip_suffix(&format!(".{ext}")) else { return false };
+        let Some(rest) = name.strip_prefix(&format!("{stem}-")) else {
+            return false;
+        };
+        let Some(stamp) = rest.strip_suffix(&format!(".{ext}")) else {
+            return false;
+        };
         let b = stamp.as_bytes();
         b.len() == 15
             && b[8] == b'-'
-            && b.iter().enumerate().all(|(i, c)| i == 8 || c.is_ascii_digit())
+            && b.iter()
+                .enumerate()
+                .all(|(i, c)| i == 8 || c.is_ascii_digit())
     };
-    let dir = if dir.as_os_str().is_empty() { Path::new(".") } else { dir };
-    let Ok(rd) = std::fs::read_dir(dir) else { return Vec::new() };
+    let dir = if dir.as_os_str().is_empty() {
+        Path::new(".")
+    } else {
+        dir
+    };
+    let Ok(rd) = std::fs::read_dir(dir) else {
+        return Vec::new();
+    };
     let mut parts: Vec<(std::time::SystemTime, String, PathBuf)> = rd
         .flatten()
         .filter_map(|e| {
             let name = e.file_name().to_string_lossy().into_owned();
             let meta = e.metadata().ok()?;
             (meta.is_file() && is_part(&name)).then(|| {
-                (meta.modified().unwrap_or(std::time::UNIX_EPOCH), name.to_lowercase(), e.path())
+                (
+                    meta.modified().unwrap_or(std::time::UNIX_EPOCH),
+                    name.to_lowercase(),
+                    e.path(),
+                )
             })
         })
         .collect();
@@ -339,7 +358,9 @@ impl LogSource {
     /// with the same bytes and is at least as long as what was read).
     fn find_rotated(&self) -> Option<PathBuf> {
         rotated_parts(&self.path).into_iter().rev().find(|p| {
-            let Ok(mut f) = File::open(p) else { return false };
+            let Ok(mut f) = File::open(p) else {
+                return false;
+            };
             let long_enough = f.metadata().is_ok_and(|m| m.len() >= self.offset);
             long_enough && self.head_matches(&mut f).unwrap_or(false)
         })
@@ -357,7 +378,11 @@ impl LogSource {
         let mut rotated = None;
         if self.offset > 0 && (len < self.offset || !self.head_matches(&mut f)?) {
             // The file was rotated, truncated or replaced by a new one.
-            rotated = if self.merge_rotated { self.find_rotated() } else { None };
+            rotated = if self.merge_rotated {
+                self.find_rotated()
+            } else {
+                None
+            };
             if rotated.is_none() {
                 self.reset();
             }
@@ -369,9 +394,12 @@ impl LogSource {
             Vec::new()
         };
         let size = |p: &Path| std::fs::metadata(p).map_or(0, |m| m.len());
-        let rest_of_rotated = rotated.as_deref().map_or(0, |p| size(p).saturating_sub(self.offset));
+        let rest_of_rotated = rotated
+            .as_deref()
+            .map_or(0, |p| size(p).saturating_sub(self.offset));
         let active_start = if rotated.is_some() { 0 } else { self.offset };
-        let total = older.iter().map(|p| size(p)).sum::<u64>() + rest_of_rotated + len - active_start;
+        let total =
+            older.iter().map(|p| size(p)).sum::<u64>() + rest_of_rotated + len - active_start;
         if !is_reset && rotated.is_none() && len == self.offset {
             return Ok(PollResult::Unchanged);
         }
@@ -411,7 +439,12 @@ impl LogSource {
         }
         let id = self.active_id();
         self.read_to_end(&mut f, id, &mut committed, progress, &mut reserved)?;
-        self.file_size = self.files.iter().filter_map(|s| s.path.as_deref()).map(size).sum();
+        self.file_size = self
+            .files
+            .iter()
+            .filter_map(|s| s.path.as_deref())
+            .map(size)
+            .sum();
 
         // Provisional entries: incomplete last line + unfinished multi-line entry.
         // The parser state is not changed – the next refresh replaces them with real ones.
@@ -478,7 +511,10 @@ impl LogSource {
         let mut buf = Vec::new();
         while self.offset < len {
             if progress.cancel.load(Ordering::Relaxed) {
-                return Err(std::io::Error::new(std::io::ErrorKind::Interrupted, "cancelled"));
+                return Err(std::io::Error::new(
+                    std::io::ErrorKind::Interrupted,
+                    "cancelled",
+                ));
             }
             buf.clear();
             let want = (len - self.offset).min(CHUNK);
@@ -740,7 +776,11 @@ fn parse_cmtrace(line_no: usize, s: &str, kw: bool) -> LogEntry {
     let start = s.find(CM_START).map_or(0, |i| i + CM_START.len());
     let end = s.find(CM_END).unwrap_or(s.len());
     let message = s[start..end.max(start)].to_owned();
-    let rest = if end < s.len() { &s[end + CM_END.len()..] } else { "" };
+    let rest = if end < s.len() {
+        &s[end + CM_END.len()..]
+    } else {
+        ""
+    };
 
     let time = attr(rest, "time").unwrap_or("");
     let date = attr(rest, "date").unwrap_or("");
@@ -893,18 +933,27 @@ mod tests {
         std::fs::write(&p, "a\nb\npartial").unwrap();
         let mut s = LogSource::new(&p, true);
         match s.poll(&Progress::default()).unwrap() {
-            PollResult::Reset { committed, provisional } => {
+            PollResult::Reset {
+                committed,
+                provisional,
+            } => {
                 assert_eq!(committed.len(), 2);
                 assert_eq!(provisional.len(), 1);
                 assert_eq!(provisional[0].message, "partial");
             }
             _ => panic!(),
         }
-        assert!(matches!(s.poll(&Progress::default()).unwrap(), PollResult::Unchanged));
+        assert!(matches!(
+            s.poll(&Progress::default()).unwrap(),
+            PollResult::Unchanged
+        ));
         let mut f = std::fs::OpenOptions::new().append(true).open(&p).unwrap();
         f.write_all(b" end\nc\n").unwrap();
         match s.poll(&Progress::default()).unwrap() {
-            PollResult::Appended { committed, provisional } => {
+            PollResult::Appended {
+                committed,
+                provisional,
+            } => {
                 assert_eq!(committed.len(), 2);
                 assert_eq!(committed.at(0).message, "partial end");
                 assert_eq!(committed.at(0).line_no, 3);
@@ -913,7 +962,10 @@ mod tests {
             _ => panic!(),
         }
         std::fs::write(&p, "new\n").unwrap();
-        assert!(matches!(s.poll(&Progress::default()).unwrap(), PollResult::Reset { .. }));
+        assert!(matches!(
+            s.poll(&Progress::default()).unwrap(),
+            PollResult::Reset { .. }
+        ));
         std::fs::remove_dir_all(&dir).ok();
     }
 
@@ -938,16 +990,27 @@ mod tests {
             "2026-10-23 10:00:00, Info                  CBS    one\n\
              2026-10-23 10:00:01, Error                 CBS    two\n   detail\n",
         );
-        let PollResult::Reset { committed, provisional } = s.poll(&Progress::default()).unwrap() else {
+        let PollResult::Reset {
+            committed,
+            provisional,
+        } = s.poll(&Progress::default()).unwrap()
+        else {
             panic!()
         };
         assert_eq!(s.schema().name, "Windows CBS log");
         assert_eq!(committed.len(), 1);
         assert_eq!(provisional[0].message, "two\n   detail");
         assert_eq!(provisional[0].severity, Severity::Error);
-        let mut f = std::fs::OpenOptions::new().append(true).open(&s.path).unwrap();
-        f.write_all(b"   more\n2026-10-23 10:00:02, Info                  CBS    three\n").unwrap();
-        let PollResult::Appended { committed, provisional } = s.poll(&Progress::default()).unwrap()
+        let mut f = std::fs::OpenOptions::new()
+            .append(true)
+            .open(&s.path)
+            .unwrap();
+        f.write_all(b"   more\n2026-10-23 10:00:02, Info                  CBS    three\n")
+            .unwrap();
+        let PollResult::Appended {
+            committed,
+            provisional,
+        } = s.poll(&Progress::default()).unwrap()
         else {
             panic!()
         };
@@ -971,7 +1034,10 @@ mod tests {
         assert_eq!(committed.at(0).severity, Severity::Error);
 
         // CMTrace content with a matching definition name pattern only by content → built-in.
-        let mut s = open("other.log", "<![LOG[Hello]LOG]!><time=\"10:00:00.000+000\" date=\"10-23-2026\" component=\"C\" context=\"\" type=\"1\" thread=\"1\" file=\"\">\n");
+        let mut s = open(
+            "other.log",
+            "<![LOG[Hello]LOG]!><time=\"10:00:00.000+000\" date=\"10-23-2026\" component=\"C\" context=\"\" type=\"1\" thread=\"1\" file=\"\">\n",
+        );
         s.poll(&Progress::default()).unwrap();
         assert_eq!(s.schema().name, "");
 
@@ -982,12 +1048,17 @@ mod tests {
             panic!()
         };
         assert_eq!(s.schema().name, "");
-        assert_eq!(committed.at(0).message, "2026-10-23 10:00:00, Info  DISM   x");
+        assert_eq!(
+            committed.at(0).message,
+            "2026-10-23 10:00:00, Info  DISM   x"
+        );
         std::fs::remove_dir_all(&dir).ok();
     }
 
     fn messages(s: &LogStore) -> Vec<(u16, usize, &str)> {
-        (0..s.len()).map(|i| (s.file(i), s.line_no(i), s.message(i))).collect()
+        (0..s.len())
+            .map(|i| (s.file(i), s.line_no(i), s.message(i)))
+            .collect()
     }
 
     fn test_dir(name: &str) -> PathBuf {
@@ -1040,16 +1111,29 @@ mod tests {
 
         let mut s = LogSource::new(dir.join("service.log"), false);
         s.merge_rotated = true;
-        let PollResult::Reset { committed, provisional } = s.poll(&Progress::default()).unwrap() else {
+        let PollResult::Reset {
+            committed,
+            provisional,
+        } = s.poll(&Progress::default()).unwrap()
+        else {
             panic!()
         };
         assert!(provisional.is_empty());
         assert_eq!(
             messages(&committed),
-            [(0, 1, "h1"), (0, 2, "h2"), (1, 1, "r1"), (2, 1, "a1"), (2, 2, "a2")]
+            [
+                (0, 1, "h1"),
+                (0, 2, "h2"),
+                (1, 1, "r1"),
+                (2, 1, "a1"),
+                (2, 2, "a2")
+            ]
         );
         let names: Vec<&str> = s.files().iter().map(|f| f.name.as_str()).collect();
-        assert_eq!(names, ["service-20261023-101500.log", "service.lo_", "service.log"]);
+        assert_eq!(
+            names,
+            ["service-20261023-101500.log", "service.lo_", "service.log"]
+        );
 
         // Without merging only the active file is read.
         let mut s = LogSource::new(dir.join("service.log"), false);
@@ -1070,7 +1154,11 @@ mod tests {
         std::fs::write(&log, "a\nb\npart").unwrap();
         let mut s = LogSource::new(&log, false);
         s.merge_rotated = true;
-        let PollResult::Reset { committed, provisional } = s.poll(&Progress::default()).unwrap() else {
+        let PollResult::Reset {
+            committed,
+            provisional,
+        } = s.poll(&Progress::default()).unwrap()
+        else {
             panic!()
         };
         assert_eq!(committed.len(), 2);
@@ -1082,13 +1170,23 @@ mod tests {
         drop(f);
         std::fs::rename(&log, &lo).unwrap();
         std::fs::write(&log, "x\ny\n").unwrap();
-        let PollResult::Appended { committed, provisional } = s.poll(&Progress::default()).unwrap()
+        let PollResult::Appended {
+            committed,
+            provisional,
+        } = s.poll(&Progress::default()).unwrap()
         else {
             panic!("rotation must not reset the log")
         };
         assert!(provisional.is_empty());
-        assert_eq!(messages(&committed), [(0, 3, "part end"), (0, 4, "c"), (1, 1, "x"), (1, 2, "y")]);
-        let files: Vec<(&str, bool)> = s.files().iter().map(|f| (f.name.as_str(), f.path.is_some())).collect();
+        assert_eq!(
+            messages(&committed),
+            [(0, 3, "part end"), (0, 4, "c"), (1, 1, "x"), (1, 2, "y")]
+        );
+        let files: Vec<(&str, bool)> = s
+            .files()
+            .iter()
+            .map(|f| (f.name.as_str(), f.path.is_some()))
+            .collect();
         assert_eq!(files, [("service.lo_", true), ("service.log", true)]);
 
         // Next rotation overwrites service.lo_ – its old lines are no longer in any file.
@@ -1101,9 +1199,23 @@ mod tests {
             panic!()
         };
         assert_eq!(messages(&committed), [(1, 3, "z"), (2, 1, "q")]);
-        let files: Vec<(&str, bool)> = s.files().iter().map(|f| (f.name.as_str(), f.path.is_some())).collect();
-        assert_eq!(files, [("service.lo_", false), ("service.lo_", true), ("service.log", true)]);
-        assert!(matches!(s.poll(&Progress::default()).unwrap(), PollResult::Unchanged));
+        let files: Vec<(&str, bool)> = s
+            .files()
+            .iter()
+            .map(|f| (f.name.as_str(), f.path.is_some()))
+            .collect();
+        assert_eq!(
+            files,
+            [
+                ("service.lo_", false),
+                ("service.lo_", true),
+                ("service.log", true)
+            ]
+        );
+        assert!(matches!(
+            s.poll(&Progress::default()).unwrap(),
+            PollResult::Unchanged
+        ));
         std::fs::remove_dir_all(&dir).ok();
     }
 
@@ -1134,7 +1246,10 @@ mod tests {
         let mut paths = Vec::new();
         let mut dirs = vec![root.clone()];
         while let Some(d) = dirs.pop() {
-            for e in std::fs::read_dir(&d).expect("run scripts/gen_testlogs.py first").flatten() {
+            for e in std::fs::read_dir(&d)
+                .expect("run scripts/gen_testlogs.py first")
+                .flatten()
+            {
                 let p = e.path();
                 if p.is_dir() {
                     dirs.push(p);
@@ -1150,21 +1265,34 @@ mod tests {
             s.merge_rotated = true;
             let t = std::time::Instant::now();
             let (store, provisional) = match s.poll(&Progress::default()).unwrap() {
-                PollResult::Reset { committed, provisional } => (committed, provisional.len()),
+                PollResult::Reset {
+                    committed,
+                    provisional,
+                } => (committed, provisional.len()),
                 _ => panic!(),
             };
-            let count = |sev| (0..store.len()).filter(|&i| store.at(i).severity == sev).count();
+            let count = |sev| {
+                (0..store.len())
+                    .filter(|&i| store.at(i).severity == sev)
+                    .count()
+            };
             let name = s.schema().name.clone();
             println!(
                 "{:<40} {:<22} {:<11} files={} entries={} (+{provisional} provisional) errors={} warnings={} dated={} {:.2?}",
                 p.strip_prefix(&root).unwrap().display().to_string(),
-                if name.is_empty() { "CMTrace/plain (built-in)".to_owned() } else { name },
+                if name.is_empty() {
+                    "CMTrace/plain (built-in)".to_owned()
+                } else {
+                    name
+                },
                 s.encoding_name(),
                 s.files().len(),
                 store.len(),
                 count(Severity::Error),
                 count(Severity::Warning),
-                (0..store.len()).filter(|&i| store.timestamp(i).is_some()).count(),
+                (0..store.len())
+                    .filter(|&i| store.timestamp(i).is_some())
+                    .count(),
                 t.elapsed()
             );
         }
@@ -1215,13 +1343,19 @@ mod tests {
         let t = std::time::Instant::now();
         let mut s = LogSource::new(&path, true);
         s.temp_file_threshold = mapped.then_some(0);
-        let PollResult::Reset { committed: entries, .. } = s.poll(&Progress::default()).unwrap() else {
+        let PollResult::Reset {
+            committed: entries, ..
+        } = s.poll(&Progress::default()).unwrap()
+        else {
             panic!()
         };
         let load = t.elapsed();
         let after = mem_mb();
 
-        let re = regex::RegexBuilder::new("error 0x8007").case_insensitive(true).build().unwrap();
+        let re = regex::RegexBuilder::new("error 0x8007")
+            .case_insensitive(true)
+            .build()
+            .unwrap();
         let t = std::time::Instant::now();
         let hits = (0..entries.len())
             .filter(|&i| {
@@ -1239,7 +1373,9 @@ mod tests {
             x ^= x >> 7;
             x ^= x << 17;
             let e = entries.at((x % entries.len() as u64) as usize);
-            sum += e.message.lines().next().unwrap_or("").len() + e.component.len() + e.datetime().len();
+            sum += e.message.lines().next().unwrap_or("").len()
+                + e.component.len()
+                + e.datetime().len();
         }
         let random = t.elapsed();
         println!(
@@ -1309,7 +1445,10 @@ mod tests {
         let prog = Progress::default();
         prog.cancel.store(true, Ordering::Relaxed);
         let mut s = LogSource::new(&p, true);
-        assert_eq!(s.poll(&prog).err().unwrap().kind(), std::io::ErrorKind::Interrupted);
+        assert_eq!(
+            s.poll(&prog).err().unwrap().kind(),
+            std::io::ErrorKind::Interrupted
+        );
         std::fs::remove_dir_all(&dir).ok();
     }
 }

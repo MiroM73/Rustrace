@@ -26,9 +26,15 @@ impl App {
             ui.separator();
 
             let (label, tip) = if self.cfg.auto_refresh {
-                (format!("⏸ {}", t!("toolbar.pause")), t!("toolbar.pause.tip"))
+                (
+                    format!("⏸ {}", t!("toolbar.pause")),
+                    t!("toolbar.pause.tip"),
+                )
             } else {
-                (format!("▶ {}", t!("toolbar.resume")), t!("toolbar.resume.tip"))
+                (
+                    format!("▶ {}", t!("toolbar.resume")),
+                    t!("toolbar.resume.tip"),
+                )
             };
             let btn = egui::Button::new(label).selected(!self.cfg.auto_refresh);
             if ui.add(btn).on_hover_text(tip).clicked() {
@@ -112,13 +118,22 @@ impl App {
             ui.separator();
             let mut sev_changed = false;
             sev_changed |= ui
-                .toggle_value(&mut self.show_sev[0], format!("ℹ {}", t!("severity.info.plural")))
+                .toggle_value(
+                    &mut self.show_sev[0],
+                    format!("ℹ {}", t!("severity.info.plural")),
+                )
                 .changed();
             sev_changed |= ui
-                .toggle_value(&mut self.show_sev[1], format!("⚠ {}", t!("severity.warning.plural")))
+                .toggle_value(
+                    &mut self.show_sev[1],
+                    format!("⚠ {}", t!("severity.warning.plural")),
+                )
                 .changed();
             sev_changed |= ui
-                .toggle_value(&mut self.show_sev[2], format!("⛔ {}", t!("severity.error.plural")))
+                .toggle_value(
+                    &mut self.show_sev[2],
+                    format!("⛔ {}", t!("severity.error.plural")),
+                )
                 .changed();
             if sev_changed {
                 self.filtered.clear();
@@ -167,7 +182,10 @@ impl App {
                 }
                 if !self.cfg.search_history.is_empty() {
                     ui.separator();
-                    if ui.button(format!("🗑 {}", t!("search.history.clear"))).clicked() {
+                    if ui
+                        .button(format!("🗑 {}", t!("search.history.clear")))
+                        .clicked()
+                    {
                         self.cfg.search_history.clear();
                         self.cfg_dirty = true;
                         ui.close();
@@ -244,10 +262,18 @@ impl App {
             {
                 self.cfg_dirty = true;
             }
-            if ui.button("⬆").on_hover_text(t!("search.prev.tip")).clicked() {
+            if ui
+                .button("⬆")
+                .on_hover_text(t!("search.prev.tip"))
+                .clicked()
+            {
                 self.find(false);
             }
-            if ui.button("⬇").on_hover_text(t!("search.next.tip")).clicked() {
+            if ui
+                .button("⬇")
+                .on_hover_text(t!("search.next.tip"))
+                .clicked()
+            {
                 self.find(true);
             }
             ui.separator();
@@ -301,7 +327,8 @@ impl App {
                 .on_hover_text(t!("time.tip"))
                 .changed();
             if self.time_invalid.0 {
-                ui.colored_label(RED, "⚠").on_hover_text(t!("time.invalid", example = example));
+                ui.colored_label(RED, "⚠")
+                    .on_hover_text(t!("time.invalid", example = example));
             }
             ui.label(t!("time.to"));
             changed |= ui
@@ -309,18 +336,25 @@ impl App {
                 .on_hover_text(t!("time.tip"))
                 .changed();
             if self.time_invalid.1 {
-                ui.colored_label(RED, "⚠").on_hover_text(t!("time.invalid", example = example));
+                ui.colored_label(RED, "⚠")
+                    .on_hover_text(t!("time.invalid", example = example));
             }
             ui.separator();
             if ui
-                .add_enabled(selected.is_some(), egui::Button::new(t!("time.from_selected")))
+                .add_enabled(
+                    selected.is_some(),
+                    egui::Button::new(t!("time.from_selected")),
+                )
                 .clicked()
             {
                 self.time_from = selected.clone().unwrap_or_default();
                 changed = true;
             }
             if ui
-                .add_enabled(selected.is_some(), egui::Button::new(t!("time.to_selected")))
+                .add_enabled(
+                    selected.is_some(),
+                    egui::Button::new(t!("time.to_selected")),
+                )
                 .clicked()
             {
                 self.time_to = selected.clone().unwrap_or_default();
@@ -332,7 +366,9 @@ impl App {
                     .on_hover_text(t!("export.since.presets.tip"))
                     .clicked()
                 {
-                    let from = latest.as_deref().and_then(|l| export::hours_before(l, hours));
+                    let from = latest
+                        .as_deref()
+                        .and_then(|l| export::hours_before(l, hours));
                     self.time_from = from.map(|f| self.input_dt(&f)).unwrap_or_default();
                     self.time_to.clear();
                     changed = true;

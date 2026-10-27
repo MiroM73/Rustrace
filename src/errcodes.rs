@@ -252,7 +252,13 @@ mod os {
     fn module(name: &str) -> *const c_void {
         let wide: Vec<u16> = name.encode_utf16().chain(std::iter::once(0)).collect();
         // SAFETY: the name is NUL-terminated; the library is loaded only as a data file (message resources).
-        unsafe { LoadLibraryExW(wide.as_ptr(), std::ptr::null_mut(), LOAD_LIBRARY_AS_DATAFILE) }
+        unsafe {
+            LoadLibraryExW(
+                wide.as_ptr(),
+                std::ptr::null_mut(),
+                LOAD_LIBRARY_AS_DATAFILE,
+            )
+        }
     }
 
     pub fn message(hr: u32, win32: Option<u32>) -> Option<String> {
@@ -306,6 +312,9 @@ mod tests {
             "Failed, error 0x80070005, content 0x0000ABCD, exit code 1603, hr=-2147024891 (dup)",
         );
         assert_eq!(c, vec![0x8007_0005, 1603]);
-        assert_eq!(find_codes("Process terminated with exit code 0"), Vec::<u32>::new());
+        assert_eq!(
+            find_codes("Process terminated with exit code 0"),
+            Vec::<u32>::new()
+        );
     }
 }

@@ -14,7 +14,10 @@ impl App {
                 || (r.rule.match_component && Self::other_columns_match(&r.regex, e));
             if hit {
                 let (fg, bg) = r.rule.colors(self.dark);
-                return (r.rule.use_fg.then(|| c32(fg)), r.rule.use_bg.then(|| c32(bg)));
+                return (
+                    r.rule.use_fg.then(|| c32(fg)),
+                    r.rule.use_bg.then(|| c32(bg)),
+                );
             }
         }
         if self.cfg.color_by_severity {
@@ -35,7 +38,13 @@ impl App {
     /// the search but the first match in the message would not be visible there (a later line,
     /// past the length cut or past the right edge of the column), an excerpt starting shortly
     /// before the match is shown instead, so the highlighted match is in view.
-    pub(in crate::app) fn message_cell_text(&self, ui: &egui::Ui, message: &str, hit: bool, font: &FontId) -> String {
+    pub(in crate::app) fn message_cell_text(
+        &self,
+        ui: &egui::Ui,
+        message: &str,
+        hit: bool,
+        font: &FontId,
+    ) -> String {
         let text = excerpt::first_line(message, MAX_CELL_CHARS);
         let Some(m) = hit
             .then_some(self.search_re.as_ref())
@@ -145,10 +154,11 @@ impl App {
             self.table_scroll_x -= parent.input(|i| i.smooth_scroll_delta.x);
         }
         self.table_scroll_x = self.table_scroll_x.clamp(0.0, max_offset);
-        let mut child = parent.new_child(egui::UiBuilder::new().max_rect(egui::Rect::from_min_max(
-            egui::pos2(view.min.x - self.table_scroll_x, view.min.y),
-            view.max,
-        )));
+        let mut child =
+            parent.new_child(egui::UiBuilder::new().max_rect(egui::Rect::from_min_max(
+                egui::pos2(view.min.x - self.table_scroll_x, view.min.y),
+                view.max,
+            )));
         child.set_clip_rect(view.intersect(parent.clip_rect()));
         let ui = &mut child;
 
@@ -191,7 +201,12 @@ impl App {
         let show_filters = self.cfg.show_column_filters;
         let mut filter_texts: Vec<String> = columns
             .iter()
-            .map(|c| self.col_filter_text.get(&c.kind).cloned().unwrap_or_default())
+            .map(|c| {
+                self.col_filter_text
+                    .get(&c.kind)
+                    .cloned()
+                    .unwrap_or_default()
+            })
             .collect();
         let mut filters_changed = false;
         let mut clear_filters = false;
@@ -226,7 +241,9 @@ impl App {
                                 .hint_text(t!("filter.hint"))
                                 .desired_width(f32::INFINITY);
                             if active {
-                                edit = edit.background_color(c32(self.cfg.palette(self.dark).search.1).gamma_multiply(0.35));
+                                edit = edit.background_color(
+                                    c32(self.cfg.palette(self.dark).search.1).gamma_multiply(0.35),
+                                );
                             }
                             filters_changed |=
                                 ui.add(edit).on_hover_text(t!("filter.tip")).changed();
@@ -421,7 +438,12 @@ impl App {
 }
 
 /// Builds formatted text with highlighted pieces. Later spans take precedence.
-pub(in crate::app) fn build_job(text: &str, spans: &[Span], default_fg: Color32, font: &FontId) -> LayoutJob {
+pub(in crate::app) fn build_job(
+    text: &str,
+    spans: &[Span],
+    default_fg: Color32,
+    font: &FontId,
+) -> LayoutJob {
     let mut job = LayoutJob::default();
     if spans.is_empty() {
         job.append(

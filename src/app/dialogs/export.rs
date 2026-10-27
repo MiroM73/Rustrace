@@ -42,7 +42,11 @@ impl App {
 
     /// Newest timestamp in the log (cached).
     pub(in crate::app) fn latest_ts(&mut self) -> Option<String> {
-        if self.latest_ts.as_ref().is_none_or(|(g, _)| *g != self.data_gen) {
+        if self
+            .latest_ts
+            .as_ref()
+            .is_none_or(|(g, _)| *g != self.data_gen)
+        {
             let latest = export::latest_timestamp(&self.entries).map(ms_to_iso);
             self.latest_ts = Some((self.data_gen, latest));
         }
@@ -52,7 +56,11 @@ impl App {
     /// Computes what will be exported: highlighted rows → time filter → context ranges
     /// merged → older context clipped → only the last N blocks.
     pub(in crate::app) fn export_plan(&mut self) -> ExportPlan {
-        let (before, after, len) = (self.cfg.export_before, self.cfg.export_after, self.entries.len());
+        let (before, after, len) = (
+            self.cfg.export_before,
+            self.cfg.export_after,
+            self.entries.len(),
+        );
         let since = if self.cfg.export_since_enabled {
             match export::parse_datetime_input(&self.cfg.export_since, &self.date_format) {
                 Some(iso) => Some(iso),
@@ -78,7 +86,10 @@ impl App {
         let hits = export::filter_hits_since(&all_hits, &self.entries, since);
         let blocks = export::merge_ranges(&hits, before, after, len);
         let blocks = export::clip_blocks_since(&blocks, &self.entries, since);
-        let last = self.cfg.export_last_enabled.then_some(self.cfg.export_last_blocks);
+        let last = self
+            .cfg
+            .export_last_enabled
+            .then_some(self.cfg.export_last_blocks);
         let blocks = export::keep_last_blocks(blocks, last);
         // Count only hits that are really exported.
         let hits = hits
@@ -114,18 +125,25 @@ impl App {
             .resizable(false)
             .default_width(520.0)
             .show(ctx, |ui| {
-                egui::Grid::new("export_grid").spacing([12.0, 6.0]).show(ui, |ui| {
-                    ui.label(t!("export.before"));
-                    changed |= ui
-                        .add(egui::DragValue::new(&mut self.cfg.export_before).range(0..=100_000))
-                        .changed();
-                    ui.end_row();
-                    ui.label(t!("export.after"));
-                    changed |= ui
-                        .add(egui::DragValue::new(&mut self.cfg.export_after).range(0..=100_000))
-                        .changed();
-                    ui.end_row();
-                });
+                egui::Grid::new("export_grid")
+                    .spacing([12.0, 6.0])
+                    .show(ui, |ui| {
+                        ui.label(t!("export.before"));
+                        changed |= ui
+                            .add(
+                                egui::DragValue::new(&mut self.cfg.export_before)
+                                    .range(0..=100_000),
+                            )
+                            .changed();
+                        ui.end_row();
+                        ui.label(t!("export.after"));
+                        changed |= ui
+                            .add(
+                                egui::DragValue::new(&mut self.cfg.export_after).range(0..=100_000),
+                            )
+                            .changed();
+                        ui.end_row();
+                    });
                 ui.separator();
                 ui.label(t!("export.include"));
                 let (visible, total) = (self.filtered.len(), self.entries.len());
@@ -138,17 +156,22 @@ impl App {
                     .changed();
                 // The criteria are not used while every visible row counts as highlighted.
                 ui.add_enabled_ui(!self.cfg.export_visible_only, |ui| {
-                    changed |=
-                        ui.checkbox(&mut self.cfg.export_rules, t!("export.inc.rules")).changed();
-                    changed |=
-                        ui.checkbox(&mut self.cfg.export_errors, t!("export.inc.errors")).changed();
+                    changed |= ui
+                        .checkbox(&mut self.cfg.export_rules, t!("export.inc.rules"))
+                        .changed();
+                    changed |= ui
+                        .checkbox(&mut self.cfg.export_errors, t!("export.inc.errors"))
+                        .changed();
                     changed |= ui
                         .checkbox(&mut self.cfg.export_warnings, t!("export.inc.warnings"))
                         .changed();
                     changed |= ui
                         .add_enabled(
                             self.search_re.is_some(),
-                            egui::Checkbox::new(&mut self.cfg.export_search, t!("export.inc.search")),
+                            egui::Checkbox::new(
+                                &mut self.cfg.export_search,
+                                t!("export.inc.search"),
+                            ),
                         )
                         .changed();
                 });
@@ -199,7 +222,10 @@ impl App {
                             .and_then(|e| e.timestamp())
                             .map(ms_to_iso);
                         if ui
-                            .add_enabled(sel_ts.is_some(), egui::Button::new(t!("export.since.selected")))
+                            .add_enabled(
+                                sel_ts.is_some(),
+                                egui::Button::new(t!("export.since.selected")),
+                            )
                             .clicked()
                         {
                             preset = sel_ts;
@@ -214,7 +240,9 @@ impl App {
                                 .on_hover_text(t!("export.since.presets.tip"))
                                 .clicked()
                             {
-                                preset = latest.as_deref().and_then(|l| export::hours_before(l, hours));
+                                preset = latest
+                                    .as_deref()
+                                    .and_then(|l| export::hours_before(l, hours));
                             }
                         }
                     });
@@ -225,12 +253,18 @@ impl App {
                     if latest.is_none() {
                         ui.colored_label(ORANGE, t!("export.since.no_time"));
                     } else {
-                        match export::parse_datetime_input(&self.cfg.export_since, &self.date_format) {
+                        match export::parse_datetime_input(
+                            &self.cfg.export_since,
+                            &self.date_format,
+                        ) {
                             Some(iso) => {
                                 ui.weak(t!("export.since.parsed", time = self.input_dt(&iso)));
                             }
                             None => {
-                                ui.colored_label(RED, t!("export.since.invalid", example = example));
+                                ui.colored_label(
+                                    RED,
+                                    t!("export.since.invalid", example = example),
+                                );
                             }
                         }
                     }
@@ -244,7 +278,8 @@ impl App {
                     changed |= ui
                         .add_enabled(
                             self.cfg.export_last_enabled,
-                            egui::DragValue::new(&mut self.cfg.export_last_blocks).range(1..=100_000),
+                            egui::DragValue::new(&mut self.cfg.export_last_blocks)
+                                .range(1..=100_000),
                         )
                         .changed();
                     ui.label(t!("export.last.unit"));
@@ -268,7 +303,10 @@ impl App {
                 ui.horizontal(|ui| {
                     let busy = self.export_job.is_some() || self.loading.is_some();
                     if ui
-                        .add_enabled(rows > 0 && !busy, egui::Button::new(format!("💾 {}", t!("export.button"))))
+                        .add_enabled(
+                            rows > 0 && !busy,
+                            egui::Button::new(format!("💾 {}", t!("export.button"))),
+                        )
                         .clicked()
                     {
                         start = true;
@@ -294,7 +332,9 @@ impl App {
 
     /// Asks for the target file and writes the export in a background thread.
     pub(in crate::app) fn start_export(&mut self) {
-        let Some(src) = self.cur_path.clone() else { return };
+        let Some(src) = self.cur_path.clone() else {
+            return;
+        };
         let plan = self.export_plan();
         let blocks = plan.blocks;
         let hits = plan.hits;
@@ -317,12 +357,16 @@ impl App {
         if let Some(dir) = src.parent() {
             dlg = dlg.set_directory(dir);
         }
-        let Some(target) = dlg.save_file() else { return };
+        let Some(target) = dlg.save_file() else {
+            return;
+        };
 
         // Blocks split by file (a log merged from rotated parts); file names only then.
         let multi = self.files.len() > 1;
-        let segs: Vec<Vec<export::Segment>> =
-            blocks.iter().map(|&b| export::segments(&self.entries, b)).collect();
+        let segs: Vec<Vec<export::Segment>> = blocks
+            .iter()
+            .map(|&b| export::segments(&self.entries, b))
+            .collect();
         let seg_sep = |s: &export::Segment| {
             let name = multi.then(|| self.file_label(s.file));
             export::separator(name.as_deref(), s.lines.0, s.lines.1)
@@ -339,7 +383,14 @@ impl App {
                     many => {
                         let label: Vec<String> = many
                             .iter()
-                            .map(|s| format!("{}: {} – {}", self.file_label(s.file), s.lines.0, s.lines.1))
+                            .map(|s| {
+                                format!(
+                                    "{}: {} – {}",
+                                    self.file_label(s.file),
+                                    s.lines.0,
+                                    s.lines.1
+                                )
+                            })
                             .collect();
                         format!("-------- {} --------", label.join(", "))
                     }
@@ -406,11 +457,20 @@ impl App {
                             }
                         };
                         jobs[job].1.push(s.lines);
-                        PartSrc::File { job, range: jobs[job].1.len() - 1 }
+                        PartSrc::File {
+                            job,
+                            range: jobs[job].1.len() - 1,
+                        }
                     }
                     None => PartSrc::Text(
                         (s.entries.0..=s.entries.1)
-                            .flat_map(|i| self.entries.message(i).lines().map(str::to_owned).collect::<Vec<_>>())
+                            .flat_map(|i| {
+                                self.entries
+                                    .message(i)
+                                    .lines()
+                                    .map(str::to_owned)
+                                    .collect::<Vec<_>>()
+                            })
                             .collect(),
                     ),
                 };

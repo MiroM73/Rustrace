@@ -42,7 +42,11 @@ pub fn parse_version(s: &str) -> Option<[u64; 3]> {
     let s = s.trim().trim_start_matches(['v', 'V']);
     let s = s.split(['-', '+']).next()?;
     let mut parts = s.split('.').map(|p| p.parse::<u64>().ok());
-    let v = [parts.next()??, parts.next()??, parts.next().unwrap_or(Some(0))?];
+    let v = [
+        parts.next()??,
+        parts.next()??,
+        parts.next().unwrap_or(Some(0))?,
+    ];
     parts.next().is_none().then_some(v)
 }
 
@@ -62,7 +66,9 @@ pub fn current_version() -> String {
 
 /// GitHub API URL of the latest release of a `https://github.com/owner/repo` project.
 pub fn latest_release_url(repository: &str) -> Option<String> {
-    let rest = repository.trim_end_matches('/').strip_prefix("https://github.com/")?;
+    let rest = repository
+        .trim_end_matches('/')
+        .strip_prefix("https://github.com/")?;
     let mut it = rest.split('/');
     let (owner, repo) = (it.next()?, it.next()?);
     (it.next().is_none() && !owner.is_empty() && !repo.is_empty())
@@ -120,7 +126,10 @@ pub fn plain_notes(notes: &str) -> Vec<(bool, String)> {
                 None
             } else if trimmed.starts_with('#') {
                 Some((true, trimmed.trim_start_matches('#').trim().to_owned()))
-            } else if let Some(item) = trimmed.strip_prefix("* ").or_else(|| trimmed.strip_prefix("- ")) {
+            } else if let Some(item) = trimmed
+                .strip_prefix("* ")
+                .or_else(|| trimmed.strip_prefix("- "))
+            {
                 let indent = "    ".repeat((line.len() - trimmed.len()) / 2);
                 Some((false, format!("{indent}• {item}")))
             } else {
@@ -152,7 +161,10 @@ pub fn parse_sha256_file(text: &str, name: &str) -> Option<String> {
 
 pub fn sha256_hex(data: &[u8]) -> String {
     use sha2::Digest;
-    sha2::Sha256::digest(data).iter().map(|b| format!("{b:02x}")).collect()
+    sha2::Sha256::digest(data)
+        .iter()
+        .map(|b| format!("{b:02x}"))
+        .collect()
 }
 
 fn u16_at(b: &[u8], i: usize) -> Option<usize> {
@@ -235,9 +247,19 @@ pub struct Progress {
 
 /// Downloads the release ZIP, checks it and installs it over the program at `exe`.
 /// Returns warnings about files that could not be replaced (the program itself was).
-pub fn download_and_install(release: &Release, exe: &Path, progress: &Progress) -> Result<Vec<String>, String> {
-    let zip = release.zip.as_ref().ok_or("the release has no Windows ZIP archive")?;
-    let sha = release.sha256.as_ref().ok_or("the release has no checksum file")?;
+pub fn download_and_install(
+    release: &Release,
+    exe: &Path,
+    progress: &Progress,
+) -> Result<Vec<String>, String> {
+    let zip = release
+        .zip
+        .as_ref()
+        .ok_or("the release has no Windows ZIP archive")?;
+    let sha = release
+        .sha256
+        .as_ref()
+        .ok_or("the release has no checksum file")?;
     let sha_text = crate::http::get(&sha.url, "application/octet-stream", |n, _| n < 1 << 20)?;
     let expected = parse_sha256_file(&String::from_utf8_lossy(&sha_text), &zip.name)
         .ok_or("the checksum file could not be read")?;
@@ -261,7 +283,10 @@ pub fn old_exe_path(exe: &Path) -> PathBuf {
 
 /// Archive files relative to the program folder: the common top folder ("RusTrace/") removed.
 fn strip_top_folder(files: Vec<(String, Vec<u8>)>) -> Vec<(String, Vec<u8>)> {
-    let top = files.first().and_then(|(n, _)| n.split_once('/')).map(|(t, _)| format!("{t}/"));
+    let top = files
+        .first()
+        .and_then(|(n, _)| n.split_once('/'))
+        .map(|(t, _)| format!("{t}/"));
     match top {
         Some(top) if files.iter().all(|(n, _)| n.starts_with(&top)) => files
             .into_iter()
@@ -314,19 +339,23 @@ pub fn install(files: Vec<(String, Vec<u8>)>, exe: &Path) -> Result<Vec<String>,
 /// Deletes `rustrace.exe.old` left by an update (in the background: the old program may still be
 /// closing for a moment).
 pub fn cleanup_old() {
-    let Ok(exe) = std::env::current_exe() else { return };
+    let Ok(exe) = std::env::current_exe() else {
+        return;
+    };
     let old = old_exe_path(&exe);
     if !old.exists() {
         return;
     }
-    let _ = std::thread::Builder::new().name("rustrace-cleanup".into()).spawn(move || {
-        for _ in 0..20 {
-            if std::fs::remove_file(&old).is_ok() || !old.exists() {
-                return;
+    let _ = std::thread::Builder::new()
+        .name("rustrace-cleanup".into())
+        .spawn(move || {
+            for _ in 0..20 {
+                if std::fs::remove_file(&old).is_ok() || !old.exists() {
+                    return;
+                }
+                std::thread::sleep(std::time::Duration::from_millis(500));
             }
-            std::thread::sleep(std::time::Duration::from_millis(500));
-        }
-    });
+        });
 }
 
 /// Window position and size (logical points).
@@ -371,7 +400,8 @@ pub const RESTORE_ARG: &str = "--restore";
 impl SessionState {
     /// Saves the state into a temporary file for the new program.
     pub fn save_temp(&self) -> Result<PathBuf, String> {
-        let path = std::env::temp_dir().join(format!("rustrace-restore-{}.json", std::process::id()));
+        let path =
+            std::env::temp_dir().join(format!("rustrace-restore-{}.json", std::process::id()));
         let json = serde_json::to_string(self).map_err(|e| e.to_string())?;
         std::fs::write(&path, json).map_err(|e| format!("{}: {e}", path.display()))?;
         Ok(path)
@@ -460,10 +490,19 @@ mod tests {
     #[test]
     fn sha256_files() {
         let h = "a".repeat(64);
-        assert_eq!(parse_sha256_file(&format!("{h}  RusTrace.zip\n"), "rustrace.zip"), Some(h.clone()));
-        assert_eq!(parse_sha256_file(&format!("{h} *RusTrace.zip"), "RusTrace.zip"), Some(h.clone()));
+        assert_eq!(
+            parse_sha256_file(&format!("{h}  RusTrace.zip\n"), "rustrace.zip"),
+            Some(h.clone())
+        );
+        assert_eq!(
+            parse_sha256_file(&format!("{h} *RusTrace.zip"), "RusTrace.zip"),
+            Some(h.clone())
+        );
         assert_eq!(parse_sha256_file(&h.to_uppercase(), "x"), Some(h.clone()));
-        assert_eq!(parse_sha256_file(&format!("{h}  other.zip"), "RusTrace.zip"), None);
+        assert_eq!(
+            parse_sha256_file(&format!("{h}  other.zip"), "RusTrace.zip"),
+            None
+        );
         assert_eq!(parse_sha256_file("abc  RusTrace.zip", "RusTrace.zip"), None);
         assert_eq!(
             sha256_hex(b"abc"),
@@ -478,7 +517,8 @@ mod tests {
         let mut central = Vec::new();
         for (name, data) in entries {
             let packed = if deflate {
-                let mut e = flate2::write::DeflateEncoder::new(Vec::new(), flate2::Compression::best());
+                let mut e =
+                    flate2::write::DeflateEncoder::new(Vec::new(), flate2::Compression::best());
                 e.write_all(data).unwrap();
                 e.finish().unwrap()
             } else {
@@ -524,9 +564,15 @@ mod tests {
     fn unzip_stored_and_deflated() {
         let text = b"key = value\n".repeat(50);
         for deflate in [false, true] {
-            let zip = make_zip(&[("RusTrace/", b""), ("RusTrace/lang/en.lang", &text)], deflate);
+            let zip = make_zip(
+                &[("RusTrace/", b""), ("RusTrace/lang/en.lang", &text)],
+                deflate,
+            );
             let files = unzip(&zip).unwrap();
-            assert_eq!(files, vec![("RusTrace/lang/en.lang".to_owned(), text.clone())]);
+            assert_eq!(
+                files,
+                vec![("RusTrace/lang/en.lang".to_owned(), text.clone())]
+            );
         }
         let mut broken = make_zip(&[("a.txt", b"hello")], false);
         let i = broken.windows(5).position(|w| w == b"hello").unwrap();
@@ -538,7 +584,8 @@ mod tests {
 
     #[test]
     fn install_replaces_program_and_files() {
-        let dir = std::env::temp_dir().join(format!("rustrace-install-test-{}", std::process::id()));
+        let dir =
+            std::env::temp_dir().join(format!("rustrace-install-test-{}", std::process::id()));
         let _ = std::fs::remove_dir_all(&dir);
         std::fs::create_dir_all(dir.join("logdef")).unwrap();
         let exe = dir.join("rustrace.exe");
@@ -554,9 +601,15 @@ mod tests {
         assert!(warnings.is_empty());
         assert_eq!(std::fs::read(&exe).unwrap(), b"new exe");
         assert_eq!(std::fs::read(old_exe_path(&exe)).unwrap(), b"old exe");
-        assert_eq!(std::fs::read(dir.join("lang").join("en.lang")).unwrap(), b"en");
+        assert_eq!(
+            std::fs::read(dir.join("lang").join("en.lang")).unwrap(),
+            b"en"
+        );
         assert_eq!(std::fs::read(dir.join("LICENSE")).unwrap(), b"lic");
-        assert_eq!(std::fs::read(dir.join("logdef").join("mine.def")).unwrap(), b"own");
+        assert_eq!(
+            std::fs::read(dir.join("logdef").join("mine.def")).unwrap(),
+            b"own"
+        );
 
         // Without the program in the archive nothing is changed.
         let err = install(vec![("RusTrace/LICENSE".to_owned(), b"x".to_vec())], &exe).unwrap_err();
@@ -569,12 +622,22 @@ mod tests {
     fn session_state_round_trip() {
         let state = SessionState {
             path: Some(r"C:\Logs\a.log".into()),
-            format: Some(FormatState::Def { id: "cbs.log.def".into(), priority: 1 }),
+            format: Some(FormatState::Def {
+                id: "cbs.log.def".into(),
+                priority: 1,
+            }),
             selected: Some(42),
             search_text: "error".into(),
             show_sev: [true, false, true],
-            col_filters: vec![(ColumnKind::Role(Role::Component), "ccm".into()), (ColumnKind::Extra(2), "!x".into())],
-            window: Some(WindowState { pos: Some([10.0, 20.0]), size: Some([800.0, 600.0]), maximized: false }),
+            col_filters: vec![
+                (ColumnKind::Role(Role::Component), "ccm".into()),
+                (ColumnKind::Extra(2), "!x".into()),
+            ],
+            window: Some(WindowState {
+                pos: Some([10.0, 20.0]),
+                size: Some([800.0, 600.0]),
+                maximized: false,
+            }),
             ..Default::default()
         };
         let file = state.save_temp().unwrap();

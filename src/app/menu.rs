@@ -6,7 +6,10 @@ impl App {
     pub(in crate::app) fn menu_bar(&mut self, ui: &mut egui::Ui) {
         egui::MenuBar::new().ui(ui, |ui| {
             ui.menu_button(t!("menu.file"), |ui| {
-                if ui.button(format!("📂 {}   {}", t!("menu.file.open"), kb("Ctrl+O"))).clicked() {
+                if ui
+                    .button(format!("📂 {}   {}", t!("menu.file.open"), kb("Ctrl+O")))
+                    .clicked()
+                {
                     ui.close();
                     self.open_dialog();
                 }
@@ -33,11 +36,17 @@ impl App {
                     }
                 });
                 ui.separator();
-                if ui.button(format!("🔄 {}   F5", t!("menu.file.refresh"))).clicked() {
+                if ui
+                    .button(format!("🔄 {}   F5", t!("menu.file.refresh")))
+                    .clicked()
+                {
                     ui.close();
                     self.refresh();
                 }
-                if ui.button(format!("{}   {}", t!("menu.file.reload"), kb("Ctrl+F5"))).clicked() {
+                if ui
+                    .button(format!("{}   {}", t!("menu.file.reload"), kb("Ctrl+F5")))
+                    .clicked()
+                {
                     ui.close();
                     self.reload_full();
                 }
@@ -162,7 +171,11 @@ impl App {
             });
             ui.menu_button(t!("menu.highlight"), |ui| {
                 if ui
-                    .button(format!("🎨 {}   {}", t!("menu.highlight.rules"), kb("Ctrl+H")))
+                    .button(format!(
+                        "🎨 {}   {}",
+                        t!("menu.highlight.rules"),
+                        kb("Ctrl+H")
+                    ))
                     .clicked()
                 {
                     ui.close();
@@ -188,11 +201,17 @@ impl App {
                     self.show_help = true;
                 }
                 #[cfg(windows)]
-                if ui.button(format!("🔗 {}", t!("menu.help.default_app"))).clicked() {
+                if ui
+                    .button(format!("🔗 {}", t!("menu.help.default_app")))
+                    .clicked()
+                {
                     ui.close();
                     self.assoc = Some(fileassoc::info());
                 }
-                if ui.button(format!("⬆ {}", t!("menu.help.updates"))).clicked() {
+                if ui
+                    .button(format!("⬆ {}", t!("menu.help.updates")))
+                    .clicked()
+                {
                     ui.close();
                     self.show_update = true;
                     if !matches!(self.update, UpdateState::Installing { .. }) {
@@ -239,7 +258,10 @@ impl App {
             self.info(t!("lang.reloaded"));
             ui.close();
         }
-        if ui.button(format!("📂 {}", t!("lang.open_folder"))).clicked() {
+        if ui
+            .button(format!("📂 {}", t!("lang.open_folder")))
+            .clicked()
+        {
             if let Some(dir) = i18n::user_lang_dir() {
                 let res = std::fs::create_dir_all(&dir).and_then(|_| open::that_detached(&dir));
                 if let Err(e) = res {

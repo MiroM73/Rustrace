@@ -5,7 +5,10 @@ use crate::app::*;
 impl App {
     /// Asks GitHub for the latest release in a background thread.
     pub(in crate::app) fn start_update_check(&mut self, silent: bool) {
-        if matches!(self.update, UpdateState::Checking { .. } | UpdateState::Installing { .. }) {
+        if matches!(
+            self.update,
+            UpdateState::Checking { .. } | UpdateState::Installing { .. }
+        ) {
             return;
         }
         let (tx, rx) = mpsc::channel();
@@ -50,7 +53,9 @@ impl App {
                     Err(e) => UpdateState::Failed(e),
                 };
             }
-            UpdateState::Installing { rx, release, exe, .. } => {
+            UpdateState::Installing {
+                rx, release, exe, ..
+            } => {
                 let res = match rx.try_recv() {
                     Ok(res) => res,
                     Err(mpsc::TryRecvError::Empty) => {
@@ -93,7 +98,12 @@ impl App {
         };
         let progress = Arc::new(update::Progress::default());
         let (tx, rx) = mpsc::channel();
-        let (prog, rel, path, ctx) = (progress.clone(), release.clone(), exe.clone(), self.ctx.clone());
+        let (prog, rel, path, ctx) = (
+            progress.clone(),
+            release.clone(),
+            exe.clone(),
+            self.ctx.clone(),
+        );
         let spawned = std::thread::Builder::new()
             .name("rustrace-update".into())
             .spawn(move || {
@@ -123,7 +133,10 @@ impl App {
             let maximized = vp.maximized.unwrap_or(false);
             WindowState {
                 // A maximized window keeps its normal size from the default.
-                pos: vp.outer_rect.filter(|_| !maximized).map(|r| [r.min.x * zoom, r.min.y * zoom]),
+                pos: vp
+                    .outer_rect
+                    .filter(|_| !maximized)
+                    .map(|r| [r.min.x * zoom, r.min.y * zoom]),
                 size: vp
                     .inner_rect
                     .filter(|_| !maximized)
@@ -132,7 +145,10 @@ impl App {
             }
         });
         SessionState {
-            path: self.cur_path.as_ref().map(|p| p.to_string_lossy().into_owned()),
+            path: self
+                .cur_path
+                .as_ref()
+                .map(|p| p.to_string_lossy().into_owned()),
             format: match &self.format_choice {
                 FormatChoice::Auto => None,
                 FormatChoice::Builtin => Some(FormatState::Builtin),
@@ -148,7 +164,11 @@ impl App {
             search_case: self.search_case,
             filter_mode: self.filter_mode,
             show_sev: self.show_sev,
-            col_filters: self.col_filter_text.iter().map(|(k, v)| (*k, v.clone())).collect(),
+            col_filters: self
+                .col_filter_text
+                .iter()
+                .map(|(k, v)| (*k, v.clone()))
+                .collect(),
             time_from: self.time_from.clone(),
             time_to: self.time_to.clone(),
             window: Some(window),
@@ -168,7 +188,9 @@ impl App {
         self.time_to = state.time_to.clone();
         self.apply_time_range();
         self.recompile_search();
-        let Some(path) = state.path.clone() else { return };
+        let Some(path) = state.path.clone() else {
+            return;
+        };
         self.open_file(&path);
         let format = match &state.format {
             None => None,
@@ -229,8 +251,12 @@ impl App {
                     UpdateState::Failed(e) => {
                         ui.colored_label(RED, t!("update.check_failed", error = e));
                     }
-                    UpdateState::Checked(r) if update::is_newer(&r.version, &update::current_version()) => {
-                        ui.label(RichText::new(t!("update.new_version", version = r.version)).strong());
+                    UpdateState::Checked(r)
+                        if update::is_newer(&r.version, &update::current_version()) =>
+                    {
+                        ui.label(
+                            RichText::new(t!("update.new_version", version = r.version)).strong(),
+                        );
                         if !r.notes.trim().is_empty() {
                             ui.add_space(4.0);
                             egui::ScrollArea::vertical()
@@ -261,12 +287,18 @@ impl App {
                         ui.add_space(4.0);
                         ui.horizontal(|ui| {
                             if ui
-                                .add_enabled(can_install, egui::Button::new(format!("⬇ {}", t!("update.install"))))
+                                .add_enabled(
+                                    can_install,
+                                    egui::Button::new(format!("⬇ {}", t!("update.install"))),
+                                )
                                 .clicked()
                             {
                                 action = Some(UpdateAction::Install(r.clone()));
                             }
-                            if ui.button(format!("🌐 {}", t!("update.release_page"))).clicked() {
+                            if ui
+                                .button(format!("🌐 {}", t!("update.release_page")))
+                                .clicked()
+                            {
                                 ui.ctx().open_url(egui::OpenUrl::new_tab(&r.page));
                             }
                             if ui.button(t!("update.skip")).clicked() {
@@ -284,7 +316,9 @@ impl App {
                         );
                         ui.hyperlink_to(t!("update.release_page"), &r.page);
                     }
-                    UpdateState::Installing { progress, release, .. } => {
+                    UpdateState::Installing {
+                        progress, release, ..
+                    } => {
                         ui.horizontal(|ui| {
                             ui.spinner();
                             ui.label(t!("update.downloading", version = release.version));
@@ -292,7 +326,8 @@ impl App {
                         let received = progress.received.load(Ordering::Relaxed);
                         let total = progress.total.load(Ordering::Relaxed);
                         let (fraction, text) = if total > 0 {
-                            let text = format!("{} / {}", format_size(received), format_size(total));
+                            let text =
+                                format!("{} / {}", format_size(received), format_size(total));
                             (received as f32 / total as f32, text)
                         } else {
                             (0.0, format_size(received))
@@ -315,14 +350,19 @@ impl App {
                         UpdateState::Checking { .. } | UpdateState::Installing { .. }
                     );
                     if ui
-                        .add_enabled(!busy, egui::Button::new(format!("🔄 {}", t!("update.check_again"))))
+                        .add_enabled(
+                            !busy,
+                            egui::Button::new(format!("🔄 {}", t!("update.check_again"))),
+                        )
                         .clicked()
                     {
                         action = Some(UpdateAction::Check);
                     }
                 });
                 ui.separator();
-                auto_changed = ui.checkbox(&mut self.cfg.update_check, t!("update.auto")).changed();
+                auto_changed = ui
+                    .checkbox(&mut self.cfg.update_check, t!("update.auto"))
+                    .changed();
             });
         if auto_changed {
             self.cfg_dirty = true;

@@ -95,7 +95,11 @@ impl App {
                                         .width(110.0)
                                         .show_ui(ui, |ui| {
                                             for s in [HighlightScope::Row, HighlightScope::Text] {
-                                                ui.selectable_value(&mut r.scope, s, scope_label(s));
+                                                ui.selectable_value(
+                                                    &mut r.scope,
+                                                    s,
+                                                    scope_label(s),
+                                                );
                                             }
                                         });
                                     changed |= before != r.scope;

@@ -88,7 +88,9 @@ pub fn parse(text: &str) -> HashMap<String, String> {
         if line.is_empty() || line.starts_with('#') {
             continue;
         }
-        let Some((k, v)) = line.split_once('=') else { continue };
+        let Some((k, v)) = line.split_once('=') else {
+            continue;
+        };
         let k = k.trim();
         if k.is_empty() {
             continue;
@@ -173,13 +175,17 @@ fn scan_available() -> Vec<LangInfo> {
         })
         .collect();
     for dir in lang_dirs() {
-        let Ok(rd) = std::fs::read_dir(&dir) else { continue };
+        let Ok(rd) = std::fs::read_dir(&dir) else {
+            continue;
+        };
         for e in rd.flatten() {
             let p = e.path();
             if p.extension().and_then(|x| x.to_str()) != Some("lang") {
                 continue;
             }
-            let Some(code) = p.file_stem().and_then(|s| s.to_str()) else { continue };
+            let Some(code) = p.file_stem().and_then(|s| s.to_str()) else {
+                continue;
+            };
             if !list.iter().any(|l| l.code.eq_ignore_ascii_case(code)) {
                 list.push(LangInfo {
                     code: code.to_owned(),
@@ -313,8 +319,14 @@ mod tests {
         for (code, text) in &BUILTIN[1..] {
             let m = parse(text);
             for (k, v) in &en {
-                let tv = m.get(k).unwrap_or_else(|| panic!("{code}: missing key {k}"));
-                assert_eq!(placeholders(v), placeholders(tv), "{code}: placeholders differ in {k}");
+                let tv = m
+                    .get(k)
+                    .unwrap_or_else(|| panic!("{code}: missing key {k}"));
+                assert_eq!(
+                    placeholders(v),
+                    placeholders(tv),
+                    "{code}: placeholders differ in {k}"
+                );
             }
             for k in m.keys() {
                 assert!(en.contains_key(k), "{code}: unknown key {k}");
@@ -325,9 +337,21 @@ mod tests {
     #[test]
     fn resolve_codes() {
         let av = vec![
-            LangInfo { code: "en".into(), name: String::new(), external: false },
-            LangInfo { code: "de".into(), name: String::new(), external: false },
-            LangInfo { code: "pt-BR".into(), name: String::new(), external: true },
+            LangInfo {
+                code: "en".into(),
+                name: String::new(),
+                external: false,
+            },
+            LangInfo {
+                code: "de".into(),
+                name: String::new(),
+                external: false,
+            },
+            LangInfo {
+                code: "pt-BR".into(),
+                name: String::new(),
+                external: true,
+            },
         ];
         assert_eq!(resolve("de-AT", &av), "de");
         assert_eq!(resolve("pt_BR.UTF-8", &av), "pt-BR");

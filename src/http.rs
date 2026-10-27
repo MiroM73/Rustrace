@@ -5,12 +5,20 @@
 /// Downloads `url` (https only). `progress(received, total)` is called after every block;
 /// returning `false` cancels the download.
 #[cfg(windows)]
-pub fn get(url: &str, accept: &str, progress: impl FnMut(u64, Option<u64>) -> bool) -> Result<Vec<u8>, String> {
+pub fn get(
+    url: &str,
+    accept: &str,
+    progress: impl FnMut(u64, Option<u64>) -> bool,
+) -> Result<Vec<u8>, String> {
     imp::get(url, accept, progress)
 }
 
 #[cfg(not(windows))]
-pub fn get(_url: &str, _accept: &str, _progress: impl FnMut(u64, Option<u64>) -> bool) -> Result<Vec<u8>, String> {
+pub fn get(
+    _url: &str,
+    _accept: &str,
+    _progress: impl FnMut(u64, Option<u64>) -> bool,
+) -> Result<Vec<u8>, String> {
     Err("not supported on this platform".into())
 }
 
@@ -32,8 +40,20 @@ mod imp {
 
     #[link(name = "winhttp")]
     unsafe extern "system" {
-        fn WinHttpOpen(agent: *const u16, access: u32, proxy: *const u16, bypass: *const u16, flags: u32) -> Handle;
-        fn WinHttpSetTimeouts(h: Handle, resolve: i32, connect: i32, send: i32, receive: i32) -> i32;
+        fn WinHttpOpen(
+            agent: *const u16,
+            access: u32,
+            proxy: *const u16,
+            bypass: *const u16,
+            flags: u32,
+        ) -> Handle;
+        fn WinHttpSetTimeouts(
+            h: Handle,
+            resolve: i32,
+            connect: i32,
+            send: i32,
+            receive: i32,
+        ) -> i32;
         fn WinHttpConnect(session: Handle, server: *const u16, port: u16, reserved: u32) -> Handle;
         fn WinHttpOpenRequest(
             connect: Handle,
@@ -62,7 +82,12 @@ mod imp {
             len: *mut u32,
             index: *mut u32,
         ) -> i32;
-        fn WinHttpReadData(request: Handle, buffer: *mut c_void, to_read: u32, read: *mut u32) -> i32;
+        fn WinHttpReadData(
+            request: Handle,
+            buffer: *mut c_void,
+            to_read: u32,
+            read: *mut u32,
+        ) -> i32;
         fn WinHttpCloseHandle(h: Handle) -> i32;
     }
 
@@ -111,7 +136,11 @@ mod imp {
     }
 
     fn open(h: Handle, what: &str) -> Result<Guard, String> {
-        if h.is_null() { Err(last_error(what)) } else { Ok(Guard(h)) }
+        if h.is_null() {
+            Err(last_error(what))
+        } else {
+            Ok(Guard(h))
+        }
     }
 
     pub fn get(
@@ -145,7 +174,10 @@ mod imp {
             }
             let session = open(session, "WinHttpOpen")?;
             WinHttpSetTimeouts(session.0, 15_000, 15_000, 30_000, 30_000);
-            let connect = open(WinHttpConnect(session.0, host.as_ptr(), 443, 0), "WinHttpConnect")?;
+            let connect = open(
+                WinHttpConnect(session.0, host.as_ptr(), 443, 0),
+                "WinHttpConnect",
+            )?;
             let request = open(
                 WinHttpOpenRequest(
                     connect.0,
@@ -159,7 +191,15 @@ mod imp {
                 "WinHttpOpenRequest",
             )?;
             check(
-                WinHttpSendRequest(request.0, headers.as_ptr(), u32::MAX, std::ptr::null(), 0, 0, 0) != 0,
+                WinHttpSendRequest(
+                    request.0,
+                    headers.as_ptr(),
+                    u32::MAX,
+                    std::ptr::null(),
+                    0,
+                    0,
+                    0,
+                ) != 0,
                 "WinHttpSendRequest",
             )?;
             check(
@@ -200,7 +240,12 @@ mod imp {
             loop {
                 let mut read = 0u32;
                 check(
-                    WinHttpReadData(request.0, buf.as_mut_ptr().cast(), buf.len() as u32, &mut read) != 0,
+                    WinHttpReadData(
+                        request.0,
+                        buf.as_mut_ptr().cast(),
+                        buf.len() as u32,
+                        &mut read,
+                    ) != 0,
                     "WinHttpReadData",
                 )?;
                 if read == 0 {

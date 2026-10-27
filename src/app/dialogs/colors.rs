@@ -16,7 +16,10 @@ impl App {
                     .checkbox(&mut self.cfg.color_by_severity, t!("colors.by_severity"))
                     .changed();
                 if ui
-                    .checkbox(&mut self.cfg.keyword_severity, t!("colors.keyword_severity"))
+                    .checkbox(
+                        &mut self.cfg.keyword_severity,
+                        t!("colors.keyword_severity"),
+                    )
                     .changed()
                 {
                     changed = true;
@@ -26,20 +29,22 @@ impl App {
                 let edit_dark = self.edit_dark;
                 theme_selector(ui, &mut self.edit_dark);
                 ui.add_space(4.0);
-                egui::Grid::new("sev_colors").spacing([12.0, 6.0]).show(ui, |ui| {
-                    ui.strong("");
-                    ui.strong(t!("rules.col.text"));
-                    ui.strong(t!("rules.col.background"));
-                    ui.strong(t!("rules.col.preview"));
-                    ui.end_row();
-                    for (key, fg, bg) in self.cfg.palette_mut(edit_dark) {
-                        ui.label(t!(key));
-                        changed |= color_button(ui, fg);
-                        changed |= color_button(ui, bg);
-                        preview(ui, edit_dark, Some(*fg), Some(*bg));
+                egui::Grid::new("sev_colors")
+                    .spacing([12.0, 6.0])
+                    .show(ui, |ui| {
+                        ui.strong("");
+                        ui.strong(t!("rules.col.text"));
+                        ui.strong(t!("rules.col.background"));
+                        ui.strong(t!("rules.col.preview"));
                         ui.end_row();
-                    }
-                });
+                        for (key, fg, bg) in self.cfg.palette_mut(edit_dark) {
+                            ui.label(t!(key));
+                            changed |= color_button(ui, fg);
+                            changed |= color_button(ui, bg);
+                            preview(ui, edit_dark, Some(*fg), Some(*bg));
+                            ui.end_row();
+                        }
+                    });
                 ui.separator();
                 ui.horizontal(|ui| {
                     if ui.button(t!("colors.restore_defaults")).clicked() {
@@ -54,7 +59,9 @@ impl App {
                         let src = self.cfg.palette(!edit_dark);
                         let [e, w, s] = self.cfg.palette_mut(edit_dark);
                         for ((_, fg, bg), (sf, sb)) in
-                            [e, w, s].into_iter().zip([src.error, src.warning, src.search])
+                            [e, w, s]
+                                .into_iter()
+                                .zip([src.error, src.warning, src.search])
                         {
                             *fg = sf;
                             *bg = sb;

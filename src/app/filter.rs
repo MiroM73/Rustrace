@@ -48,7 +48,11 @@ impl App {
 
     /// Selects the first displayed row that matches the search (search as you type).
     pub(in crate::app) fn select_first_match(&mut self) {
-        if let Some(pos) = self.filtered.iter().position(|&i| self.is_match.get(i) == Some(&true)) {
+        if let Some(pos) = self
+            .filtered
+            .iter()
+            .position(|&i| self.is_match.get(i) == Some(&true))
+        {
             self.select_row(pos);
         }
     }
@@ -120,7 +124,11 @@ impl App {
             ColumnKind::Role(Role::Thread) => f.matches(e.thread),
             ColumnKind::Role(Role::DateTime) => f.matches(&self.display_dt(&e.datetime())),
             ColumnKind::Extra(i) => f.matches(e.extra(*i)),
-            ColumnKind::File => f.matches(self.file_labels.get(e.file as usize).map_or("", String::as_str)),
+            ColumnKind::File => f.matches(
+                self.file_labels
+                    .get(e.file as usize)
+                    .map_or("", String::as_str),
+            ),
         })
     }
 
@@ -129,7 +137,9 @@ impl App {
     pub(in crate::app) fn in_time_range(&self, ts: Option<i64>) -> bool {
         match self.time_range {
             (None, None) => true,
-            (from, to) => ts.is_some_and(|t| from.is_none_or(|f| t >= f) && to.is_none_or(|x| t <= x)),
+            (from, to) => {
+                ts.is_some_and(|t| from.is_none_or(|f| t >= f) && to.is_none_or(|x| t <= x))
+            }
         }
     }
 

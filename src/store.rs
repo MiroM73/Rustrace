@@ -61,7 +61,9 @@ pub fn iso_to_ms(s: &str) -> Option<i64> {
         return None;
     }
     let num = |r: std::ops::Range<usize>| -> Option<i64> {
-        b[r].iter().try_fold(0i64, |acc, &c| c.is_ascii_digit().then(|| acc * 10 + (c - b'0') as i64))
+        b[r].iter().try_fold(0i64, |acc, &c| {
+            c.is_ascii_digit().then(|| acc * 10 + (c - b'0') as i64)
+        })
     };
     let sep = |i: usize, c: u8| b[i] == c;
     if !(sep(4, b'-') && sep(7, b'-') && sep(10, b' ') && sep(13, b':') && sep(16, b':')) {
@@ -78,8 +80,27 @@ pub fn iso_to_ms(s: &str) -> Option<i64> {
         0
     };
     let leap = (y % 4 == 0 && y % 100 != 0) || y % 400 == 0;
-    let mdays = [31, if leap { 29 } else { 28 }, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31];
-    if !(1..=12).contains(&m) || d < 1 || d > mdays[(m - 1) as usize] || hh > 23 || mm > 59 || ss > 59 {
+    let mdays = [
+        31,
+        if leap { 29 } else { 28 },
+        31,
+        30,
+        31,
+        30,
+        31,
+        31,
+        30,
+        31,
+        30,
+        31,
+    ];
+    if !(1..=12).contains(&m)
+        || d < 1
+        || d > mdays[(m - 1) as usize]
+        || hh > 23
+        || mm > 59
+        || ss > 59
+    {
         return None;
     }
     Some(((days_from_civil(y, m, d) * 24 + hh) * 60 + mm) * 60_000 + ss * 1000 + ms)
@@ -269,7 +290,10 @@ impl MappedText {
         if need <= self.capacity() {
             return Ok(());
         }
-        let cap = need.max(self.capacity() * 2).max(MIN_MAPPED).next_multiple_of(1 << 20);
+        let cap = need
+            .max(self.capacity() * 2)
+            .max(MIN_MAPPED)
+            .next_multiple_of(1 << 20);
         self.file.set_len(cap as u64)?;
         // SAFETY: the file is opened exclusively (share mode 0, deleted on close), so no other
         // process can change it; only this struct writes it and only within `len`/`cap`.
@@ -488,7 +512,8 @@ impl LogStore {
         let ts = if e.datetime.is_empty() {
             TS_NONE
         } else {
-            iso_to_ms(&e.datetime).unwrap_or_else(|| TS_RAW + self.strings.intern(&e.datetime) as i64)
+            iso_to_ms(&e.datetime)
+                .unwrap_or_else(|| TS_RAW + self.strings.intern(&e.datetime) as i64)
         };
         self.recs.push(Rec {
             start,
@@ -511,9 +536,16 @@ impl LogStore {
     /// Moves the text from memory to a memory-mapped temporary file (when a watched log grew
     /// big). Returns false when the temporary file cannot be used (the text stays in memory).
     pub fn move_text_to_temp_file(&mut self) -> bool {
-        let TextArena::Memory(t) = &self.text else { return true };
-        let Ok(mut m) = MappedText::new() else { return false };
-        if m.reserve_total(t.len()).and_then(|_| m.push_str(t)).is_err() {
+        let TextArena::Memory(t) = &self.text else {
+            return true;
+        };
+        let Ok(mut m) = MappedText::new() else {
+            return false;
+        };
+        if m.reserve_total(t.len())
+            .and_then(|_| m.push_str(t))
+            .is_err()
+        {
             return false;
         }
         self.text = TextArena::Mapped(m);
@@ -532,7 +564,10 @@ impl LogStore {
         if k == 0 {
             return;
         }
-        let base = self.recs.get(k).map_or(self.text.len(), |r| r.start as usize);
+        let base = self
+            .recs
+            .get(k)
+            .map_or(self.text.len(), |r| r.start as usize);
         self.text.drop_front(base);
         self.recs.drain(..k);
         for c in &mut self.extra {
@@ -636,7 +671,10 @@ impl LogStore {
 
     pub fn message(&self, i: usize) -> &str {
         let start = self.recs[i].start as usize;
-        let end = self.recs.get(i + 1).map_or(self.text.len(), |r| r.start as usize);
+        let end = self
+            .recs
+            .get(i + 1)
+            .map_or(self.text.len(), |r| r.start as usize);
         &self.text.as_str()[start..end]
     }
 
@@ -706,7 +744,12 @@ mod tests {
 
     #[test]
     fn iso_round_trip() {
-        for s in ["2026-10-23 13:22:01.123", "1970-01-01 00:00:00.000", "1601-02-28 23:59:59.999", "2024-02-29 12:00:00.000"] {
+        for s in [
+            "2026-10-23 13:22:01.123",
+            "1970-01-01 00:00:00.000",
+            "1601-02-28 23:59:59.999",
+            "2024-02-29 12:00:00.000",
+        ] {
             assert_eq!(ms_to_iso(iso_to_ms(s).unwrap()), s);
         }
         assert_eq!(iso_to_ms("1970-01-01 00:00:01").unwrap(), 1000);
@@ -715,7 +758,10 @@ mod tests {
         assert!(iso_to_ms("13:22:01.123").is_none());
         assert!(iso_to_ms("2026-10-23 24:00:00").is_none());
         // Ordering of milliseconds equals ordering of the ISO text.
-        assert!(iso_to_ms("2026-10-23 10:00:00.001").unwrap() > iso_to_ms("2026-10-23 09:59:59.999").unwrap());
+        assert!(
+            iso_to_ms("2026-10-23 10:00:00.001").unwrap()
+                > iso_to_ms("2026-10-23 09:59:59.999").unwrap()
+        );
     }
 
     #[test]
@@ -726,7 +772,10 @@ mod tests {
         s.push(entry(4, "", "CompA", "", &["z"]), 0);
         assert_eq!(s.len(), 3);
         let e = s.at(1);
-        assert_eq!((e.line_no, e.message, e.component, e.thread), (2, "two\nlines", "CompB", "7 (0x0007)"));
+        assert_eq!(
+            (e.line_no, e.message, e.component, e.thread),
+            (2, "two\nlines", "CompB", "7 (0x0007)")
+        );
         assert_eq!(e.severity, Severity::Warning);
         assert_eq!(s.datetime(0), "2026-10-23 10:00:00.000");
         assert_eq!(s.timestamp(0), iso_to_ms("2026-10-23 10:00:00.000"));
@@ -735,7 +784,10 @@ mod tests {
         assert_eq!(s.datetime(2), "");
         assert_eq!(s.message(2), "");
         // Extra columns: the first entry had none, the third only the first one.
-        assert_eq!((s.extra(0, 0), s.extra(1, 1), s.extra(2, 0), s.extra(2, 1)), ("", "y", "z", ""));
+        assert_eq!(
+            (s.extra(0, 0), s.extra(1, 1), s.extra(2, 0), s.extra(2, 1)),
+            ("", "y", "z", "")
+        );
         assert_eq!(s.at(1).extras().collect::<Vec<_>>(), ["x", "y"]);
         // Components are stored once.
         assert_eq!(s.strings.len(), 1 + 3 + 1 + 3); // "", CompA, thread, CompB, "13:00:00", x, y, z
@@ -783,7 +835,10 @@ mod tests {
             let mut s = LogStore::new();
             s.push(entry(1, "old one", "OldComp", "raw old", &["gone"]), 0);
             s.push(entry(2, "old two", "Comp", "", &["x"]), 0);
-            s.push(entry(3, "keep ž", "Comp", "2026-10-23 10:00:00.000", &["y"]), 1);
+            s.push(
+                entry(3, "keep ž", "Comp", "2026-10-23 10:00:00.000", &["y"]),
+                1,
+            );
             s.push(entry(4, "last", "Comp2", "raw new", &["y"]), 1);
             if mapped {
                 assert!(s.move_text_to_temp_file());
@@ -795,7 +850,10 @@ mod tests {
             s.drop_front(2);
             assert_eq!(s.len(), 2);
             let e = s.at(0);
-            assert_eq!((e.message, e.component, e.line_no, e.file), ("keep ž", "Comp", 3, 1));
+            assert_eq!(
+                (e.message, e.component, e.line_no, e.file),
+                ("keep ž", "Comp", 3, 1)
+            );
             assert_eq!(s.datetime(0), "2026-10-23 10:00:00.000");
             assert_eq!(s.datetime(1), "raw new");
             assert_eq!((s.extra(0, 0), s.extra(1, 0)), ("y", "y"));
@@ -819,7 +877,9 @@ mod tests {
         assert_eq!(i.intern(""), 0);
         let a = i.intern("abc");
         assert_eq!(i.intern("abc"), a);
-        let ids: Vec<u32> = (0..10_000).map(|n| i.intern(&format!("value{n}"))).collect();
+        let ids: Vec<u32> = (0..10_000)
+            .map(|n| i.intern(&format!("value{n}")))
+            .collect();
         for (n, id) in ids.iter().enumerate() {
             assert_eq!(i.get(*id), format!("value{n}"));
         }

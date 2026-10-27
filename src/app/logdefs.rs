@@ -31,8 +31,11 @@ impl App {
             self.cfg_dirty = true;
             return;
         }
-        self.def_updates =
-            logdef::definition_updates(&self.cfg.known_logdefs, &self.predefined_defs, &self.own_defs);
+        self.def_updates = logdef::definition_updates(
+            &self.cfg.known_logdefs,
+            &self.predefined_defs,
+            &self.own_defs,
+        );
         self.show_def_updates = !self.def_updates.is_empty();
     }
 
@@ -58,72 +61,103 @@ impl App {
             .resizable(true)
             .show(ctx, |ui| {
                 ui.label(t!("defupd.intro"));
-                egui::ScrollArea::vertical().max_height(520.0).show(ui, |ui| {
-                    for u in &self.def_updates {
-                        ui.separator();
-                        let head = match u.kind {
-                            logdef::UpdateKind::New => t!("defupd.new", name = u.name, file = u.id),
-                            logdef::UpdateKind::Changed => t!("defupd.changed", name = u.name, file = u.id),
-                            logdef::UpdateKind::Removed => t!("defupd.removed", name = u.name, file = u.id),
-                        };
-                        ui.strong(head);
-                        if let Some(p) = &u.own_path {
-                            ui.colored_label(ORANGE, t!("defupd.own_copy", path = p.display()));
-                        }
-                        if u.changes.is_empty() {
-                            continue;
-                        }
-                        let has_own = u.own_path.is_some();
-                        let value = |v: &Option<String>| v.clone().unwrap_or_else(|| "—".to_owned());
-                        // Values (patterns can be long) wrap within a fixed width.
-                        let cell = |ui: &mut egui::Ui, text: String, width: f32| {
-                            ui.allocate_ui(egui::vec2(width, 0.0), |ui| {
-                                ui.add(egui::Label::new(RichText::new(text).monospace()).wrap());
-                            });
-                        };
-                        egui::Grid::new(("defupd_grid", &u.id))
-                            .striped(true)
-                            .spacing([14.0, 4.0])
-                            .show(ui, |ui| {
-                                ui.strong(t!("defupd.col.key"));
-                                ui.strong(t!("defupd.col.before"));
-                                ui.strong(t!("defupd.col.now"));
-                                if has_own {
-                                    ui.strong(t!("defupd.col.own"));
+                egui::ScrollArea::vertical()
+                    .max_height(520.0)
+                    .show(ui, |ui| {
+                        for u in &self.def_updates {
+                            ui.separator();
+                            let head = match u.kind {
+                                logdef::UpdateKind::New => {
+                                    t!("defupd.new", name = u.name, file = u.id)
                                 }
-                                ui.end_row();
-                                for c in &u.changes {
-                                    ui.monospace(&c.key);
-                                    cell(ui, value(&c.old), 250.0);
-                                    cell(ui, value(&c.new), 250.0);
-                                    if let Some(own) = &c.own {
-                                        ui.allocate_ui(egui::vec2(220.0, 0.0), |ui| {
-                                            if *own == c.new {
-                                                ui.label(format!("✔ {}", t!("defupd.own.done")));
-                                            } else if *own == c.old {
-                                                ui.colored_label(ORANGE, format!("⚠ {}", t!("defupd.own.update")));
-                                            } else {
-                                                ui.add(
-                                                    egui::Label::new(t!("defupd.own.custom", value = value(own)))
-                                                        .wrap(),
-                                                );
-                                            }
-                                        });
+                                logdef::UpdateKind::Changed => {
+                                    t!("defupd.changed", name = u.name, file = u.id)
+                                }
+                                logdef::UpdateKind::Removed => {
+                                    t!("defupd.removed", name = u.name, file = u.id)
+                                }
+                            };
+                            ui.strong(head);
+                            if let Some(p) = &u.own_path {
+                                ui.colored_label(ORANGE, t!("defupd.own_copy", path = p.display()));
+                            }
+                            if u.changes.is_empty() {
+                                continue;
+                            }
+                            let has_own = u.own_path.is_some();
+                            let value =
+                                |v: &Option<String>| v.clone().unwrap_or_else(|| "—".to_owned());
+                            // Values (patterns can be long) wrap within a fixed width.
+                            let cell = |ui: &mut egui::Ui, text: String, width: f32| {
+                                ui.allocate_ui(egui::vec2(width, 0.0), |ui| {
+                                    ui.add(
+                                        egui::Label::new(RichText::new(text).monospace()).wrap(),
+                                    );
+                                });
+                            };
+                            egui::Grid::new(("defupd_grid", &u.id))
+                                .striped(true)
+                                .spacing([14.0, 4.0])
+                                .show(ui, |ui| {
+                                    ui.strong(t!("defupd.col.key"));
+                                    ui.strong(t!("defupd.col.before"));
+                                    ui.strong(t!("defupd.col.now"));
+                                    if has_own {
+                                        ui.strong(t!("defupd.col.own"));
                                     }
                                     ui.end_row();
-                                }
-                            });
-                    }
-                });
+                                    for c in &u.changes {
+                                        ui.monospace(&c.key);
+                                        cell(ui, value(&c.old), 250.0);
+                                        cell(ui, value(&c.new), 250.0);
+                                        if let Some(own) = &c.own {
+                                            ui.allocate_ui(egui::vec2(220.0, 0.0), |ui| {
+                                                if *own == c.new {
+                                                    ui.label(format!(
+                                                        "✔ {}",
+                                                        t!("defupd.own.done")
+                                                    ));
+                                                } else if *own == c.old {
+                                                    ui.colored_label(
+                                                        ORANGE,
+                                                        format!("⚠ {}", t!("defupd.own.update")),
+                                                    );
+                                                } else {
+                                                    ui.add(
+                                                        egui::Label::new(t!(
+                                                            "defupd.own.custom",
+                                                            value = value(own)
+                                                        ))
+                                                        .wrap(),
+                                                    );
+                                                }
+                                            });
+                                        }
+                                        ui.end_row();
+                                    }
+                                });
+                        }
+                    });
                 ui.separator();
                 ui.horizontal(|ui| {
-                    if ui.button(format!("✔ {}", t!("defupd.ack"))).on_hover_text(t!("defupd.ack.tip")).clicked() {
+                    if ui
+                        .button(format!("✔ {}", t!("defupd.ack")))
+                        .on_hover_text(t!("defupd.ack.tip"))
+                        .clicked()
+                    {
                         ack = true;
                     }
-                    if ui.button(t!("defupd.later")).on_hover_text(t!("defupd.later.tip")).clicked() {
+                    if ui
+                        .button(t!("defupd.later"))
+                        .on_hover_text(t!("defupd.later.tip"))
+                        .clicked()
+                    {
                         close = true;
                     }
-                    if ui.button(format!("📂 {}", t!("format.open_folder"))).clicked() {
+                    if ui
+                        .button(format!("📂 {}", t!("format.open_folder")))
+                        .clicked()
+                    {
                         open_folder = true;
                     }
                 });
@@ -201,14 +235,23 @@ impl App {
         let mut tip = t!("status.format.tip");
         if let Some(d) = &self.active_def {
             tip.push('\n');
-            tip.push_str(&d.path.as_ref().map_or_else(Self::builtin_label, |p| p.display().to_string()));
+            tip.push_str(
+                &d.path
+                    .as_ref()
+                    .map_or_else(Self::builtin_label, |p| p.display().to_string()),
+            );
         }
         let competing = self.competing_defs();
         if !competing.is_empty() {
             tip.push_str("\n\n");
             tip.push_str(&t!("format.several"));
             for d in &competing {
-                tip.push_str(&format!("\n• {} – {} ({})", d.name, d.id, Self::def_source(d)));
+                tip.push_str(&format!(
+                    "\n• {} – {} ({})",
+                    d.name,
+                    d.id,
+                    Self::def_source(d)
+                ));
             }
         }
         tip
@@ -233,7 +276,10 @@ impl App {
             choice = Some(FormatChoice::Auto);
         }
         if ui
-            .radio(matches!(self.format_choice, FormatChoice::Builtin), t!("format.builtin"))
+            .radio(
+                matches!(self.format_choice, FormatChoice::Builtin),
+                t!("format.builtin"),
+            )
             .clicked()
         {
             choice = Some(FormatChoice::Builtin);
@@ -258,8 +304,17 @@ impl App {
                 .on_hover_text(t!("format.priority.tip"));
             for (i, d) in competing.iter().enumerate() {
                 let mark = if i == 0 { "✔" } else { "    " };
-                ui.label(format!("{mark} {} – {} ({})", d.name, d.id, Self::def_source(d)))
-                    .on_hover_text(d.path.as_ref().map_or_else(Self::builtin_label, |p| p.display().to_string()));
+                ui.label(format!(
+                    "{mark} {} – {} ({})",
+                    d.name,
+                    d.id,
+                    Self::def_source(d)
+                ))
+                .on_hover_text(
+                    d.path
+                        .as_ref()
+                        .map_or_else(Self::builtin_label, |p| p.display().to_string()),
+                );
             }
         }
         ui.separator();
@@ -269,7 +324,10 @@ impl App {
         let mut sources_changed = false;
         for (filter, key) in [
             (logdef::SourceFilter::All, "format.sources.all"),
-            (logdef::SourceFilter::Predefined, "format.sources.predefined"),
+            (
+                logdef::SourceFilter::Predefined,
+                "format.sources.predefined",
+            ),
             (logdef::SourceFilter::Own, "format.sources.own"),
         ] {
             let current = logdef::SourceFilter::from_key(&self.cfg.logdef_sources) == filter;
@@ -307,7 +365,10 @@ impl App {
             }
             ui.close();
         }
-        if ui.button(format!("📂 {}", t!("format.open_folder"))).clicked() {
+        if ui
+            .button(format!("📂 {}", t!("format.open_folder")))
+            .clicked()
+        {
             if let Some(dir) = logdef::user_def_dir() {
                 let res = std::fs::create_dir_all(&dir).and_then(|_| open::that_detached(&dir));
                 if let Err(e) = res {
