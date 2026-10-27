@@ -131,6 +131,11 @@ Notes for Claude, linked from `CLAUDE.md`.
     turn "Follow end" off (the view jumps to the end after a filter change), and the Export button
     is disabled while an automatic refresh read is pending (`busy` = `self.loading.is_some()`; on
     Xvfb with 6 merged logs it stayed disabled until the refresh was paused) – not fixed yet.
+58. Second guide *Software updates do not install* (remote log set over `admin$`, CMTrace + CBS.log
+    merged, column filters `ScanAgent|WUAHandler` and `!CSI`, time range around the deadline,
+    highlight rule for the update ID / KB / CBS package, raw line, export of the visible rows,
+    codes table for scan / install errors). `scripts/gen_guide_logs.py` now runs one generator per
+    guide from `scripts/guide_logs/` (the first guide's logs are unchanged, checked by checksum).
 
 ## Ideas not done yet (offered by the owner)
 - `--set "<name>"` command-line option for log sets (#27): would need the set loading, the file
