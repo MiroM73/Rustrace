@@ -53,6 +53,7 @@ mod widgets;
 
 use cli::*;
 use details::RowCodes;
+use filter::TypedSearch;
 use follow::Follow;
 use statusbar::*;
 use strip::*;
@@ -225,6 +226,8 @@ pub struct App {
     /// A search text shorter than `INSTANT_SEARCH_MIN_CHARS` was searched explicitly (Enter, F3,
     /// history, …); typing clears it.
     search_confirmed: bool,
+    /// The first match selected by search as you type, for the Enter after it (#47).
+    typed_search: TypedSearch,
     search_regex: bool,
     search_case: bool,
     filter_mode: bool,
@@ -444,6 +447,7 @@ impl App {
             status_info: None,
             search_text: String::new(),
             search_confirmed: false,
+            typed_search: TypedSearch::default(),
             search_regex: false,
             search_case: false,
             filter_mode: false,

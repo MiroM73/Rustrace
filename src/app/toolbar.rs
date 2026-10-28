@@ -168,10 +168,13 @@ impl App {
             let typed = changed;
             if typed {
                 self.search_confirmed = false;
+                self.typed_search.navigated();
             }
             if resp.lost_focus() && ui.input(|i| i.key_pressed(Key::Enter)) {
                 let back = ui.input(|i| i.modifiers.shift);
-                self.find(!back);
+                if back || !self.confirm_typed_search() {
+                    self.find(!back);
+                }
                 resp.request_focus();
             } else if resp.lost_focus() {
                 self.remember_search();
@@ -243,6 +246,7 @@ impl App {
             if changed {
                 self.recompile_search();
                 if typed && self.search_re.is_some() {
+                    self.typed_search.expect_first();
                     self.select_first_match();
                 }
             }

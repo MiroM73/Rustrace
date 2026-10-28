@@ -282,6 +282,13 @@ Notes for Claude, linked from `CLAUDE.md`.
     plain label. Verified: release build on the IIS guide log, `--search 10.20.7.42 --filter`:
     every Client IP cell of the 55 rows and "Client IP: 10.20.7.42" in the details pane highlighted
     (screenshot); clippy / tests.
+76. #47 Enter right after search as you type no longer skips the first match: the automatically
+    selected first match is remembered (`TypedSearch`); the first Enter on it only confirms the
+    search (adds it to the history), every further Enter / F3 moves on; F3, the arrows, a history
+    entry, Shift+Enter, a `--search` on the command line or another selected row behave as
+    before. Guide client-msi-1603 step 6: the warning note replaced. Verified: unit test
+    `enter_after_typing_keeps_the_first_match`; release build driven by keystrokes on the guide's
+    client.msi.log: type `Return value 3` → line 91, Enter → still line 91, Enter → line 92.
 
 ## Ideas not done yet (offered by the owner)
 - `--set "<name>"` command-line option for log sets (#27): would need the set loading, the file

@@ -53,9 +53,24 @@ impl App {
             self.after_filter.select_first = true;
             return;
         }
-        if let Some(pos) = self.filtered.iter().position(|&i| self.is_match.get(i)) {
+        let pos = self.filtered.iter().position(|&i| self.is_match.get(i));
+        if let Some(pos) = pos {
             self.select_row(pos);
         }
+        self.typed_search
+            .first_selected(pos.map(|p| self.filtered[p]));
+    }
+
+    /// Enter in the search field right after search as you type selected the first match, with
+    /// that row still selected: the search is only confirmed, so the first match is not skipped
+    /// (#47). Every further Enter / F3 moves on.
+    pub(in crate::app) fn confirm_typed_search(&mut self) -> bool {
+        if !self.typed_search.confirm(self.selected) {
+            return false;
+        }
+        self.search_confirmed = true;
+        self.remember_search();
+        true
     }
 
     /// Follows the end of the log (now, or after the running background re-filter).
@@ -302,6 +317,7 @@ impl App {
     }
 
     pub(in crate::app) fn find(&mut self, forward: bool) {
+        self.typed_search.navigated();
         self.remember_search();
         // A short text typed without searching yet is searched now.
         if self.search_re.is_none() && self.search_err.is_none() && !self.search_text.is_empty() {
@@ -346,6 +362,46 @@ impl App {
     }
 }
 
+/// Search as you type selects the first match (#4); Enter pressed right after it (out of habit)
+/// must not skip that match (#47). Remembers the entry selected automatically until the user
+/// navigates, so the first Enter on it only confirms the search.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub(in crate::app) struct TypedSearch {
+    /// The typed text is searched; the next selection of the first match is automatic.
+    expecting: bool,
+    /// The entry selected as the first match of the typed text.
+    first: Option<usize>,
+}
+
+impl TypedSearch {
+    /// The typed search text is searched; its first match is about to be selected (maybe once a
+    /// background filter has finished).
+    pub(in crate::app) fn expect_first(&mut self) {
+        *self = TypedSearch {
+            expecting: true,
+            first: None,
+        };
+    }
+
+    /// The first match (entry index) was selected – automatically only when it was expected.
+    pub(in crate::app) fn first_selected(&mut self, entry: Option<usize>) {
+        self.first = entry.filter(|_| self.expecting);
+        self.expecting = false;
+    }
+
+    /// The text changed again or the user moved to another match: Enter works as usual.
+    pub(in crate::app) fn navigated(&mut self) {
+        *self = TypedSearch::default();
+    }
+
+    /// Enter in the search field with `selected` selected: `true` = only confirm the search
+    /// (the automatically selected first match is still selected). Works once.
+    pub(in crate::app) fn confirm(&mut self, selected: Option<usize>) -> bool {
+        let first = std::mem::take(self).first;
+        first.is_some() && first == selected
+    }
+}
+
 /// A search text is searched: non-empty and either long enough to search as you type or
 /// searched explicitly.
 fn search_active(text: &str, confirmed: bool) -> bool {
@@ -355,6 +411,33 @@ fn search_active(text: &str, confirmed: bool) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn enter_after_typing_keeps_the_first_match() {
+        // Type → the first match (entry 91) is selected → Enter only confirms; the next Enter
+        // moves on.
+        let mut t = TypedSearch::default();
+        t.expect_first();
+        t.first_selected(Some(91));
+        assert!(t.confirm(Some(91)));
+        assert!(!t.confirm(Some(91)));
+        // Another row selected meanwhile (click, arrows): Enter moves on from there.
+        t.expect_first();
+        t.first_selected(Some(91));
+        assert!(!t.confirm(Some(120)));
+        // F3 / the arrows / a history entry / typing again: as before.
+        t.expect_first();
+        t.first_selected(Some(91));
+        t.navigated();
+        assert!(!t.confirm(Some(91)));
+        // A first match selected without typing (a `--search` on the command line).
+        t.first_selected(Some(91));
+        assert!(!t.confirm(Some(91)));
+        // No match.
+        t.expect_first();
+        t.first_selected(None);
+        assert!(!t.confirm(None));
+    }
 
     #[test]
     fn search_starts_from_three_characters() {
