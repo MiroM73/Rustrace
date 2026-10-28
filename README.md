@@ -310,6 +310,10 @@ the version information into the exe; this uses the resource compiler `rc.exe` o
 - **HTTP status codes** (IIS logs and any log whose definition names its status columns): the details
   pane of the selected row explains the HTTP status with the IIS substatus (e.g. `404.3` Not Found:
   MIME type restriction) and the Win32 status (e.g. `50`, `64`, `1236` – via the Win32 lookup above);
+  the Win32 / SSPI codes typical for IIS logs (`1`, `50`, `64`, `121`, `995`, `1229`, `1236`,
+  `1314`, `1326`, `1330`, `1331`, `1385`, `1909`, `2148074252`, `2148074254`) have own texts worded
+  for IIS (e.g. `64` = the client closed the connection, usually harmless for BITS downloads), on
+  every OS; on Windows the system message is shown below them
   hovering a status / substatus / Win32 status cell in the table shows the same explanation as a
   tooltip. Codes without an own description show their class (e.g. "4xx – client error")
 - the lookup window also accepts HTTP statuses: `404.3`, `HTTP 500`, `http 403.14` show only the

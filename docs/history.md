@@ -266,6 +266,15 @@ Notes for Claude, linked from `CLAUDE.md`.
     non-numeric cells and texts that only look like conditions; on the IIS guide log `>=10000` in
     *Time (ms)* matches exactly the 371 rows of the regex search (and equals an integer ≥ 10000
     check on all 23 970 rows).
+74. #43 IIS Win32 status texts: own descriptions (en / sk / cs / de) for the `sc-win32-status`
+    values typical for IIS / ConfigMgr web logs – 1, 50, 64, 121, 995, 1229, 1236, 1314, 1326, 1330,
+    1331, 1385, 1909 and the SSPI codes 2148074252 / 2148074254 – worded for the IIS context (64 =
+    the client closed the connection, 1326 = wrong password / broken secure channel of a computer
+    account, 2148074254 = the anonymous first step of Negotiate). They are shown in the details pane
+    and the cell tooltip on every OS (before: "Unknown code" outside Windows, the generic system
+    message on Windows, which stays below the own text). Verified: unit test
+    `errcodes::tests::iis_win32_status_codes` (own text first, for ten of the codes),
+    `builtin_languages_are_complete`.
 
 ## Ideas not done yet (offered by the owner)
 - `--set "<name>"` command-line option for log sets (#27): would need the set loading, the file
