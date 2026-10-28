@@ -198,6 +198,12 @@ Notes for Claude, linked from `CLAUDE.md`.
     Shift+F3 / Shift+F2, #48 rules window width, guides 1–5). `release.ps1` must run under
     PowerShell 7 (`pwsh`): Windows PowerShell 5.1 strips the quotes of the `gh run list --jq`
     filter, so the "waiting for the workflow" step failed after the tag was pushed.
+66. #41 Built-in IIS definition shows the status columns first: new `*` item in the `columns` key
+    of log definitions (= all the other columns in field order, so no `#Fields:` field
+    disappears); `iisweb.log.def` gets `columns = datetime sc-status sc-substatus sc-win32-status
+    time-taken c-ip cs-username message *`. Users with an own copy get the "changed predefined
+    definitions" notice. Tests for the default and a large `#Fields:` set, and for `columns`
+    without `*` (unlisted columns hidden); the IIS guide's step 2 is now optional.
 
 ## Ideas not done yet (offered by the owner)
 - `--set "<name>"` command-line option for log sets (#27): would need the set loading, the file

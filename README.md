@@ -475,7 +475,9 @@ message, …). The table then shows exactly these columns; severity coloring, se
 filters, the time filter and the export work as with CMTrace logs.
 
 Built in: `iisweb.log.def` (IIS web logs `u_ex*.log`, W3C format; HTTP 5xx = error, 4xx = warning;
-`sc-status` / `sc-substatus` / `sc-win32-status` explained), `exchconnect.log.def` (Exchange
+`sc-status` / `sc-substatus` / `sc-win32-status` explained and shown first – date/time, status,
+substatus, Win32 status, time taken, client IP, user, request, then every other field of the
+`#Fields:` header), `exchconnect.log.def` (Exchange
 Server Transport Connectivity logs `CONNECTLOG*.LOG`, comma-separated W3C-like format),
 `dism.log.def` (`dism.log`) and `cbs.log.def` (`CBS.log`, `CbsPersist_*.log`).
 
@@ -545,7 +547,7 @@ title.severity = Level
 | `severity.error`, `severity.warning` | regexes (case-insensitive) for that value – e.g. `^5\d\d$` for HTTP 5xx; default: error/err/e/fatal/critical/3 and warning/warn/w/2; without a severity column the error/fail/warn keywords are used |
 | `datetime.format` | [chrono format](https://docs.rs/chrono/latest/chrono/format/strftime/index.html)(s) separated by `\|`; ISO-like dates are recognized without it |
 | `timezone` | `local` (default) or `utc` – converted to local time (IIS logs are in UTC) |
-| `columns` | order of the table columns (role or column names); default: the order in the pattern / header |
+| `columns` | order of the table columns (role or column names); `*` = all the other columns in the order of the pattern / header (e.g. `columns = datetime sc-status message *`); without `*` the columns not listed are hidden; default: the order in the pattern / header |
 | `title.<column>` | column header, e.g. `title.sc-status = Status`, `title.message = Request` |
 | `http_status`, `http_substatus`, `win32_status` | optional: the columns holding an HTTP status, an IIS substatus and a Win32 status code (decimal) – explained in the details pane and in the cell tooltip, e.g. `http_status = sc-status`; a named column missing in the log is ignored; only extra columns (not used by a role) are explained |
 

@@ -19,7 +19,7 @@
 //! | `severity.error`, `severity.warning` | regexes (case-insensitive) for the severity value |
 //! | `datetime.format` | chrono format(s) of the date/time, separated by `\|`, e.g. `%Y-%m-%d %H:%M:%S` |
 //! | `timezone` | `local` (default) or `utc` (converted to local time) |
-//! | `columns` | order of the columns in the table (role names or column names); default: order in the pattern / header |
+//! | `columns` | order of the columns in the table (role names or column names, `*` = all the other columns in the order of the pattern / header); columns not listed are hidden unless `*` is used; default: order in the pattern / header |
 //! | `title.<column>` | column header (`title.message = Request`) |
 //! | `http_status`, `http_substatus`, `win32_status` | columns with an HTTP status, an IIS substatus and a Win32 status code (decimal) – explained in the details pane, in the cell tooltip and in the error code lookup (#28); optional, a missing column is ignored |
 //!
@@ -573,11 +573,29 @@ impl LogDef {
         };
         match &self.columns {
             Some(list) => {
-                for n in list {
+                let named = |n: &str| -> Option<(ColumnKind, Option<String>)> {
                     if let Some(r) = Role::from_key(n) {
-                        push(ColumnKind::Role(r), title(r.key()));
-                    } else if let Some(i) = names.iter().position(|f| f.eq_ignore_ascii_case(n)) {
-                        let (k, t) = field_column(i, schema);
+                        Some((ColumnKind::Role(r), title(r.key())))
+                    } else {
+                        let i = names.iter().position(|f| f.eq_ignore_ascii_case(n))?;
+                        Some(field_column(i, schema))
+                    }
+                };
+                // `*` = every column not named in the list, in the order of the fields (#41).
+                let listed: Vec<ColumnKind> = list
+                    .iter()
+                    .filter_map(|n| named(n))
+                    .map(|(k, _)| k)
+                    .collect();
+                for n in list {
+                    if n == "*" {
+                        for (i, _) in names.iter().enumerate().filter(|(_, f)| !f.is_empty()) {
+                            let (k, t) = field_column(i, schema);
+                            if !listed.contains(&k) {
+                                push(k, t);
+                            }
+                        }
+                    } else if let Some((k, t)) = named(n) {
                         push(k, t);
                     }
                 }
@@ -1277,8 +1295,87 @@ mod tests {
             .iter()
             .filter_map(|c| c.title.as_deref())
             .collect();
-        assert_eq!(titles, ["Server IP", "Request", "Status", "Time (ms)"]);
+        assert_eq!(titles, ["Status", "Time (ms)", "Request", "Server IP"]);
         assert_eq!(s.columns[0].kind, ColumnKind::Role(Role::DateTime));
+    }
+
+    /// Built-in IIS columns (#41): status columns first, every other field of any `#Fields:` set
+    /// after the request (`*`), none lost.
+    #[test]
+    fn iis_status_columns_first() {
+        let titles = |lines: &[&str]| -> Vec<String> {
+            let (_, s) = parse_lines(builtin("iisweb.log.def"), lines);
+            s.columns
+                .iter()
+                .map(|c| c.title.clone().unwrap_or_else(|| format!("{:?}", c.kind)))
+                .collect()
+        };
+        // The default IIS field set (no header yet).
+        assert_eq!(
+            titles(&[]),
+            [
+                "Role(DateTime)",
+                "Status",
+                "Substatus",
+                "Win32 status",
+                "Time (ms)",
+                "Client IP",
+                "User",
+                "Request",
+                "Server IP",
+                "Port",
+                "User agent",
+                "Referer"
+            ]
+        );
+        // Fields the definition does not name stay visible in their header order.
+        assert_eq!(
+            titles(&[
+                "#Fields: date time s-sitename s-computername s-ip cs-method cs-uri-stem cs-uri-query s-port cs-username c-ip cs-version cs(User-Agent) cs(Cookie) cs(Referer) cs-host sc-status sc-substatus sc-win32-status sc-bytes cs-bytes time-taken",
+                "2026-10-23 08:00:01 W3SVC1 MP01 10.0.0.5 GET /a - 443 - 10.0.0.9 HTTP/1.1 x - - mp01 200 0 0 100 200 15",
+            ]),
+            [
+                "Role(DateTime)",
+                "Status",
+                "Substatus",
+                "Win32 status",
+                "Time (ms)",
+                "Client IP",
+                "User",
+                "Request",
+                "s-sitename",
+                "s-computername",
+                "Server IP",
+                "Port",
+                "cs-version",
+                "User agent",
+                "cs(Cookie)",
+                "Referer",
+                "cs-host",
+                "sc-bytes",
+                "cs-bytes"
+            ]
+        );
+    }
+
+    /// `columns` without `*` hides the columns it does not name (own definitions rely on it).
+    #[test]
+    fn columns_without_star_hide_the_rest() {
+        let def = LogDef::parse(
+            "x.def",
+            "pattern = ^(?P<a>\\S+) (?P<b>\\S+) (?P<message>.*)$\ncolumns = b message\n",
+            None,
+        )
+        .unwrap();
+        let (e, s) = parse_lines(Arc::new(def), &["1 2 text"]);
+        let titles: Vec<&str> = s
+            .columns
+            .iter()
+            .filter_map(|c| c.title.as_deref())
+            .collect();
+        assert_eq!(titles, ["b"]);
+        assert_eq!(s.columns.len(), 2);
+        assert_eq!(extra(&e[0], &s, "a"), "1");
     }
 
     /// Exchange Transport Connectivity log (issue #13): comma-separated `#Fields:` and values,
@@ -1411,10 +1508,10 @@ mod tests {
             titles,
             [
                 "Role(DateTime)",
-                "Server IP",
-                "Request",
-                "Client IP",
                 "Status",
+                "Client IP",
+                "Request",
+                "Server IP",
                 "Time (ms)"
             ]
         );

@@ -33,6 +33,11 @@ http_status = sc-status
 http_substatus = sc-substatus
 win32_status = sc-win32-status
 
+# Status columns first, so they fit in a normal window without horizontal scrolling; "*" = all
+# the other fields of the "#Fields:" header (server IP, port, user agent, referer, host, bytes …)
+# in their header order – no field is hidden.
+columns = datetime sc-status sc-substatus sc-win32-status time-taken c-ip cs-username message *
+
 title.message = Request
 title.sc-status = Status
 title.sc-substatus = Substatus
