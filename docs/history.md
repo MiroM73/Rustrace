@@ -192,6 +192,10 @@ Notes for Claude, linked from `CLAUDE.md`.
     rows, lines and file paths before its thread starts. Ctrl+P workaround removed from the
     failed-app-install and software-updates guides; unit test for `has_read` in
     `single_log_passes_through`.
+65. Release v1.0.8 (#38 export during auto refresh, #37 Follow end paused by a selection, #46
+    Shift+F3 / Shift+F2, #48 rules window width, guides 1–5). `release.ps1` must run under
+    PowerShell 7 (`pwsh`): Windows PowerShell 5.1 strips the quotes of the `gh run list --jq`
+    filter, so the "waiting for the workflow" step failed after the tag was pushed.
 
 ## Ideas not done yet (offered by the owner)
 - `--set "<name>"` command-line option for log sets (#27): would need the set loading, the file
