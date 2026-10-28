@@ -165,6 +165,13 @@ Notes for Claude, linked from `CLAUDE.md`.
     order). Other `consume_key` calls reviewed: Ctrl+Shift+S has no Ctrl+S counterpart and is
     consumed first anyway; Ctrl is matched exactly, so F5 / Ctrl+F5 and F2 / Ctrl+F2 are fine;
     Ctrl+Shift+C does not produce egui's `Copy` event (egui-winit requires Ctrl only).
+62. #48 Highlight rules window columns cut off: the table (name 150 px, pattern 300 px fields) was
+    wider than the 1150 px default window, egui's floating scroll bars stayed hidden, so the
+    ↑ ↓ 🗑 column (or On / Name) was cut off without any hint. Name 140 px / pattern 250 px with
+    the full text in the tooltip, default width 1240 px limited to the main window (min. 600 px),
+    solid scroll bar style, scroll offset reset on opening. Verified on Xvfb: 3 default + 3 MSI
+    rules fully visible in a 1400 × 900 window (English and German), 1000 × 800 shows the
+    horizontal bar and starts at the left; unit test for the width.
 
 ## Ideas not done yet (offered by the owner)
 - `--set "<name>"` command-line option for log sets (#27): would need the set loading, the file

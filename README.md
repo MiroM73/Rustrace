@@ -266,6 +266,9 @@ the version information into the exe; this uses the resource compiler `rc.exe` o
 - scope **Whole row** (text + background color of the row) or **Text only** (colors just the match in the message)
 - optionally match the Component column as well (and the extra columns of a log definition)
 - order = priority (up/down arrows), on/off, live preview, invalid regex warning
+- the window opens wide enough for the whole table (up to the size of the main window); long names
+  and patterns are shown in full in the tooltip of their field; a narrower window shows a
+  horizontal scroll bar
 - import/export of rules as JSON (e.g. to share with colleagues)
 - error / warning / search match, bookmark and long-gap (Δ column) colors are configurable
   (Highlighting → Colors…)
