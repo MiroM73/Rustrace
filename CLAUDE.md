@@ -104,5 +104,11 @@ Feature index (file → section of `docs/architecture.md`):
   GUI checks; benchmarks: `docs/architecture.md` → Tests and benchmarks.
 - Releases: `scripts\release.ps1 <version> [-Publish] [-DryRun] [-NoWatch] [-Yes]`; the owner runs
   it himself to save tokens. Details: `docs/architecture.md` → Packaging and releases.
+- **Every release gets written release notes** on GitHub (the workflow only adds the
+  "Full Changelog" link): `## What's new`, `## What's changed`, `## What's fixed`, `## Removed`
+  ("Nothing." when empty), one item per issue with its number, user-facing (menu paths, short
+  examples), then the `**Full Changelog**` compare link; source = `docs/history.md` and
+  `git log v<prev>..v<new>`. Set them with `gh release edit v<ver> --notes-file <file>`. The
+  in-app update window shows these notes. Example: v1.1.6.
 - Line endings: `.gitattributes` forces LF for all text files (`* text=auto eol=lf`); write new
   files with LF.

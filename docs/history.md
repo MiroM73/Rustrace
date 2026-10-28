@@ -326,6 +326,9 @@ Notes for Claude, linked from `CLAUDE.md`.
     screenshots: a 5-line free-text `test.log` → Line + Message only; `test.log` + AppEnforce.log
     → File, Message, Component, Date / time, Thread; client.msi.log → Date / time, MSI,
     Process:thread, Message as before.
+81. Release notes of v1.1.6 written on GitHub (it had only the generated "Full Changelog" link):
+    What's new (#32, #40, #42, #39), What's changed (#41, #43, #44), What's fixed (#47), Removed.
+    From now on every release gets such notes (rule in `CLAUDE.md` → Commands).
 
 ## Ideas not done yet (offered by the owner)
 - `--set "<name>"` command-line option for log sets (#27): would need the set loading, the file
