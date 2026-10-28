@@ -261,6 +261,12 @@ User-facing descriptions are in `README.md`.
   with `layout_no_wrap`) → `App::message_cell_text` shows `excerpt::around` (context before the
   match, "…"). Details pane: `TextEdit` with a layouter using `text_spans` (rules + search), scrolls
   to the first match once per (row, `search_gen`) (`details_scrolled`).
+- Search highlight in the other cells (#44): `App::search_spans(text, offset)` (the search part of
+  `text_spans`). In the table, every text cell of a matching row (`is_match`) – component, thread,
+  date/time, file (also the colored `■` label: the mark is a span with the log color, search spans
+  shifted by its length), extra columns – goes through `text_cell`: spans → `build_job`, no spans →
+  the plain label as before. Only drawn rows of matching rows run the regex. Details pane: the
+  value inside each column label (`rfind`) gets the spans, `build_job` with the body font.
 
 ## Table
 - Horizontal scrolling of the table (`App::table`): egui_extras tables only scroll vertically, so

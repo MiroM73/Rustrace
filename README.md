@@ -434,7 +434,9 @@ tickets or colleagues without RusTrace: every column is a spreadsheet column
 - **search history** (🕘 next to the search field): the last 30 search texts, newest first, kept
   between sessions; a text is remembered when you search with Enter / F3 / the arrows or leave the
   field; picking one searches it again; "Clear search history" empties the list
-- searches the message, the component and the extra columns of a log definition
+- searches the message, the component and the extra columns of a log definition; in a matching
+  row the found text is highlighted in **every** cell, not only in the message (e.g. a client IP in
+  the *Client IP* column of an IIS log), and in the column values of the details pane
 - when a match in a long message would not be visible in the Message cell (past the right edge of
   the column, or on a later line of a multi-line message), the cell shows the part of the message
   around the match, starting with "…"

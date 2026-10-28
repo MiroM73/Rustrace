@@ -181,6 +181,10 @@ impl App {
                 Severity::Info => (t!("severity.info"), ui.visuals().text_color()),
             };
             ui.colored_label(col, txt);
+            // Search matches in the column values are highlighted like in the table (#44).
+            let hit = self.details_row().is_some_and(|i| self.is_match.get(i));
+            let font = egui::TextStyle::Body.resolve(ui.style());
+            let fg = ui.visuals().text_color();
             // Every column except the message (shown below), in the order of the table.
             for c in &self.columns() {
                 let value = match c.kind {
@@ -199,9 +203,16 @@ impl App {
                     }
                     (ColumnKind::Role(Role::DateTime), None) => t!("details.time", time = value),
                     (ColumnKind::Role(Role::Thread), None) => t!("details.thread", thread = value),
-                    _ => value,
+                    _ => value.clone(),
                 };
-                ui.label(label);
+                let spans = match (hit, label.rfind(&value)) {
+                    (true, Some(at)) => self.search_spans(&value, at),
+                    _ => Vec::new(),
+                };
+                match spans.is_empty() {
+                    true => ui.label(label),
+                    false => ui.label(build_job(&label, &spans, fg, &font)),
+                };
             }
             // Time to the previous row and to the reference row (#23).
             let idx = self.details_row().unwrap_or_default();

@@ -96,20 +96,29 @@ impl App {
             }
         }
         // Search matches are on top.
-        if search_hit && let Some(re) = &self.search_re {
-            let (sfg, sbg) = self.cfg.palette(self.dark).search;
-            for m in re.find_iter(text).take(200) {
-                if m.start() < m.end() {
-                    spans.push(Span {
-                        start: m.start(),
-                        end: m.end(),
-                        fg: Some(c32(sfg)),
-                        bg: Some(c32(sbg)),
-                    });
-                }
-            }
+        if search_hit {
+            spans.extend(self.search_spans(text, 0));
         }
         spans
+    }
+
+    /// The search matches in `text` in the search colors, shifted by `offset` bytes; empty
+    /// without a search.
+    pub(in crate::app) fn search_spans(&self, text: &str, offset: usize) -> Vec<Span> {
+        let Some(re) = &self.search_re else {
+            return Vec::new();
+        };
+        let (sfg, sbg) = self.cfg.palette(self.dark).search;
+        re.find_iter(text)
+            .take(200)
+            .filter(|m| m.start() < m.end())
+            .map(|m| Span {
+                start: m.start() + offset,
+                end: m.end() + offset,
+                fg: Some(c32(sfg)),
+                bg: Some(c32(sbg)),
+            })
+            .collect()
     }
 
     pub(in crate::app) fn table(&mut self, ui: &mut egui::Ui) {
@@ -329,6 +338,21 @@ impl App {
                                 .selectable(false),
                         );
                     };
+                    // A text cell of a row matching the search: the search matches highlighted
+                    // like in the message (#44); only for the drawn rows.
+                    let hit = self.is_match.get(idx);
+                    let text_cell = |ui: &mut egui::Ui, s: &str| {
+                        let spans = match hit {
+                            true => self.search_spans(s, 0),
+                            false => Vec::new(),
+                        };
+                        if spans.is_empty() {
+                            return simple(ui, s);
+                        }
+                        paint_bg(ui);
+                        let job = build_job(s, &spans, fg_col, &font);
+                        ui.add(egui::Label::new(job).truncate().selectable(false));
+                    };
 
                     // Line number; a bookmarked row has the cell in the bookmark colors (#22).
                     let (_, line_cell) = row.col(|ui| match self.bookmark_note(idx) {
@@ -361,7 +385,6 @@ impl App {
                             ColumnKind::Role(Role::Message) => {
                                 row.col(|ui| {
                                     paint_bg(ui);
-                                    let hit = self.is_match.get(idx);
                                     let text = self.message_cell_text(ui, e.message, hit, &font);
                                     let spans = self.text_spans(&text, hit);
                                     let job = build_job(&text, &spans, fg_col, &font);
@@ -369,30 +392,29 @@ impl App {
                                 });
                             }
                             ColumnKind::Role(Role::Component) => {
-                                row.col(|ui| simple(ui, e.component));
+                                row.col(|ui| text_cell(ui, e.component));
                             }
                             ColumnKind::Role(Role::Thread) => {
-                                row.col(|ui| simple(ui, e.thread));
+                                row.col(|ui| text_cell(ui, e.thread));
                             }
                             // A merged view of several logs: a color mark per log.
                             ColumnKind::File if self.cfg.color_files && self.is_merged() => {
                                 row.col(|ui| {
                                     paint_bg(ui);
                                     let log = self.file_sources.get(e.file as usize).copied();
-                                    let mut job = LayoutJob::default();
-                                    job.append(
-                                        "■ ",
-                                        0.0,
-                                        TextFormat::simple(
-                                            font.clone(),
-                                            log.map_or(fg_col, |l| self.log_color(l)),
-                                        ),
-                                    );
-                                    job.append(
-                                        &self.file_label(e.file),
-                                        0.0,
-                                        TextFormat::simple(font.clone(), fg_col),
-                                    );
+                                    const MARK: &str = "■ ";
+                                    let label = self.file_label(e.file);
+                                    let mut spans = vec![Span {
+                                        start: 0,
+                                        end: MARK.len(),
+                                        fg: log.map(|l| self.log_color(l)),
+                                        bg: None,
+                                    }];
+                                    if hit {
+                                        spans.extend(self.search_spans(&label, MARK.len()));
+                                    }
+                                    let job =
+                                        build_job(&format!("{MARK}{label}"), &spans, fg_col, &font);
                                     ui.add(egui::Label::new(job).truncate().selectable(false));
                                 });
                             }
@@ -421,7 +443,8 @@ impl App {
                                 });
                             }
                             kind => {
-                                let (_, cell) = row.col(|ui| simple(ui, &self.cell_text(&e, kind)));
+                                let (_, cell) =
+                                    row.col(|ui| text_cell(ui, &self.cell_text(&e, kind)));
                                 // Status columns of the log definition (#28): explanation as a
                                 // tooltip, computed only while the cell is hovered.
                                 if status_cols.contains(&Some(kind))

@@ -275,6 +275,13 @@ Notes for Claude, linked from `CLAUDE.md`.
     message on Windows, which stays below the own text). Verified: unit test
     `errcodes::tests::iis_win32_status_codes` (own text first, for ten of the codes),
     `builtin_languages_are_complete`.
+75. #44 Search matches highlighted in all table cells (component, thread, date/time, file, extra
+    columns), not only in the Message cell, and in the column values of the details pane – a
+    match in another column (IIS Client IP, Time (ms), CBS level …) is now visible, also on rows
+    colored by severity. `App::search_spans` split off `text_spans`; cells without a match keep the
+    plain label. Verified: release build on the IIS guide log, `--search 10.20.7.42 --filter`:
+    every Client IP cell of the 55 rows and "Client IP: 10.20.7.42" in the details pane highlighted
+    (screenshot); clippy / tests.
 
 ## Ideas not done yet (offered by the owner)
 - `--set "<name>"` command-line option for log sets (#27): would need the set loading, the file
