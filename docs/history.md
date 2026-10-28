@@ -158,6 +158,13 @@ Notes for Claude, linked from `CLAUDE.md`.
     search-as-you-type skips the first match, #48 rules window columns cut off, #49 empty columns
     of plain text logs, #50 severity from highlight rules, #51 rules import duplicates / partial
     export.
+61. #46 Shift+F3 / Shift+F2 went forward: egui `consume_key` matches modifiers with
+    `matches_logically` (extra Shift / Alt ignored) and the `NONE` pattern was checked first, so it
+    also took the Shift variant. New helper `consume_key_and_shifted` in `app/input.rs` consumes
+    `Shift+key` first (F3 and F2), module note on the order rule, unit test (fails with the old
+    order). Other `consume_key` calls reviewed: Ctrl+Shift+S has no Ctrl+S counterpart and is
+    consumed first anyway; Ctrl is matched exactly, so F5 / Ctrl+F5 and F2 / Ctrl+F2 are fine;
+    Ctrl+Shift+C does not produce egui's `Copy` event (egui-winit requires Ctrl only).
 
 ## Ideas not done yet (offered by the owner)
 - `--set "<name>"` command-line option for log sets (#27): would need the set loading, the file
