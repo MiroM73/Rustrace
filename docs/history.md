@@ -258,6 +258,14 @@ Notes for Claude, linked from `CLAUDE.md`.
     HTML export with colors and a saved preset in the window, Copy for Excel of 35 selected rows
     (clipboard checked), `--export` of two merged logs to XLSX (opened by Excel) and of the 400 MB
     log with `--errors` (95 133 rows, ~5 s), unknown extension → exit code 1. Closes #32.
+73. #42 Column filters compare numbers: `>n`, `>=n`, `<n`, `<=n` and inclusive ranges `a..b`
+    (open bounds `500..`, `..10`), integers and decimals, combinable with `|` / `!` / `=exact`; a
+    cell that is not a number never matches a number condition; the date/time column keeps its
+    time ranges. Tooltip of the filter fields lists the syntax; IIS guide step 6 uses `>=10000`.
+    Verified: unit tests for every operator, ranges, open bounds, decimals / signs, combinations,
+    non-numeric cells and texts that only look like conditions; on the IIS guide log `>=10000` in
+    *Time (ms)* matches exactly the 371 rows of the regex search (and equals an integer ≥ 10000
+    check on all 23 970 rows).
 
 ## Ideas not done yet (offered by the owner)
 - `--set "<name>"` command-line option for log sets (#27): would need the set loading, the file

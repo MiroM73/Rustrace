@@ -453,6 +453,11 @@ tickets or colleagues without RusTrace: every column is a spreadsheet column
   - `text` – the value contains the text, `=text` – exactly this value
   - `a|b` – any of them (`Error|Warning`, `=404|=500`)
   - `!` at the start – none of them (`!Info`, `!=0`)
+  - numbers: `>10000`, `>=500`, `<100`, `<=3` and inclusive ranges `500..599` (`500..`, `..10`
+    leave a bound open) – e.g. `>=10000` in *Time (ms)* of an IIS log = requests that took 10 s
+    or more; integers and decimals (`1.5`), combinable with the rest (`>=500|=401`,
+    `!500..599`); a cell that is not a number (empty, `-`) never matches a number condition.
+    The tooltip of a filter field lists the syntax
   - the date/time column is filtered as displayed (e.g. `23.10.2026 10:2`); a filter that fixes
     the date from the year on (`23.10.2026`, `23.10.2026 10:3`, `10.2026`, `2026`) is compared
     with the stored time directly – about 30× faster on big logs than comparing texts

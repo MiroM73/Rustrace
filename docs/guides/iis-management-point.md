@@ -169,8 +169,13 @@ the DP's web site (IIS Manager → the site → *MIME Types*).
 
 ## Step 6 – Slow requests
 
-The search box also searches the extra columns. A regular expression finds every request that
-took 10 seconds or more (a number of five or more digits in a column):
+The quickest way: **column filters** (toolbar) and `>=10000` in the **Time (ms)** filter field –
+the field compares numbers (`>`, `>=`, `<`, `<=`, ranges like `500..599`, see its tooltip), so it
+shows exactly the requests that took 10 seconds or more.
+
+The search box also searches the extra columns, so a regular expression finds the same requests
+(a number of five or more digits in a column) – useful on the command line, where there are no
+column filters:
 
 ![Requests that took 10 s or more](images/iis-management-point/08-slow-requests.png)
 
@@ -184,6 +189,7 @@ Other useful searches (Regex on):
 | Search | Finds |
 |---|---|
 | `10.20.7.42` (Client IP column filter) | everything of one client |
+| `500..599` (Status column filter) | all server errors |
 | `ccm_system` | policy requests only |
 | `SMS_DP_SMSPKG` | content downloads only |
 | `MPLIST\|MPKEYINFORMATION` | MP list and key requests |

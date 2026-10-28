@@ -358,7 +358,7 @@ toolbar.column_filters.tip = Shows a filter field under every column header – 
 toolbar.bookmarks_only = Bookmarked
 toolbar.bookmarks_only.tip = Show only bookmarked rows
 filter.hint = filter
-filter.tip = text = contains (case-insensitive)\n=text = exactly this value\na|b = any of them\n! at the start = none of them (e.g. !Info|=0)
+filter.tip = text = contains (case-insensitive)\n=text = exactly this value\na|b = any of them\n! at the start = none of them (e.g. !Info|=0)\n>n  >=n  <n  <=n = numbers (e.g. >=10000)\na..b = numbers from a to b (500..599, 500.., ..10)\nA value that is not a number never matches a number condition.
 filter.clear = Clear all column filters
 file.overwritten = {name} (overwritten)
 toolbar.time_range = Time range

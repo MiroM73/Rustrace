@@ -344,7 +344,7 @@ toolbar.column_filters.tip = Zeigt unter jeder Spaltenüberschrift ein Filterfel
 toolbar.bookmarks_only = Lesezeichen
 toolbar.bookmarks_only.tip = Nur Zeilen mit Lesezeichen anzeigen
 filter.hint = Filter
-filter.tip = Text = enthält (Groß-/Kleinschreibung egal)\n=Text = genau dieser Wert\na|b = einer davon\n! am Anfang = keiner davon (z. B. !Info|=0)
+filter.tip = Text = enthält (Groß-/Kleinschreibung egal)\n=Text = genau dieser Wert\na|b = einer davon\n! am Anfang = keiner davon (z. B. !Info|=0)\n>n  >=n  <n  <=n = Zahlen (z. B. >=10000)\na..b = Zahlen von a bis b (500..599, 500.., ..10)\nEin Wert, der keine Zahl ist, erfüllt eine Zahlenbedingung nie.
 filter.clear = Alle Spaltenfilter löschen
 file.overwritten = {name} (überschrieben)
 toolbar.time_range = Zeitraum

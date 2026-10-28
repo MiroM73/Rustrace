@@ -4,16 +4,25 @@
 //! * `text` – the value contains `text`,
 //! * `=text` – the value is exactly `text`,
 //! * `a|b|c` – any of the alternatives (each one may start with `=`),
+//! * `>n`, `>=n`, `<n`, `<=n`, `a..b` (inclusive, either bound may be left out) – the value is a
+//!   number in that range (#42); a value that is not a number never matches such an alternative,
 //! * `!…` at the start – negation: the value matches none of the alternatives.
 //!
-//! Spaces around alternatives are ignored; an empty filter (or only `!`) filters nothing.
+//! Spaces around alternatives are ignored; an empty filter (or only `!`) filters nothing. The
+//! date/time column (`DateFilter`) has no numeric alternatives, it compares time ranges.
 
 use crate::store::{EntryRef, iso_to_ms, ms_to_iso, ms_to_iso_bytes};
 use regex::{Regex, RegexBuilder};
+use std::ops::{Bound, RangeBounds};
+
+/// Numbers matched by a numeric alternative.
+type NumRange = (Bound<f64>, Bound<f64>);
 
 #[derive(Clone)]
 pub struct ColumnFilter {
-    re: Regex,
+    /// The text alternatives; `None` when all alternatives are numeric.
+    re: Option<Regex>,
+    ranges: Vec<NumRange>,
     negate: bool,
 }
 
@@ -48,29 +57,86 @@ fn split(input: &str) -> (bool, Vec<Alternative<'_>>) {
     (negate, alternatives)
 }
 
+/// A number of a filter or a cell: optional sign, digits, optional decimal point (`-1.5`).
+fn number(s: &str) -> Option<f64> {
+    let s = s.trim();
+    let digits = s.strip_prefix(['-', '+']).unwrap_or(s);
+    let valid = digits.bytes().any(|b| b.is_ascii_digit())
+        && digits.bytes().all(|b| b.is_ascii_digit() || b == b'.')
+        && digits.bytes().filter(|&b| b == b'.').count() <= 1;
+    valid.then(|| s.parse().ok()).flatten()
+}
+
+/// The numbers selected by a numeric alternative (`>n`, `>=n`, `<n`, `<=n`, `a..b`).
+fn number_range(text: &str) -> Option<NumRange> {
+    use Bound::{Excluded, Included, Unbounded};
+    if let Some(n) = text.strip_prefix(">=") {
+        return number(n).map(|n| (Included(n), Unbounded));
+    }
+    if let Some(n) = text.strip_prefix('>') {
+        return number(n).map(|n| (Excluded(n), Unbounded));
+    }
+    if let Some(n) = text.strip_prefix("<=") {
+        return number(n).map(|n| (Unbounded, Included(n)));
+    }
+    if let Some(n) = text.strip_prefix('<') {
+        return number(n).map(|n| (Unbounded, Excluded(n)));
+    }
+    let (from, to) = text.split_once("..")?;
+    let bound = |s: &str| match s.trim() {
+        "" => Some(Unbounded),
+        s => number(s).map(Included),
+    };
+    match (bound(from)?, bound(to)?) {
+        (Unbounded, Unbounded) => None,
+        range => Some(range),
+    }
+}
+
 impl ColumnFilter {
     /// Compiles a filter text; `None` when it filters nothing.
     pub fn parse(input: &str) -> Option<ColumnFilter> {
+        Self::build(input, true)
+    }
+
+    /// Like `parse`, but every alternative is text (the date/time column).
+    fn parse_text(input: &str) -> Option<ColumnFilter> {
+        Self::build(input, false)
+    }
+
+    fn build(input: &str, numeric: bool) -> Option<ColumnFilter> {
         let (negate, alternatives) = split(input);
-        let alternatives: Vec<String> = alternatives
-            .iter()
-            .map(|a| match a.exact {
-                true => format!("^{}$", regex::escape(a.text)),
-                false => regex::escape(a.text),
-            })
-            .collect();
         if alternatives.is_empty() {
             return None;
         }
-        let re = RegexBuilder::new(&format!("(?:{})", alternatives.join("|")))
-            .case_insensitive(true)
-            .build()
-            .ok()?;
-        Some(ColumnFilter { re, negate })
+        let mut ranges = Vec::new();
+        let mut texts = Vec::new();
+        for a in &alternatives {
+            match a.exact {
+                true => texts.push(format!("^{}$", regex::escape(a.text))),
+                false => match number_range(a.text).filter(|_| numeric) {
+                    Some(range) => ranges.push(range),
+                    None => texts.push(regex::escape(a.text)),
+                },
+            }
+        }
+        let re = match texts.is_empty() {
+            true => None,
+            false => Some(
+                RegexBuilder::new(&format!("(?:{})", texts.join("|")))
+                    .case_insensitive(true)
+                    .build()
+                    .ok()?,
+            ),
+        };
+        Some(ColumnFilter { re, ranges, negate })
     }
 
     pub fn matches(&self, value: &str) -> bool {
-        self.re.is_match(value) != self.negate
+        let hit = self.re.as_ref().is_some_and(|re| re.is_match(value))
+            || (!self.ranges.is_empty()
+                && number(value).is_some_and(|v| self.ranges.iter().any(|r| r.contains(&v))));
+        hit != self.negate
     }
 }
 
@@ -193,7 +259,7 @@ pub struct DateFilter {
 impl DateFilter {
     /// `None` when the text filters nothing (like `ColumnFilter::parse`).
     pub fn parse(input: &str, date_pattern: &str) -> Option<DateFilter> {
-        let text = ColumnFilter::parse(input)?;
+        let text = ColumnFilter::parse_text(input)?;
         let layout = DateLayout::new(date_pattern);
         let (_, alternatives) = split(input);
         let ranges = alternatives
@@ -340,6 +406,68 @@ mod tests {
         assert!(!m("a.b", "axb"));
     }
 
+    #[test]
+    fn numeric_conditions() {
+        // every operator
+        assert!(m(">10000", "30012"));
+        assert!(!m(">10000", "10000"));
+        assert!(m(">=10000", "10000"));
+        assert!(!m(">=10000", "9999"));
+        assert!(m("<100", "99"));
+        assert!(!m("<100", "100"));
+        assert!(m("<=3", "3"));
+        assert!(!m("<=3", "4"));
+        assert!(m("> 10", " 11 "));
+        // numbers, not texts: 9 < 10, while "9" > "10" as text
+        assert!(m("<10", "9"));
+        assert!(!m(">10", "9"));
+        // decimals and signs
+        assert!(m(">1.5", "1.75"));
+        assert!(!m(">1.5", "1.5"));
+        assert!(m("<0", "-3"));
+        assert!(m("-5..-1", "-2"));
+        // inclusive ranges, open bounds
+        assert!(m("500..599", "500"));
+        assert!(m("500..599", "599"));
+        assert!(!m("500..599", "600"));
+        assert!(!m("500..599", "499.9"));
+        assert!(m("1.5..2", "2"));
+        assert!(m("500..", "100000"));
+        assert!(m("..10", "-1"));
+        assert!(!m("..10", "11"));
+        // combined with alternatives and negation
+        assert!(m(">=500|=401", "401"));
+        assert!(m(">=500|=401", "503"));
+        assert!(!m(">=500|=401", "404"));
+        assert!(m(">=500|warn", "Warning"));
+        assert!(m("!500..599", "404"));
+        assert!(!m("!500..599", "503"));
+        assert!(!m("!>0", "5"));
+        // a cell that is not a number never matches a numeric alternative
+        for cell in [
+            "",
+            "-",
+            "abc",
+            "1.2.3",
+            "10.20.7.42",
+            "1e5",
+            "0x10",
+            "12 ms",
+            ".",
+        ] {
+            assert!(!m(">=0|<0", cell), "{cell:?}");
+            assert!(m("!>=0|<0", cell), "{cell:?}");
+        }
+        // not numbers: compared as text
+        assert!(m(">abc", "x>abc"));
+        assert!(m("..", "a..b"));
+        assert!(m("10.20.7.42", "10.20.7.42"));
+        assert!(!m(">", "5"));
+        assert!(m(">", "a > b"));
+        assert!(m("=0", "0"));
+        assert!(!m("=0", "0.0"));
+    }
+
     /// Log with entries around the given times plus a few without a parsed timestamp.
     fn dated_store() -> crate::store::LogStore {
         let base = iso_to_ms("2026-10-23 10:30:15.250").unwrap();
@@ -448,7 +576,7 @@ mod tests {
             for &(input, numeric) in inputs {
                 let f = DateFilter::parse(input, pattern).unwrap();
                 assert_eq!(f.numeric(), numeric, "{pattern} {input:?}");
-                let text = ColumnFilter::parse(input).unwrap();
+                let text = ColumnFilter::parse_text(input).unwrap();
                 for i in 0..store.len() {
                     let e = store.at(i);
                     let expected = text.matches(&layout.format_iso(&e.datetime()));

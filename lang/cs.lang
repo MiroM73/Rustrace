@@ -344,7 +344,7 @@ toolbar.column_filters.tip = Zobrazí pole pro filtr pod záhlavím každého sl
 toolbar.bookmarks_only = Záložky
 toolbar.bookmarks_only.tip = Zobrazit pouze řádky se záložkou
 filter.hint = filtr
-filter.tip = text = obsahuje (bez ohledu na velikost písmen)\n=text = přesně tato hodnota\na|b = kterákoli z nich\n! na začátku = žádná z nich (např. !Info|=0)
+filter.tip = text = obsahuje (bez ohledu na velikost písmen)\n=text = přesně tato hodnota\na|b = kterákoli z nich\n! na začátku = žádná z nich (např. !Info|=0)\n>n  >=n  <n  <=n = čísla (např. >=10000)\na..b = čísla od a do b (500..599, 500.., ..10)\nHodnota, která není číslo, číselné podmínce nikdy nevyhovuje.
 filter.clear = Zrušit všechny filtry sloupců
 file.overwritten = {name} (přepsán)
 toolbar.time_range = Časový rozsah
