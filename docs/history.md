@@ -136,7 +136,9 @@ Notes for Claude, linked from `CLAUDE.md`.
     highlight rule for the update ID / KB / CBS package, raw line, export of the visible rows,
     codes table for scan / install errors). `scripts/gen_guide_logs.py` now runs one generator per
     guide from `scripts/guide_logs/` (the first guide's logs are unchanged, checked by checksum).
-59. (2026-10-28) Guides 3 and 4: *A new ConfigMgr client does not register* (client installation log
+
+## History (2026-10-28)
+59. Guides 3 and 4: *A new ConfigMgr client does not register* (client installation log
     set with a rotated part, rows without a date, harmless MSI notes, regex milestones, time
     reference, bookmarks list, error code lookup) and *The management point / distribution point is
     not healthy* (IIS log: own log definition with the status columns first, 500 after 30 s,
