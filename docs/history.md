@@ -258,6 +258,37 @@ Notes for Claude, linked from `CLAUDE.md`.
     HTML export with colors and a saved preset in the window, Copy for Excel of 35 selected rows
     (clipboard checked), `--export` of two merged logs to XLSX (opened by Excel) and of the 400 MB
     log with `--errors` (95 133 rows, ~5 s), unknown extension → exit code 1. Closes #32.
+73. #42 Column filters compare numbers: `>n`, `>=n`, `<n`, `<=n` and inclusive ranges `a..b`
+    (open bounds `500..`, `..10`), integers and decimals, combinable with `|` / `!` / `=exact`; a
+    cell that is not a number never matches a number condition; the date/time column keeps its
+    time ranges. Tooltip of the filter fields lists the syntax; IIS guide step 6 uses `>=10000`.
+    Verified: unit tests for every operator, ranges, open bounds, decimals / signs, combinations,
+    non-numeric cells and texts that only look like conditions; on the IIS guide log `>=10000` in
+    *Time (ms)* matches exactly the 371 rows of the regex search (and equals an integer ≥ 10000
+    check on all 23 970 rows).
+74. #43 IIS Win32 status texts: own descriptions (en / sk / cs / de) for the `sc-win32-status`
+    values typical for IIS / ConfigMgr web logs – 1, 50, 64, 121, 995, 1229, 1236, 1314, 1326, 1330,
+    1331, 1385, 1909 and the SSPI codes 2148074252 / 2148074254 – worded for the IIS context (64 =
+    the client closed the connection, 1326 = wrong password / broken secure channel of a computer
+    account, 2148074254 = the anonymous first step of Negotiate). They are shown in the details pane
+    and the cell tooltip on every OS (before: "Unknown code" outside Windows, the generic system
+    message on Windows, which stays below the own text). Verified: unit test
+    `errcodes::tests::iis_win32_status_codes` (own text first, for ten of the codes),
+    `builtin_languages_are_complete`.
+75. #44 Search matches highlighted in all table cells (component, thread, date/time, file, extra
+    columns), not only in the Message cell, and in the column values of the details pane – a
+    match in another column (IIS Client IP, Time (ms), CBS level …) is now visible, also on rows
+    colored by severity. `App::search_spans` split off `text_spans`; cells without a match keep the
+    plain label. Verified: release build on the IIS guide log, `--search 10.20.7.42 --filter`:
+    every Client IP cell of the 55 rows and "Client IP: 10.20.7.42" in the details pane highlighted
+    (screenshot); clippy / tests.
+76. #47 Enter right after search as you type no longer skips the first match: the automatically
+    selected first match is remembered (`TypedSearch`); the first Enter on it only confirms the
+    search (adds it to the history), every further Enter / F3 moves on; F3, the arrows, a history
+    entry, Shift+Enter, a `--search` on the command line or another selected row behave as
+    before. Guide client-msi-1603 step 6: the warning note replaced. Verified: unit test
+    `enter_after_typing_keeps_the_first_match`; release build driven by keystrokes on the guide's
+    client.msi.log: type `Return value 3` → line 91, Enter → still line 91, Enter → line 92.
 
 ## Ideas not done yet (offered by the owner)
 - `--set "<name>"` command-line option for log sets (#27): would need the set loading, the file

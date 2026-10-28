@@ -323,4 +323,25 @@ mod tests {
         );
         assert!(find_codes("Installation success or error status: 0.").is_empty());
     }
+
+    #[test]
+    fn iis_win32_status_codes() {
+        // Typical `sc-win32-status` values of IIS logs have an own text on every OS (#43).
+        for (code, name) in [
+            (64, "ERROR_NETNAME_DELETED"),
+            (1236, "ERROR_CONNECTION_ABORTED"),
+            (1326, "ERROR_LOGON_FAILURE"),
+            (50, "ERROR_NOT_SUPPORTED"),
+            (995, "ERROR_OPERATION_ABORTED"),
+            (121, "ERROR_SEM_TIMEOUT"),
+            (1229, "ERROR_CONNECTION_INVALID"),
+            (1314, "ERROR_PRIVILEGE_NOT_HELD"),
+            (1385, "ERROR_LOGON_TYPE_NOT_GRANTED"),
+            (2_148_074_254, "SEC_E_NO_CREDENTIALS"),
+        ] {
+            let (source, text) = &lookup(code).descriptions[0];
+            assert_eq!(*source, t!("code.source.description"), "{code}");
+            assert!(text.starts_with(name), "{code}: {text}");
+        }
+    }
 }

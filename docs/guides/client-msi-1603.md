@@ -146,8 +146,8 @@ Type `Return value 3` into the search field. Search as you type selects the **fi
    *CustomAction CcmRegisterHostingConfiguration returned actual error code 1603*.
 4. A harmless note, grayed out by the rule.
 
-> Press **F3** for the next match. Do **not** press Enter right after typing: the first match is
-> already selected and Enter jumps to the second one.
+> Press **F3** (or Enter) for the next match. Enter right after typing keeps the first match
+> selected – it only confirms the search; the next Enter moves on.
 
 ## Step 7 – Read the lines above the failure
 

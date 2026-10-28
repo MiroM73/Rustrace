@@ -310,6 +310,10 @@ the version information into the exe; this uses the resource compiler `rc.exe` o
 - **HTTP status codes** (IIS logs and any log whose definition names its status columns): the details
   pane of the selected row explains the HTTP status with the IIS substatus (e.g. `404.3` Not Found:
   MIME type restriction) and the Win32 status (e.g. `50`, `64`, `1236` – via the Win32 lookup above);
+  the Win32 / SSPI codes typical for IIS logs (`1`, `50`, `64`, `121`, `995`, `1229`, `1236`,
+  `1314`, `1326`, `1330`, `1331`, `1385`, `1909`, `2148074252`, `2148074254`) have own texts worded
+  for IIS (e.g. `64` = the client closed the connection, usually harmless for BITS downloads), on
+  every OS; on Windows the system message is shown below them
   hovering a status / substatus / Win32 status cell in the table shows the same explanation as a
   tooltip. Codes without an own description show their class (e.g. "4xx – client error")
 - the lookup window also accepts HTTP statuses: `404.3`, `HTTP 500`, `http 403.14` show only the
@@ -426,11 +430,15 @@ tickets or colleagues without RusTrace: every column is a spreadsheet column
   button are shown right after the search field
 - **search as you type**: from 3 characters on the search runs while typing and the first matching
   row (from the top of the table) is selected and scrolled to; a shorter text is searched with
-  Enter / F3 (the field then shows "Enter = search (automatically from 3 characters)")
+  Enter / F3 (the field then shows "Enter = search (automatically from 3 characters)"). Enter
+  pressed right after typing only confirms the search (adds it to the history) and keeps the
+  first match selected; every further Enter / F3 moves to the next match
 - **search history** (🕘 next to the search field): the last 30 search texts, newest first, kept
   between sessions; a text is remembered when you search with Enter / F3 / the arrows or leave the
   field; picking one searches it again; "Clear search history" empties the list
-- searches the message, the component and the extra columns of a log definition
+- searches the message, the component and the extra columns of a log definition; in a matching
+  row the found text is highlighted in **every** cell, not only in the message (e.g. a client IP in
+  the *Client IP* column of an IIS log), and in the column values of the details pane
 - when a match in a long message would not be visible in the Message cell (past the right edge of
   the column, or on a later line of a multi-line message), the cell shows the part of the message
   around the match, starting with "…"
@@ -453,6 +461,11 @@ tickets or colleagues without RusTrace: every column is a spreadsheet column
   - `text` – the value contains the text, `=text` – exactly this value
   - `a|b` – any of them (`Error|Warning`, `=404|=500`)
   - `!` at the start – none of them (`!Info`, `!=0`)
+  - numbers: `>10000`, `>=500`, `<100`, `<=3` and inclusive ranges `500..599` (`500..`, `..10`
+    leave a bound open) – e.g. `>=10000` in *Time (ms)* of an IIS log = requests that took 10 s
+    or more; integers and decimals (`1.5`), combinable with the rest (`>=500|=401`,
+    `!500..599`); a cell that is not a number (empty, `-`) never matches a number condition.
+    The tooltip of a filter field lists the syntax
   - the date/time column is filtered as displayed (e.g. `23.10.2026 10:2`); a filter that fixes
     the date from the year on (`23.10.2026`, `23.10.2026 10:3`, `10.2026`, `2026`) is compared
     with the stored time directly – about 30× faster on big logs than comparing texts
