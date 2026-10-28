@@ -252,6 +252,8 @@ pub struct App {
     rule_errors: Vec<Option<String>>,
 
     show_rules: bool,
+    /// The rules window was shown in the previous frame (#48: start scrolled to the left).
+    rules_was_open: bool,
     show_colors: bool,
     show_help: bool,
     show_about: bool,
@@ -445,6 +447,7 @@ impl App {
             rules: Vec::new(),
             rule_errors: Vec::new(),
             show_rules: false,
+            rules_was_open: false,
             show_colors: false,
             show_help: false,
             show_about: false,
