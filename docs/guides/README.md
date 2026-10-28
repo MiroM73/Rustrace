@@ -12,5 +12,9 @@ screenshots; the numbers in the pictures match the numbered points in the text.
 | [The management point / distribution point is not healthy](iis-management-point.md) | The IIS log of the site server (HTTP 500 after 30 s, 503.2, 401.1 + 1326, 404.3): own log definition with the status columns first, HTTP / IIS status explanations, column filter `!=2`, regex search in extra columns. |
 | [The ConfigMgr client installation fails](client-msi-1603.md) | ccmsetup.log and the verbose client.msi.log (1618, then 1603 in a custom action with a WMI error): failed action in the details pane, misleading keyword errors in MSI logs, MSI highlight rules (importable JSON), the first `Return value 3`, copying the evidence, the fix. |
 
+**In RusTrace**: Help → Guides lists every guide (*All guides…* opens this page), Help → About
+links here, and the log sets *Application deployment*, *Software updates* and *Client installation*
+have a 📖 button for their guide in File → Open log set….
+
 The screenshots are made with invented sample logs; `python scripts/gen_guide_logs.py` creates the
 same logs in `testlogs\guides\` so you can try every step yourself.

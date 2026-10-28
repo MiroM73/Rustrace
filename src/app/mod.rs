@@ -10,6 +10,7 @@ use crate::fileassoc::{self, ExtStatus};
 use crate::filter::{
     CellFilter, FilterOutput, FilterSpec, MatchBits, entry_matches, other_columns_match,
 };
+use crate::guides;
 use crate::httpstatus::{self, HttpStatus};
 use crate::i18n;
 use crate::logdef::{self, Column as LogColumn, ColumnKind, LogDef, Role, Schema};

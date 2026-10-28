@@ -43,6 +43,7 @@ Feature index (file → section of `docs/architecture.md`):
   `dialogs/lookup.rs` → Table (error code lookup, HTTP / IIS status codes), Log definitions
 - Export with context – `src/export.rs`, `dialogs/export.rs` → Export
 - Updates – `src/update.rs`, `src/http.rs`, `dialogs/update.rs` → Updates
+- Guides in Help → Guides, About, log sets (#39) – `src/guides.rs`, `app/menu.rs` → Guides
 - Languages, settings – `src/i18n.rs`, `src/config.rs` → Localization and settings
 - Command-line arguments – `src/cli.rs`, `app/cli.rs`, `src/main.rs` → Command line
 
@@ -85,7 +86,7 @@ Feature index (file → section of `docs/architecture.md`):
   `egui::MenuBar::new().ui(..)`, `ui.close()`, `egui::Id::unique(..)` (not `Id::new`).
 
 ## Commands
-- `cargo build --release` → `target\release\rustrace.exe`; `cargo test` (108 tests; what they
+- `cargo build --release` → `target\release\rustrace.exe`; `cargo test` (110 tests; what they
   cover: `docs/architecture.md` → Tests and benchmarks).
 - `cargo fmt` + `cargo clippy --all-targets --locked -- -D warnings` – the code is rustfmt-clean and
   clippy-clean; CI (`.github/workflows/ci.yml`) fails otherwise. Formatting-only commits go into

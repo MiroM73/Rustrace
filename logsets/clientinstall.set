@@ -11,6 +11,9 @@ description.sk = Inštalácia klienta ConfigMgr, jeho registrácia a lokalita / 
 description.cs = Instalace klienta ConfigMgr, jeho registrace a lokalita / bod správy, který najde.
 description.de = Installation des ConfigMgr-Clients, seine Registrierung und der gefundene Standort / Verwaltungspunkt.
 
+guide = client-install.md
+guide = client-msi-1603.md
+
 file = %WINDIR%\ccmsetup\Logs\ccmsetup.log
 file = %WINDIR%\ccmsetup\Logs\client.msi.log
 file = %CCMLOGS%\ClientIDManagerStartup.log

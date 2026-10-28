@@ -13,6 +13,7 @@ mod excerpt;
 mod export;
 mod fileassoc;
 mod filter;
+mod guides;
 mod http;
 mod httpstatus;
 mod i18n;

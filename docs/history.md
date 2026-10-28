@@ -204,6 +204,13 @@ Notes for Claude, linked from `CLAUDE.md`.
     time-taken c-ip cs-username message *`. Users with an own copy get the "changed predefined
     definitions" notice. Tests for the default and a large `#Fields:` set, and for `columns`
     without `*` (unlisted columns hidden); the IIS guide's step 2 is now optional.
+67. #39 Guides in the program: Help → Guides (📖 submenu, one entry per guide with a translated
+    title, *All guides…* = the index, tooltip "opens the guide (in English) on GitHub"), About
+    window row *Guides*, optional `guide = …` key of log sets (file name of `docs/guides` or a URL
+    / path) shown as 📖 buttons next to the set – the built-in *Application deployment*,
+    *Software updates* and *Client installation* (two guides) sets use it. One table
+    (`src/guides.rs`); a failed open shows the link in the status bar. Tests for URLs / targets,
+    the table against the files and the index, the guides of the built-in sets.
 
 ## Ideas not done yet (offered by the owner)
 - `--set "<name>"` command-line option for log sets (#27): would need the set loading, the file

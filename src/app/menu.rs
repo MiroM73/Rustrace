@@ -277,6 +277,27 @@ impl App {
                     ui.close();
                     self.show_help = true;
                 }
+                ui.menu_button(format!("📖 {}", t!("menu.help.guides")), |ui| {
+                    for (key, file) in guides::GUIDES {
+                        if ui
+                            .button(t!(key))
+                            .on_hover_text(t!("menu.help.guides.tip"))
+                            .clicked()
+                        {
+                            ui.close();
+                            self.open_link(&guides::url(REPOSITORY, file));
+                        }
+                    }
+                    ui.separator();
+                    if ui
+                        .button(t!("menu.help.guides.all"))
+                        .on_hover_text(t!("menu.help.guides.tip"))
+                        .clicked()
+                    {
+                        ui.close();
+                        self.open_link(&guides::url(REPOSITORY, guides::INDEX));
+                    }
+                });
                 #[cfg(windows)]
                 if ui
                     .button(format!("🔗 {}", t!("menu.help.default_app")))

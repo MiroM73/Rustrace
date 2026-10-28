@@ -21,6 +21,9 @@ examples: [docs/guides](docs/guides/README.md), e.g.
 [A new ConfigMgr client does not register](docs/guides/client-install.md),
 [The management point / distribution point is not healthy](docs/guides/iis-management-point.md),
 [The ConfigMgr client installation fails](docs/guides/client-msi-1603.md).
+In the program: **Help → Guides** (one entry per guide, *All guides…* = the index; opened on GitHub
+in the browser, the guides are in English), the About window, and a 📖 button next to the log sets
+that have a guide (File → Open log set…).
 
 ## Download
 
@@ -50,8 +53,8 @@ creating the graphics context can take a moment, especially on the first start a
 follows the theme from the settings (or the Windows theme).
 
 The window title shows the version in use, e.g. `RusTrace 0.6.0 – ccmexec.log`. **Help → About
-RusTrace** shows the version, author, license, links to the project page, new versions and the
-issue tracker, the build (platform) and the settings file; "Copy version information" puts e.g.
+RusTrace** shows the version, author, license, links to the project page, new versions, the
+issue tracker and the guides, the build (platform) and the settings file; "Copy version information" puts e.g.
 `RusTrace 0.6.0 (windows x86_64, release)` on the clipboard for a bug report.
 
 **Updates** (Help → Check for updates…): RusTrace asks GitHub for the published releases and shows
@@ -566,7 +569,8 @@ the ones you do not need and press **Open** – the logs are opened as **one vie
 (the same as opening several files, see [Several logs in one view](#features)). **Check again**
 repeats the check (e.g. after starting the scenario on the client).
 
-Built-in sets (`%CCMLOGS%` = the log folder of the ConfigMgr client, see below):
+Built-in sets (`%CCMLOGS%` = the log folder of the ConfigMgr client, see below); *Application
+deployment*, *Software updates* and *Client installation* have a 📖 button that opens their guide:
 
 | Set | Logs |
 |---|---|
@@ -639,6 +643,7 @@ file = C:\MyApp\Logs\install.log
 | `name`, `name.<language>` | name in the list (default: the file name without `.set`) |
 | `description`, `description.<language>` | one or two sentences under the name |
 | `file` | one log of the set (one line per log, in the order shown) |
+| `guide` | optional, repeatable: a guide for the scenario, shown as a 📖 button next to the set – a file name of [docs/guides](docs/guides/README.md) (e.g. `guide = failed-app-install.md`, opened on GitHub with its translated title), or a URL / path of your own guide (`guide = https://intranet/wiki/AppDeploy`, `guide = \\server\docs\deploy.pdf`) |
 
 ## Languages
 
@@ -761,6 +766,7 @@ rustrace --lang de AppEnforce.log
 - `src/logset.rs` – log sets: `.set` file format, loading, variables, file checks (+ tests)
 - `src/errcodes.rs` – error code detection and lookup (+ tests)
 - `src/httpstatus.rs` – HTTP status / IIS substatus descriptions, lookup input parsing (+ tests)
+- `src/guides.rs` – the guides of Help → Guides: table of guide files and titles, GitHub URLs (+ tests)
 - `src/fileassoc.rs` – Windows file association for `.log` / `.lo_` (registry, status, + tests)
 - `src/export.rs` – export around highlighted rows: range merging, date/time filter and input
   parsing, last-N blocks, output formats (+ tests)

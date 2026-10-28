@@ -389,6 +389,18 @@ User-facing descriptions are in `README.md`.
   before `select_first`, so a pending first match wins over following the end.
 - Help → About: row "Command line" (`about.cmdline`) pointing to `rustrace.exe --help`.
 
+## Guides
+- **Guides** (#39, `src/guides.rs` pure + tested): `GUIDES` = (language key of the title, file in
+  `docs/guides/`) in menu order, `INDEX` = `README.md`; `url(REPOSITORY, file)` =
+  `{repo}/blob/master/docs/guides/<file>`. Help → Guides submenu (`app/menu.rs`), About row
+  `about.guides` (`dialogs/help.rs`), log set window: `LogSetDef::guides` (repeatable `guide` key)
+  → 📖 buttons next to the set combo; `guides::target` = a plain file name → GitHub URL, anything
+  with `/ \ :` (URL, path) as it is; title = the translated `title_key` or the value itself.
+  `App::open_link` → `open::that_detached`, on error `error.open_link` with the link in the status
+  bar. Test `table_matches_the_guide_files`: every table file exists and is in the index, every
+  `docs/guides/*.md` is in the table; built-in sets' guides must be in the table. Adding a guide =
+  one `GUIDES` line + `help.guide.*` keys.
+
 ## Localization and settings
 - Localization: built-in en / sk / cs / de; external `<code>.lang` files load **without recompiling**
   from `lang\` next to the exe or `%APPDATA%\RusTrace\lang`; fallback to English.
@@ -406,7 +418,7 @@ User-facing descriptions are in `README.md`.
   program), names via `AssocQueryStringW`. Test `register_and_unregister` uses its own HKCU key.
 
 ## Tests and benchmarks
-- `cargo test` (108 tests: IIS column order with `*` (#41), follow end pause / resume (#37), rules window default width (#48), keyboard shortcut order (Shift+F3 / Shift+F2 not taken by F3 / F2, #46), log sets (set file parsing / translations / built-in sets, variables, loading priorities, file checks, remote computer names / variables / drive letters / share roots, network error codes, recent computers), HTTP status lookup / class fallback / lookup input parsing and ambiguity / cell values, status column keys of log definitions, command-line parsing (file association, all options, errors, `--restore`, language / time / regex checks, help text), overview buckets incremental = full / pixel runs, readable export with Δ, durations, match bits set / iterate, bookmark file id remap, update releases list / missed versions / check setting migration, merged logs (order by time, appended older rows, formats + rotated parts + re-read, single log unchanged, interleave), store copy_entry / split_off, raw lines of entries (all formats / encodings), filter (parallel = sequential, match bits), date column filter = text filter, updates (versions, release JSON, notes, sha256 file, ZIP, install, restore state), icon / .ico layout, search as you type threshold, status-bar position percentage, file association (registry in an own HKCU test key), search history, store drop_front / move to temp file, rotated parts (naming, merge on open, rotation while watching, replaced
+- `cargo test` (110 tests: guides table / URLs / log set guides (#39), IIS column order with `*` (#41), follow end pause / resume (#37), rules window default width (#48), keyboard shortcut order (Shift+F3 / Shift+F2 not taken by F3 / F2, #46), log sets (set file parsing / translations / built-in sets, variables, loading priorities, file checks, remote computer names / variables / drive letters / share roots, network error codes, recent computers), HTTP status lookup / class fallback / lookup input parsing and ambiguity / cell values, status column keys of log definitions, command-line parsing (file association, all options, errors, `--restore`, language / time / regex checks, help text), overview buckets incremental = full / pixel runs, readable export with Δ, durations, match bits set / iterate, bookmark file id remap, update releases list / missed versions / check setting migration, merged logs (order by time, appended older rows, formats + rotated parts + re-read, single log unchanged, interleave), store copy_entry / split_off, raw lines of entries (all formats / encodings), filter (parallel = sequential, match bits), date column filter = text filter, updates (versions, release JSON, notes, sha256 file, ZIP, install, restore state), icon / .ico layout, search as you type threshold, status-bar position percentage, file association (registry in an own HKCU test key), search history, store drop_front / move to temp file, rotated parts (naming, merge on open, rotation while watching, replaced
   file), export segments by file, time range bounds, column filter syntax, parsers, chunked/ANSI/UTF-16 reading, log definitions (CBS, DISM, IIS,
   Exchange connectivity / CSV separator, choice by name/content, appending across refreshes), store (32-byte record, ISO ↔ ms, push /
   truncate / append, mapped temp file growing past 64 MB, interner), export incl. end-to-end and

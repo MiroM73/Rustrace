@@ -3,6 +3,14 @@
 use crate::app::*;
 
 impl App {
+    /// Opens a link (a guide) in the default browser / program; on failure the status bar shows
+    /// the link so it can be copied (#39).
+    pub(in crate::app) fn open_link(&mut self, link: &str) {
+        if let Err(e) = open::that_detached(link) {
+            self.status_error = Some(t!("error.open_link", link = link, error = e));
+        }
+    }
+
     pub(in crate::app) fn help_window(&mut self, ctx: &egui::Context) {
         egui::Window::new(t!("help.title"))
             .id(egui::Id::unique("help_window"))
@@ -84,6 +92,13 @@ impl App {
                         ui.end_row();
                         ui.label(t!("about.issues"));
                         ui.hyperlink(format!("{REPOSITORY}/issues"));
+                        ui.end_row();
+                        ui.label(t!("about.guides"));
+                        ui.hyperlink_to(
+                            t!("about.guides.text"),
+                            guides::url(REPOSITORY, guides::INDEX),
+                        )
+                        .on_hover_text(t!("menu.help.guides.tip"));
                         ui.end_row();
                         ui.label(t!("about.license"));
                         ui.label(t!("about.license.text"));

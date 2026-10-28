@@ -1,6 +1,7 @@
 # RusTrace log set – ConfigMgr application deployment
 #
-# Keys: name / name.<language>, description / description.<language>, file (one line per log).
+# Keys: name / name.<language>, description / description.<language>, file (one line per log),
+# guide (optional: a guide of docs/guides, a URL or a path; shown as a link in the window).
 # Variables: %CCMLOGS% (ConfigMgr client logs, usually C:\Windows\CCM\Logs), %WINDIR%,
 # %PROGRAMDATA%, %SYSTEMDRIVE%. Copy this file into %APPDATA%\RusTrace\logsets to make an own set.
 
@@ -12,6 +13,8 @@ description = Discovery, requirement evaluation and installation of applications
 description.sk = Zisťovanie, vyhodnotenie požiadaviek a inštalácia aplikácií, sťahovanie ich obsahu.
 description.cs = Zjišťování, vyhodnocení požadavků a instalace aplikací, stahování jejich obsahu.
 description.de = Erkennung, Auswertung der Anforderungen und Installation von Anwendungen, Download ihres Inhalts.
+
+guide = failed-app-install.md
 
 file = %CCMLOGS%\AppDiscovery.log
 file = %CCMLOGS%\AppEnforce.log
