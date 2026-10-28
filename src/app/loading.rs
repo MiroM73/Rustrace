@@ -220,6 +220,7 @@ impl App {
             .cfg
             .temp_file_enabled
             .then(|| u64::from(self.cfg.temp_file_threshold_mb) << 20);
+        let full = !src.has_read();
         let progress = Arc::new(Progress::default());
         let (tx, rx) = mpsc::channel();
         let prog = progress.clone();
@@ -242,6 +243,7 @@ impl App {
                     rx,
                     progress,
                     started: Instant::now(),
+                    full,
                 });
             }
             Err(e) => {

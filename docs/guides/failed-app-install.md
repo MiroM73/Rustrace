@@ -159,8 +159,7 @@ logs – that is why it gets its own window.
 
 ## Step 8 – Export the evidence for a ticket
 
-Press **Ctrl+P** to pause the automatic refresh (the logs then do not change while you export),
-then **File → Export highlighted rows with context…** (Ctrl+Shift+S):
+Open **File → Export highlighted rows with context…** (Ctrl+Shift+S):
 
 ![Export dialog](images/failed-app-install/09-export-for-ticket.png)
 
@@ -173,7 +172,8 @@ then **File → Export highlighted rows with context…** (Ctrl+Shift+S):
    in CMTrace / RusTrace – better when you send it to someone who analyses logs.
 4. The preview: **2 highlighted rows, 2 blocks, 38 rows to export** – overlapping ranges are
    merged, so no row is exported twice.
-5. **Export…** and choose the file. Press **Ctrl+P** again to resume the refresh.
+5. **Export…** and choose the file. The automatic refresh may keep running – the export takes the
+   rows the preview shows.
 
 To send just a few rows, select them (Shift + click) and press **Ctrl+Shift+C** – they are copied
 as a table with a header line.
@@ -230,4 +230,4 @@ decimal (`-2147023293`) or Win32 / MSI number (`1603`).
 | 5 | Follow end paused at the selected row, View → Δ time column, bookmark + note | Ctrl+F2, F2, Esc |
 | 6 | Search the app name + Filter | Ctrl+F, Ctrl+L |
 | 7 | MSI log, search `Return value 3` | Ctrl+O |
-| 8 | Pause, export errors + bookmarks with context | Ctrl+P, Ctrl+Shift+S |
+| 8 | Export errors + bookmarks with context | Ctrl+Shift+S |

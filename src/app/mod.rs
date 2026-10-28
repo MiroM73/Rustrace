@@ -114,6 +114,8 @@ struct Loading {
     rx: mpsc::Receiver<(LogSet, std::io::Result<ReadResult>)>,
     progress: Arc<Progress>,
     started: Instant,
+    /// The log is read from the beginning (first load or full reload), not a refresh read.
+    full: bool,
 }
 
 /// Full re-filter of a big log in a background thread (#16).

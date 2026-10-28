@@ -185,6 +185,13 @@ Notes for Claude, linked from `CLAUDE.md`.
     cleared and the view follows new rows, End on a row → follows, mouse wheel to the bottom →
     follows. Guides (client-install, client-msi-1603, failed-app-install) no longer tell users to
     untick Follow end.
+64. #38 Export… disabled while an automatic refresh read was pending (with auto refresh on almost
+    always – the guides told users to press Ctrl+P first). The button now waits only for a full
+    read (`Loading::full` from `LogSet::has_read()`, which is now set for a single log too) with a
+    spinner and "Reading the log…"; refresh reads do not block it because the export copies the
+    rows, lines and file paths before its thread starts. Ctrl+P workaround removed from the
+    failed-app-install and software-updates guides; unit test for `has_read` in
+    `single_log_passes_through`.
 
 ## Ideas not done yet (offered by the owner)
 - `--set "<name>"` command-line option for log sets (#27): would need the set loading, the file
