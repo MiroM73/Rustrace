@@ -171,6 +171,8 @@ enum RowAction {
     CopyOriginal,
     ExportSelected,
     ExportSelectedTable,
+    CopyCsv,
+    CopyForExcel,
     RuleFromComponent(usize),
     SearchComponent(usize),
 }
@@ -317,6 +319,10 @@ pub struct App {
     show_table_export: bool,
     table_export_cols: Option<ColumnChoice>,
     table_export_job: Option<TableExportJob>,
+    /// The file of the last table export (open / show in folder / copy path).
+    table_export_last: Option<PathBuf>,
+    /// Name typed for saving the table export settings as a preset.
+    table_export_preset_name: String,
     /// Newest timestamp in the log, cached per data generation.
     latest_ts: Option<(u64, Option<String>)>,
     /// The mouse pointer is over the log text (table or message in the details pane) in this frame.
@@ -496,6 +502,8 @@ impl App {
             show_table_export: false,
             table_export_cols: None,
             table_export_job: None,
+            table_export_last: None,
+            table_export_preset_name: String::new(),
             latest_ts: None,
             hover_log: false,
             defs: Arc::new(Vec::new()),

@@ -6,6 +6,8 @@
 //! holds an `Arc` of it while the app keeps new read results waiting (like the background filter).
 
 pub mod csv;
+pub mod html;
+pub mod jsonl;
 pub mod stats;
 pub mod xlsx;
 mod zip;
@@ -19,7 +21,7 @@ use serde::{Deserialize, Serialize};
 use std::borrow::Cow;
 use std::collections::{BTreeMap, HashMap};
 use std::io;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 
@@ -47,13 +49,39 @@ pub enum TableFormat {
     #[default]
     Csv,
     Xlsx,
+    /// JSON Lines – one object per row.
+    Jsonl,
+    /// A self-contained HTML report.
+    Html,
 }
 
 impl TableFormat {
+    #[cfg(test)]
+    pub const ALL: [TableFormat; 4] = [
+        TableFormat::Csv,
+        TableFormat::Xlsx,
+        TableFormat::Jsonl,
+        TableFormat::Html,
+    ];
+
     pub fn extension(self) -> &'static str {
         match self {
             TableFormat::Csv => "csv",
             TableFormat::Xlsx => "xlsx",
+            TableFormat::Jsonl => "jsonl",
+            TableFormat::Html => "html",
+        }
+    }
+
+    /// The format of a file name by its extension (`--export out.xlsx`).
+    pub fn from_path(path: &Path) -> Option<TableFormat> {
+        let ext = path.extension()?.to_str()?.to_ascii_lowercase();
+        match ext.as_str() {
+            "csv" | "txt" => Some(TableFormat::Csv),
+            "xlsx" => Some(TableFormat::Xlsx),
+            "jsonl" | "ndjson" => Some(TableFormat::Jsonl),
+            "html" | "htm" => Some(TableFormat::Html),
+            _ => None,
         }
     }
 }
@@ -82,6 +110,10 @@ pub struct Settings {
     pub xlsx_statistics: bool,
     /// Excel: one data sheet per source file of a merged view.
     pub xlsx_sheet_per_file: bool,
+    /// Open the file with its default program after the export.
+    pub open_after: bool,
+    /// Saved settings by name ("Errors for a ticket", "Full CSV for Power BI" …).
+    pub presets: Vec<(String, Settings)>,
     /// Chosen columns per log type (name of the log definition, "" = CMTrace): (key, on) in order.
     pub columns: BTreeMap<String, Vec<(String, bool)>>,
 }
@@ -101,6 +133,8 @@ impl Default for Settings {
             xlsx_summary: true,
             xlsx_statistics: true,
             xlsx_sheet_per_file: false,
+            open_after: false,
+            presets: Vec::new(),
             columns: BTreeMap::new(),
         }
     }
@@ -173,6 +207,14 @@ impl Col {
         }
     }
 
+    /// Key in JSON Lines: the saved key, the extra column by its own name.
+    pub fn json_key(self, extra_names: &[String]) -> String {
+        match self {
+            Col::Extra(i) => extra_names.get(i).cloned().unwrap_or_default(),
+            c => c.key(extra_names),
+        }
+    }
+
     pub fn from_key(key: &str, extra_names: &[String]) -> Option<Col> {
         Some(match key {
             "line" => Col::Line,
@@ -229,6 +271,34 @@ pub fn column_choice(
         }
     }
     out
+}
+
+impl Settings {
+    /// The settings stored in a preset (without the presets themselves).
+    pub fn preset(&self) -> Settings {
+        Settings {
+            presets: Vec::new(),
+            ..self.clone()
+        }
+    }
+
+    /// Takes over a preset; the list of presets stays.
+    pub fn apply_preset(&mut self, p: &Settings) {
+        let presets = std::mem::take(&mut self.presets);
+        *self = Settings {
+            presets,
+            ..p.clone()
+        };
+    }
+
+    /// Saves the current settings under a name (replaces a preset with the same name).
+    pub fn save_preset(&mut self, name: &str) {
+        let p = self.preset();
+        match self.presets.iter_mut().find(|(n, _)| n == name) {
+            Some(slot) => slot.1 = p,
+            None => self.presets.push((name.to_owned(), p)),
+        }
+    }
 }
 
 /// A column with its header text.
@@ -632,6 +702,75 @@ pub fn write_table_stats(
     Ok(n)
 }
 
+/// Everything one export needs (moved into the export thread or used by `--export`).
+pub struct Job {
+    pub ctx: Context,
+    pub rows: Rows,
+    pub cols: Vec<ColumnSpec>,
+    pub format: TableFormat,
+    pub header: bool,
+    pub csv: csv::CsvOptions,
+    pub xlsx: xlsx::XlsxOptions,
+    pub extras: stats::XlsxExtras,
+    /// JSON Lines keys of `cols`.
+    pub json_keys: Vec<String>,
+    /// HTML report: heading and the lines under it; row colors.
+    pub html_title: String,
+    pub html_info: Vec<String>,
+    pub html_colors: bool,
+}
+
+/// Writes the export to `path`; returns (rows, cells cut at the Excel limit). A failed or
+/// cancelled export leaves no file behind.
+pub fn run(job: &Job, path: &Path, ctl: &Control) -> io::Result<(usize, usize)> {
+    use std::io::Write as _;
+    let res = (|| -> io::Result<(usize, usize)> {
+        let file = io::BufWriter::new(std::fs::File::create(path)?);
+        let table = |sink: &mut dyn TableSink| {
+            write_table(&job.ctx, &job.rows, &job.cols, job.header, sink, ctl)
+        };
+        match job.format {
+            TableFormat::Csv => {
+                let mut w = csv::CsvWriter::new(file, job.csv)?;
+                let n = table(&mut w)?;
+                w.finish()?;
+                Ok((n, 0))
+            }
+            TableFormat::Xlsx => {
+                let (mut out, n, cut) = stats::write_xlsx(
+                    file,
+                    &job.ctx,
+                    &job.rows,
+                    &job.cols,
+                    job.header,
+                    job.xlsx.clone(),
+                    &job.extras,
+                    ctl,
+                )?;
+                out.flush()?;
+                Ok((n, cut))
+            }
+            TableFormat::Jsonl => {
+                let mut w = jsonl::JsonlWriter::new(file, job.json_keys.clone());
+                let n = table(&mut w)?;
+                w.finish()?;
+                Ok((n, 0))
+            }
+            TableFormat::Html => {
+                let mut w =
+                    html::HtmlWriter::new(file, &job.html_title, &job.html_info, job.html_colors)?;
+                let n = table(&mut w)?;
+                w.finish()?;
+                Ok((n, 0))
+            }
+        }
+    })();
+    if res.is_err() {
+        let _ = std::fs::remove_file(path);
+    }
+    res
+}
+
 #[cfg(test)]
 pub(crate) mod tests {
     use super::*;
@@ -828,6 +967,71 @@ pub(crate) mod tests {
                 (Col::DateTime, true)
             ]
         );
+    }
+
+    #[test]
+    fn presets_and_formats() {
+        let mut s = Settings {
+            format: TableFormat::Xlsx,
+            ..Default::default()
+        };
+        s.save_preset("Excel");
+        s.format = TableFormat::Csv;
+        s.save_preset("CSV");
+        s.save_preset("CSV");
+        assert_eq!(s.presets.len(), 2);
+        assert!(s.presets.iter().all(|(_, p)| p.presets.is_empty()));
+        let excel = s.presets[0].1.clone();
+        s.apply_preset(&excel);
+        assert_eq!(s.format, TableFormat::Xlsx);
+        assert_eq!(s.presets.len(), 2);
+        // Old settings without the new fields still load.
+        let old: Settings = serde_json::from_str(r#"{"scope":"all"}"#).unwrap();
+        assert_eq!(old.scope, Scope::All);
+        assert!(old.xlsx_summary && old.presets.is_empty());
+        for f in TableFormat::ALL {
+            let p = PathBuf::from(format!("out.{}", f.extension().to_uppercase()));
+            assert_eq!(TableFormat::from_path(&p), Some(f));
+        }
+        assert_eq!(TableFormat::from_path(Path::new("out.pdf")), None);
+    }
+
+    #[test]
+    fn run_writes_the_file_and_cleans_up_on_cancel() {
+        let dir = std::env::temp_dir().join(format!("rustrace_tabexport_{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let job = |format| Job {
+            ctx: sample(),
+            rows: Rows::All(3),
+            cols: specs(&[Col::Line, Col::Message]),
+            format,
+            header: true,
+            csv: csv::CsvOptions::new(',', csv::CsvEncoding::Utf8, true),
+            xlsx: xlsx::XlsxOptions::default(),
+            extras: stats::XlsxExtras::default(),
+            json_keys: vec!["line".into(), "message".into()],
+            html_title: "t".into(),
+            html_info: Vec::new(),
+            html_colors: false,
+        };
+        for f in TableFormat::ALL {
+            let path = dir.join(format!("out.{}", f.extension()));
+            assert_eq!(run(&job(f), &path, &Control::default()).unwrap(), (3, 0));
+            assert!(std::fs::metadata(&path).unwrap().len() > 0, "{f:?}");
+        }
+        let ctl = Control::default();
+        ctl.cancel.store(true, Ordering::Relaxed);
+        let big = Job {
+            ctx: context(LogStore::from_entries(
+                (0..3000).map(|i| entry(i + 1, "", Severity::Info, "", "x")),
+            )),
+            rows: Rows::All(3000),
+            ..job(TableFormat::Csv)
+        };
+        let path = dir.join("cancelled.csv");
+        assert!(run(&big, &path, &ctl).is_err());
+        assert!(!path.exists());
+        std::fs::remove_dir_all(&dir).ok();
     }
 
     #[test]

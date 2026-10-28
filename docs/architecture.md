@@ -393,6 +393,21 @@ User-facing descriptions are in `README.md`.
   (Summary 0, Statistics 1). Texts come translated from the UI thread (`SheetTexts`,
   `App::table_export_extras`: version, time, `format_name`, file paths, scope, search + filter
   mode, `show_sev`, column filters, time range).
+- Part 4: `tabexport::Job` + `run` (format by `TableFormat`, removes the file on error / cancel) is
+  shared by the window thread and `--export`. `jsonl.rs` (`Col::json_key`: extra columns by name,
+  dates `ms_to_iso`, empty cells left out, `serde_json` string escaping), `html.rs` (inline CSS,
+  `<details>` for multi-line cells, `RowLook` as `style`, no scripts). Presets:
+  `Settings::presets: Vec<(name, Settings)>` (stored without their own presets, `apply_preset`
+  keeps the list; `table_export_cols` reset after applying). `open_after` → `App::open_exported`
+  (`open::that_detached`; Show in folder = `explorer.exe /select,"path"` via `raw_arg`),
+  `table_export_last`. Context menu Copy as CSV / Copy for Excel: `copy_selection_as_table` →
+  `CsvWriter` into a `Vec` in a `rustrace-copy` thread, result through the existing `copy_job`
+  channel. `--export` (`src/batch.rs`, `cli::Options::export`, `NeedsFile`): `LogSet` read once
+  (defs, merge_rotated from the config), `FilterSpec` from the view options (search + filter,
+  severities, `parse_range_bound`), `FilterSpec::run`, columns = saved choice or table columns,
+  rules compiled from the config; `attach_console` (`AttachConsole(ATTACH_PARENT_PROCESS)`) before
+  printing, no message boxes; exit 0 / 1 / 2. Measured: 400 MB log, `--errors --export x.csv` →
+  95 133 rows in ~5 s (mostly reading).
 
 ## Updates
 - **Updates** (#15, #31, `src/update.rs`, `src/http.rs`): Help → Check for updates; GitHub API
@@ -479,7 +494,7 @@ User-facing descriptions are in `README.md`.
   program), names via `AssocQueryStringW`. Test `register_and_unregister` uses its own HKCU key.
 
 ## Tests and benchmarks
-- `cargo test` (125 tests: table export scopes / cells / columns / cancel / CSV / XLSX / ZIP writer / statistics / sheet per file (#32), MSI verbose log / header dates (#40), guides table / URLs / log set guides (#39), IIS column order with `*` (#41), follow end pause / resume (#37), rules window default width (#48), keyboard shortcut order (Shift+F3 / Shift+F2 not taken by F3 / F2, #46), log sets (set file parsing / translations / built-in sets, variables, loading priorities, file checks, remote computer names / variables / drive letters / share roots, network error codes, recent computers), HTTP status lookup / class fallback / lookup input parsing and ambiguity / cell values, status column keys of log definitions, command-line parsing (file association, all options, errors, `--restore`, language / time / regex checks, help text), overview buckets incremental = full / pixel runs, readable export with Δ, durations, match bits set / iterate, bookmark file id remap, update releases list / missed versions / check setting migration, merged logs (order by time, appended older rows, formats + rotated parts + re-read, single log unchanged, interleave), store copy_entry / split_off, raw lines of entries (all formats / encodings), filter (parallel = sequential, match bits), date column filter = text filter, updates (versions, release JSON, notes, sha256 file, ZIP, install, restore state), icon / .ico layout, search as you type threshold, status-bar position percentage, file association (registry in an own HKCU test key), search history, store drop_front / move to temp file, rotated parts (naming, merge on open, rotation while watching, replaced
+- `cargo test` (130 tests: table export scopes / cells / columns / cancel / CSV / XLSX / ZIP writer / statistics / sheet per file / JSONL / HTML / presets / `--export` (#32), MSI verbose log / header dates (#40), guides table / URLs / log set guides (#39), IIS column order with `*` (#41), follow end pause / resume (#37), rules window default width (#48), keyboard shortcut order (Shift+F3 / Shift+F2 not taken by F3 / F2, #46), log sets (set file parsing / translations / built-in sets, variables, loading priorities, file checks, remote computer names / variables / drive letters / share roots, network error codes, recent computers), HTTP status lookup / class fallback / lookup input parsing and ambiguity / cell values, status column keys of log definitions, command-line parsing (file association, all options, errors, `--restore`, language / time / regex checks, help text), overview buckets incremental = full / pixel runs, readable export with Δ, durations, match bits set / iterate, bookmark file id remap, update releases list / missed versions / check setting migration, merged logs (order by time, appended older rows, formats + rotated parts + re-read, single log unchanged, interleave), store copy_entry / split_off, raw lines of entries (all formats / encodings), filter (parallel = sequential, match bits), date column filter = text filter, updates (versions, release JSON, notes, sha256 file, ZIP, install, restore state), icon / .ico layout, search as you type threshold, status-bar position percentage, file association (registry in an own HKCU test key), search history, store drop_front / move to temp file, rotated parts (naming, merge on open, rotation while watching, replaced
   file), export segments by file, time range bounds, column filter syntax, parsers, chunked/ANSI/UTF-16 reading, log definitions (CBS, DISM, IIS,
   Exchange connectivity / CSV separator, choice by name/content, appending across refreshes), store (32-byte record, ISO ↔ ms, push /
   truncate / append, mapped temp file growing past 64 MB, interner), export incl. end-to-end and

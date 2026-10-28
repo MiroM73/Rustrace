@@ -248,6 +248,16 @@ Notes for Claude, linked from `CLAUDE.md`.
     tests (counts, sheet order Summary → Statistics → files, rows split by file); Excel 2016 via COM
     on the merged client-install guide logs: Summary 17 rows, Statistics with 0x80072EE7 × 16 and 4
     hours, five file sheets (incl. the rotated LocationServices.lo_) with AutoFilter.
+72. #32 part 4 – JSON Lines and HTML report formats, saved presets of the export settings, open
+    the file after the export / Open / Show in folder / Copy path of the last export, Copy as CSV
+    / Copy for Excel of the selected rows (context menu), `--export <file>` on the command line
+    (format by extension, the rows of `--errors` / `--warnings` / `--search --filter` / `--from` /
+    `--to`, no window, console output, exit codes 0 / 1 / 2). Verified: unit tests (JSONL objects,
+    HTML report, presets + old settings, format by extension, `run` for every format + cleanup on
+    cancel, `--export` parsing, batch export of a CMTrace log with `--errors --to`); release build:
+    HTML export with colors and a saved preset in the window, Copy for Excel of 35 selected rows
+    (clipboard checked), `--export` of two merged logs to XLSX (opened by Excel) and of the 400 MB
+    log with `--errors` (95 133 rows, ~5 s), unknown extension → exit code 1. Closes #32.
 
 ## Ideas not done yet (offered by the owner)
 - `--set "<name>"` command-line option for log sets (#27): would need the set loading, the file

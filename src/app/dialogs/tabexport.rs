@@ -17,6 +17,8 @@ impl App {
             .resizable(false)
             .default_width(560.0)
             .show(ctx, |ui| {
+                changed |= self.table_export_presets_ui(ui);
+                ui.separator();
                 changed |= self.table_export_scope_ui(ui);
                 ui.separator();
                 changed |= self.table_export_columns_ui(ui);
@@ -55,6 +57,26 @@ impl App {
                         ui.weak(t!("tabexport.summary", rows = rows, cols = cols));
                     }
                 });
+                changed |= ui
+                    .checkbox(
+                        &mut self.cfg.table_export.open_after,
+                        t!("tabexport.open_after"),
+                    )
+                    .changed();
+                if let Some(last) = self.table_export_last.clone() {
+                    ui.horizontal_wrapped(|ui| {
+                        ui.weak(t!("tabexport.last", path = last.display()));
+                        if ui.small_button(t!("tabexport.last.open")).clicked() {
+                            self.open_exported(&last, false);
+                        }
+                        if ui.small_button(t!("tabexport.last.folder")).clicked() {
+                            self.open_exported(&last, true);
+                        }
+                        if ui.small_button(t!("tabexport.last.copy")).clicked() {
+                            ui.ctx().copy_text(last.display().to_string());
+                        }
+                    });
+                }
             });
         if changed {
             self.cfg_dirty = true;
@@ -63,6 +85,74 @@ impl App {
             self.start_table_export();
         }
         self.show_table_export = open;
+    }
+
+    /// Saved settings: choose one, save the current ones under a name, delete one.
+    fn table_export_presets_ui(&mut self, ui: &mut egui::Ui) -> bool {
+        let mut changed = false;
+        let mut apply: Option<usize> = None;
+        let mut delete: Option<usize> = None;
+        ui.horizontal_wrapped(|ui| {
+            ui.label(t!("tabexport.preset"));
+            let presets = &self.cfg.table_export.presets;
+            egui::ComboBox::from_id_salt("tabexport_preset")
+                .width(200.0)
+                .selected_text(t!("tabexport.preset.choose"))
+                .show_ui(ui, |ui| {
+                    for (i, (name, _)) in presets.iter().enumerate() {
+                        if ui.selectable_label(false, name).clicked() {
+                            apply = Some(i);
+                        }
+                    }
+                    if presets.is_empty() {
+                        ui.weak(t!("tabexport.preset.none"));
+                    }
+                });
+            ui.add(
+                egui::TextEdit::singleline(&mut self.table_export_preset_name)
+                    .hint_text(t!("tabexport.preset.name"))
+                    .desired_width(150.0),
+            );
+            let name = self.table_export_preset_name.trim().to_owned();
+            if ui
+                .add_enabled(
+                    !name.is_empty(),
+                    egui::Button::new(format!("💾 {}", t!("tabexport.preset.save"))),
+                )
+                .on_hover_text(t!("tabexport.preset.save.tip"))
+                .clicked()
+            {
+                self.cfg.table_export.save_preset(&name);
+                self.info(t!("tabexport.preset.saved", name = name));
+                changed = true;
+            }
+            if let Some(i) = self
+                .cfg
+                .table_export
+                .presets
+                .iter()
+                .position(|(n, _)| *n == name)
+                && ui
+                    .button("🗑")
+                    .on_hover_text(t!("tabexport.preset.delete"))
+                    .clicked()
+            {
+                delete = Some(i);
+            }
+        });
+        if let Some(i) = apply {
+            let (name, p) = self.cfg.table_export.presets[i].clone();
+            self.cfg.table_export.apply_preset(&p);
+            // The column choice of a preset belongs to its log types.
+            self.table_export_cols = None;
+            self.table_export_preset_name = name;
+            changed = true;
+        }
+        if let Some(i) = delete {
+            self.cfg.table_export.presets.remove(i);
+            changed = true;
+        }
+        changed
     }
 
     /// Which rows, with the number of rows of every choice.
@@ -156,7 +246,7 @@ impl App {
         let mut swap: Option<(usize, usize)> = None;
         let mut toggled: Option<usize> = None;
         egui::ScrollArea::vertical()
-            .max_height(220.0)
+            .max_height(170.0)
             .auto_shrink([false, true])
             .show(ui, |ui| {
                 for (i, ((col, on), title)) in cols.iter().zip(&titles).enumerate() {
@@ -203,49 +293,81 @@ impl App {
     fn table_export_format_ui(&mut self, ui: &mut egui::Ui) -> bool {
         let mut changed = false;
         let s = &mut self.cfg.table_export;
-        ui.horizontal(|ui| {
+        ui.horizontal_wrapped(|ui| {
             ui.label(t!("tabexport.format"));
-            changed |= ui
-                .radio_value(&mut s.format, TableFormat::Csv, t!("tabexport.format.csv"))
-                .changed();
-            changed |= ui
-                .radio_value(
-                    &mut s.format,
+            for (f, key, tip) in [
+                (TableFormat::Csv, "tabexport.format.csv", None),
+                (
                     TableFormat::Xlsx,
-                    t!("tabexport.format.xlsx"),
-                )
-                .on_hover_text(t!("tabexport.format.xlsx.tip"))
-                .changed();
+                    "tabexport.format.xlsx",
+                    Some("tabexport.format.xlsx.tip"),
+                ),
+                (
+                    TableFormat::Jsonl,
+                    "tabexport.format.jsonl",
+                    Some("tabexport.format.jsonl.tip"),
+                ),
+                (
+                    TableFormat::Html,
+                    "tabexport.format.html",
+                    Some("tabexport.format.html.tip"),
+                ),
+            ] {
+                let mut r = ui.radio_value(&mut s.format, f, t!(key));
+                if let Some(tip) = tip {
+                    r = r.on_hover_text(t!(tip));
+                }
+                changed |= r.changed();
+            }
         });
-        let csv = s.format == TableFormat::Csv;
-        if !csv {
-            changed |= ui
-                .checkbox(&mut s.xlsx_colors, t!("tabexport.xlsx.colors"))
-                .on_hover_text(t!("tabexport.xlsx.colors.tip"))
-                .changed();
-            changed |= ui.checkbox(&mut s.header, t!("tabexport.header")).changed();
-            changed |= ui
-                .checkbox(&mut s.severity_english, t!("tabexport.severity_english"))
-                .changed();
-            changed |= ui
-                .checkbox(&mut s.xlsx_summary, t!("tabexport.xlsx.summary"))
-                .on_hover_text(t!("tabexport.xlsx.summary.tip"))
-                .changed();
-            changed |= ui
-                .checkbox(&mut s.xlsx_statistics, t!("tabexport.xlsx.statistics"))
-                .on_hover_text(t!("tabexport.xlsx.statistics.tip"))
-                .changed();
-            changed |= ui
-                .add_enabled(
-                    self.files.len() > 1,
-                    egui::Checkbox::new(
-                        &mut s.xlsx_sheet_per_file,
-                        t!("tabexport.xlsx.sheet_per_file"),
-                    ),
-                )
-                .on_hover_text(t!("tabexport.xlsx.sheet_per_file.tip"))
-                .changed();
-            return changed;
+        match s.format {
+            TableFormat::Csv => {}
+            TableFormat::Jsonl => {
+                changed |= ui
+                    .checkbox(&mut s.severity_english, t!("tabexport.severity_english"))
+                    .changed();
+                return changed;
+            }
+            TableFormat::Html => {
+                changed |= ui
+                    .checkbox(&mut s.xlsx_colors, t!("tabexport.xlsx.colors"))
+                    .on_hover_text(t!("tabexport.xlsx.colors.tip"))
+                    .changed();
+                changed |= ui.checkbox(&mut s.header, t!("tabexport.header")).changed();
+                changed |= ui
+                    .checkbox(&mut s.severity_english, t!("tabexport.severity_english"))
+                    .changed();
+                return changed;
+            }
+            TableFormat::Xlsx => {
+                changed |= ui
+                    .checkbox(&mut s.xlsx_colors, t!("tabexport.xlsx.colors"))
+                    .on_hover_text(t!("tabexport.xlsx.colors.tip"))
+                    .changed();
+                changed |= ui.checkbox(&mut s.header, t!("tabexport.header")).changed();
+                changed |= ui
+                    .checkbox(&mut s.severity_english, t!("tabexport.severity_english"))
+                    .changed();
+                changed |= ui
+                    .checkbox(&mut s.xlsx_summary, t!("tabexport.xlsx.summary"))
+                    .on_hover_text(t!("tabexport.xlsx.summary.tip"))
+                    .changed();
+                changed |= ui
+                    .checkbox(&mut s.xlsx_statistics, t!("tabexport.xlsx.statistics"))
+                    .on_hover_text(t!("tabexport.xlsx.statistics.tip"))
+                    .changed();
+                changed |= ui
+                    .add_enabled(
+                        self.files.len() > 1,
+                        egui::Checkbox::new(
+                            &mut s.xlsx_sheet_per_file,
+                            t!("tabexport.xlsx.sheet_per_file"),
+                        ),
+                    )
+                    .on_hover_text(t!("tabexport.xlsx.sheet_per_file.tip"))
+                    .changed();
+                return changed;
+            }
         }
         egui::Grid::new("tabexport_csv")
             .num_columns(2)

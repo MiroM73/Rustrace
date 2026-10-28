@@ -5,6 +5,7 @@
 )]
 
 mod app;
+mod batch;
 mod cli;
 mod colfilter;
 mod config;
@@ -166,6 +167,11 @@ fn command_line() -> Startup {
         std::process::exit(2)
     };
     let opts = cli::parse(std::env::args_os().skip(1)).unwrap_or_else(|e| fail(e));
+    if opts.export.is_some() {
+        // Scripted export: messages go to the console it was started from, never to a message
+        // box (an unattended task must not wait for a click).
+        batch::attach_console();
+    }
     let languages: Vec<String> = i18n::available().into_iter().map(|l| l.code).collect();
     // The language first, so the help and the messages are already in it.
     let lang = match opts.lang.as_deref().map(|l| cli::check_lang(l, &languages)) {
@@ -199,7 +205,24 @@ fn command_line() -> Startup {
         };
     }
     if let Err(e) = cli::validate(&opts.view, &t!("format.date")) {
+        if opts.export.is_some() {
+            eprintln!("{}", e.message());
+            std::process::exit(2)
+        }
         fail(e)
+    }
+    if let Some(target) = &opts.export {
+        let (cfg, _) = config::Config::load();
+        match batch::export(&opts.files, &opts.view, target, &cfg) {
+            Ok(msg) => {
+                println!("{msg}");
+                std::process::exit(0)
+            }
+            Err(e) => {
+                eprintln!("{}", t!("error.export", error = e));
+                std::process::exit(1)
+            }
+        }
     }
     Startup {
         paths: opts.files,

@@ -393,6 +393,28 @@ tickets or colleagues without RusTrace: every column is a spreadsheet column
   frequent error codes (in error / warning rows) with their explanation, entries / errors / warnings
   per hour (a quick start for a pivot table or a chart); for merged logs optionally **one sheet per
   source file** (otherwise one sheet with the File column)
+- **JSON Lines** (`.jsonl`) – one JSON object per row for scripts, Log Analytics or Splunk: keys
+  `line`, `file`, `datetime` (always ISO), `message`, `component`, `thread`, the extra column names
+  (`sc-status` …), `severity`, `rule`, `note`, `codes`, `raw`, `block`; empty cells are left out;
+  Δ and numbers are JSON numbers
+- **HTML report** – one self-contained page (no scripts, no external files) with the summary
+  lines, a sticky header and the table, optionally in the colors of the table; multi-line
+  messages are collapsible – for e-mails or tickets where Excel is not wanted
+- **Presets**: type a name and **Save** to keep the current rows, format, options and column choice
+  (e.g. "Errors for a ticket", "Full CSV for Power BI"); choose one from the list next time, 🗑
+  deletes the one with the typed name
+- **Open the file after the export** (checkbox); after an export the window shows its path with
+  **Open**, **Show in folder** (Explorer with the file selected) and **Copy path**
+- **Copy as CSV / Copy for Excel** in the row context menu: the selected rows with the chosen
+  columns to the clipboard (comma-separated, or tab-separated to paste into Excel with Ctrl+V),
+  without a file
+- **command line**: `rustrace FILE... --export out.xlsx` (or `.csv`, `.jsonl`, `.html`) writes the
+  export of the rows the other options select – `--errors` / `--warnings`, `--search` with
+  `--filter`, `--from` / `--to` – and exits without a window, e.g.
+  `rustrace AppEnforce.log --errors --from "2026-10-27 08:00" --export errors.xlsx`; the columns and
+  options are the saved ones of Export table (the table columns of the log type when none were
+  saved). Messages go to the console it was started from (no message box – fine for scheduled
+  tasks); exit code 0 = written, 1 = export error, 2 = invalid command line
 - **Safe for Excel** (default on): log text starting with `=`, `+`, `-`, `@` (or a tab / CR) gets a
   leading `'`, so a spreadsheet never runs it as a formula (CSV / formula injection)
 - runs in a background thread straight from the parsed entries (no copy of the log): the whole 400 MB
@@ -755,6 +777,7 @@ rustrace [OPTIONS] [FILE]...
 | `--from <TIME>` / `--to <TIME>` | Time range (`--to` inclusive, a date alone = the whole day). The same formats as the time range in the toolbar: ISO (`2026-10-27 13:05:30`, `2026-10-27T13:05`, `2026-10-27`) always, or the date order of the UI language (e.g. `27.10.2026 13:05` in Slovak). |
 | `--tail` / `--no-follow` | Follow / do not follow the end of the log (default: the "Follow end" setting; the options set it like the toolbar checkbox). |
 | `--merge` | Open several FILEs as one view merged by time. Several FILEs are merged also without it (the same as opening or dropping several files), the option just makes it explicit. |
+| `--export <FILE>` | Write the table export (CSV / Excel / JSON Lines / HTML by the extension of FILE) of the rows the other options select and exit without a window – see [Export table](#features). Messages go to the console; exit code 0 = written, 1 = export error, 2 = invalid command line. |
 | `--lang <CODE>` | UI language for this run only (`en`, `sk`, `cs`, `de` or an external language file); not saved in the settings. |
 | `--help`, `-h`, `/?` | Show the options (in a window; also printed when started from a console). |
 | `--version`, `-V` | Show the version. |
@@ -776,6 +799,7 @@ rustrace AppEnforce.log --line 1500
 rustrace AppEnforce.log --errors --from "2026-10-27 08:00" --to "2026-10-27 09:30"
 rustrace --merge AppDiscovery.log AppEnforce.log --search "fail.*0x8" --regex
 rustrace --lang de AppEnforce.log
+rustrace AppEnforce.log AppDiscovery.log --errors --from "2026-10-27 08:00" --export errors.xlsx
 ```
 
 ## Keyboard shortcuts

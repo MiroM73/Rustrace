@@ -3,7 +3,6 @@
 
 use crate::app::*;
 use crate::tabexport::{self, Col, ColumnSpec, Control, DeltaFrom, Rows, Scope, TableFormat};
-use std::io::Write as _;
 
 /// A table export running in a background thread.
 pub(in crate::app) struct TableExportJob {
@@ -210,15 +209,9 @@ impl App {
         }
     }
 
-    /// Asks for the target file and writes the export in a background thread.
-    pub(in crate::app) fn start_table_export(&mut self) {
-        if self.table_export_running() {
-            return;
-        }
-        let scope = self.cfg.table_export.scope;
-        let rows = self.table_export_rows(scope);
-        let cols: Vec<ColumnSpec> = self
-            .table_export_columns()
+    /// The chosen columns with their header texts.
+    fn table_export_specs(&mut self) -> Vec<ColumnSpec> {
+        self.table_export_columns()
             .clone()
             .into_iter()
             .filter(|(_, on)| *on)
@@ -226,8 +219,67 @@ impl App {
                 col,
                 title: self.table_export_title(col),
             })
+            .collect()
+    }
+
+    /// Everything one export of `rows` in `format` needs.
+    pub(in crate::app) fn table_export_job(
+        &mut self,
+        rows: Rows,
+        format: TableFormat,
+        scope: Scope,
+    ) -> tabexport::Job {
+        let cols = self.table_export_specs();
+        let s = self.cfg.table_export.clone();
+        let names = self.schema.extra_names.clone();
+        let extras = self.table_export_extras(scope, rows.len());
+        let title = self
+            .cur_path
+            .as_ref()
+            .and_then(|p| p.file_name())
+            .map_or_else(
+                || "RusTrace".to_owned(),
+                |n| n.to_string_lossy().into_owned(),
+            );
+        let html_info = extras
+            .texts
+            .summary
+            .iter()
+            .map(|(k, v)| format!("{k}: {v}"))
             .collect();
-        if rows.is_empty() || cols.is_empty() {
+        tabexport::Job {
+            ctx: self.table_export_context(),
+            json_keys: cols.iter().map(|c| c.col.json_key(&names)).collect(),
+            cols,
+            rows,
+            format,
+            header: s.header,
+            csv: tabexport::csv::CsvOptions::new(
+                s.csv_separator
+                    .unwrap_or_else(tabexport::csv::system_list_separator),
+                s.csv_encoding,
+                s.safe_for_excel,
+            ),
+            xlsx: tabexport::xlsx::XlsxOptions {
+                colors: s.xlsx_colors,
+                sheet_name: t!("tabexport.sheet.log"),
+                ..Default::default()
+            },
+            extras,
+            html_title: title,
+            html_info,
+            html_colors: s.xlsx_colors,
+        }
+    }
+
+    /// Asks for the target file and writes the export in a background thread.
+    pub(in crate::app) fn start_table_export(&mut self) {
+        if self.table_export_running() {
+            return;
+        }
+        let scope = self.cfg.table_export.scope;
+        let rows = self.table_export_rows(scope);
+        if rows.is_empty() || self.table_export_specs().is_empty() {
             return;
         }
         let format = self.cfg.table_export.format;
@@ -241,6 +293,8 @@ impl App {
         let filter = match format {
             TableFormat::Csv => t!("tabexport.filter.csv"),
             TableFormat::Xlsx => t!("tabexport.filter.xlsx"),
+            TableFormat::Jsonl => t!("tabexport.filter.jsonl"),
+            TableFormat::Html => t!("tabexport.filter.html"),
         };
         let mut dlg = rfd::FileDialog::new()
             .add_filter(filter, &[ext])
@@ -251,63 +305,16 @@ impl App {
         let Some(target) = dlg.save_file() else {
             return;
         };
-        let ctx = self.table_export_context();
-        let s = self.cfg.table_export.clone();
-        let opts = tabexport::csv::CsvOptions::new(
-            s.csv_separator
-                .unwrap_or_else(tabexport::csv::system_list_separator),
-            s.csv_encoding,
-            s.safe_for_excel,
-        );
-        let xlsx_opts = tabexport::xlsx::XlsxOptions {
-            colors: s.xlsx_colors,
-            sheet_name: t!("tabexport.sheet.log"),
-            ..Default::default()
-        };
-        let extras = self.table_export_extras(scope, rows.len());
+        let job = self.table_export_job(rows, format, scope);
         let ctl = Control::default();
-        let total = rows.len();
+        let total = job.rows.len();
         let (tx, rx) = mpsc::channel();
         let repaint = self.ctx.clone();
         let (thread_ctl, path) = (ctl.clone(), target.clone());
         let spawned = std::thread::Builder::new()
             .name("rustrace-tabexport".into())
             .spawn(move || {
-                let res = (|| -> std::io::Result<(usize, usize)> {
-                    let file = std::io::BufWriter::new(std::fs::File::create(&path)?);
-                    match format {
-                        TableFormat::Csv => {
-                            let mut w = tabexport::csv::CsvWriter::new(file, opts)?;
-                            let n = tabexport::write_table(
-                                &ctx,
-                                &rows,
-                                &cols,
-                                s.header,
-                                &mut w,
-                                &thread_ctl,
-                            )?;
-                            w.finish()?;
-                            Ok((n, 0))
-                        }
-                        TableFormat::Xlsx => {
-                            let (mut out, n, cut) = tabexport::stats::write_xlsx(
-                                file,
-                                &ctx,
-                                &rows,
-                                &cols,
-                                s.header,
-                                xlsx_opts,
-                                &extras,
-                                &thread_ctl,
-                            )?;
-                            out.flush()?;
-                            Ok((n, cut))
-                        }
-                    }
-                })();
-                let res = res.map_err(|e| {
-                    // A cancelled or failed export leaves no half-written file.
-                    let _ = std::fs::remove_file(&path);
+                let res = tabexport::run(&job, &path, &thread_ctl).map_err(|e| {
                     (e.kind() != std::io::ErrorKind::Interrupted).then(|| e.to_string())
                 });
                 let _ = tx.send(res);
@@ -323,6 +330,69 @@ impl App {
                 })
             }
             Err(e) => self.status_error = Some(t!("error.thread", error = e)),
+        }
+    }
+
+    /// Copies the selected rows with the chosen columns as CSV (`tab` = tab-separated for
+    /// pasting into Excel), in a thread like the other copies.
+    pub(in crate::app) fn copy_selection_as_table(&mut self, tab: bool) {
+        if self.copy_job.is_some() || self.sel.count() == 0 {
+            return;
+        }
+        let mut job = self.table_export_job(
+            Rows::List(self.sel.ones().collect()),
+            TableFormat::Csv,
+            Scope::Selected,
+        );
+        job.csv = tabexport::csv::CsvOptions::new(
+            if tab { '\t' } else { ',' },
+            tabexport::csv::CsvEncoding::Utf8,
+            self.cfg.table_export.safe_for_excel,
+        );
+        if tab {
+            // Excel takes the decimal separator of the system for pasted numbers.
+            job.csv.decimal = if tabexport::csv::system_list_separator() == ';' {
+                ','
+            } else {
+                '.'
+            };
+        }
+        let (tx, rx) = mpsc::channel();
+        let repaint = self.ctx.clone();
+        let spawned = std::thread::Builder::new()
+            .name("rustrace-copy".into())
+            .spawn(move || {
+                let res = (|| -> std::io::Result<(String, usize)> {
+                    let mut w = tabexport::csv::CsvWriter::new(Vec::new(), job.csv)?;
+                    let n = tabexport::write_table(
+                        &job.ctx,
+                        &job.rows,
+                        &job.cols,
+                        job.header,
+                        &mut w,
+                        &Control::default(),
+                    )?;
+                    let text = String::from_utf8_lossy(&w.finish()?).into_owned();
+                    Ok((text, n))
+                })();
+                let _ = tx.send(res.map_err(|e| e.to_string()));
+                repaint.request_repaint();
+            });
+        match spawned {
+            Ok(_) => self.copy_job = Some(rx),
+            Err(e) => self.status_error = Some(t!("error.thread", error = e)),
+        }
+    }
+
+    /// The last export: open it, show it in its folder, copy its path.
+    pub(in crate::app) fn open_exported(&mut self, path: &std::path::Path, folder: bool) {
+        let res = if folder {
+            show_in_folder(path)
+        } else {
+            open::that_detached(path)
+        };
+        if let Err(e) = res {
+            self.status_error = Some(t!("error.open_link", link = path.display(), error = e));
         }
     }
 
@@ -451,6 +521,10 @@ impl App {
                             t!("tabexport.done", rows = rows, path = target.display())
                         };
                         self.status_info = Some((msg, Instant::now() + Duration::from_secs(5)));
+                        if self.cfg.table_export.open_after {
+                            self.open_exported(&target, false);
+                        }
+                        self.table_export_last = Some(target);
                     }
                     Err(None) => self.info(t!("tabexport.cancelled")),
                     Err(Some(e)) => self.status_error = Some(t!("error.export", error = e)),
@@ -487,5 +561,22 @@ impl App {
         if ui.small_button(t!("progress.cancel")).clicked() {
             self.cancel_table_export();
         }
+    }
+}
+
+/// Opens Explorer with the file selected (other systems: its folder).
+fn show_in_folder(path: &std::path::Path) -> std::io::Result<()> {
+    #[cfg(windows)]
+    {
+        use std::os::windows::process::CommandExt;
+        // `/select,"path"` must reach Explorer as one argument with the quotes.
+        std::process::Command::new("explorer.exe")
+            .raw_arg(format!("/select,\"{}\"", path.display()))
+            .spawn()
+            .map(|_| ())
+    }
+    #[cfg(not(windows))]
+    {
+        open::that_detached(path.parent().unwrap_or(path))
     }
 }
