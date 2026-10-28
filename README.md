@@ -39,7 +39,7 @@ Both create:
 RusTrace\
     rustrace.exe      the program (no installation, no Visual C++ runtime needed)
     lang\*.lang       language files – edit or add translations here
-    logdef\*.def      log definitions (IIS, Exchange, DISM, CBS) – edit or add your own formats here
+    logdef\*.def      log definitions (IIS, Exchange, DISM, CBS, MSI) – edit or add your own formats here
     logsets\*.set     log sets (groups of ConfigMgr / Intune logs opened together)
     LICENSE           the Unlicense (public domain)
 ```
@@ -303,6 +303,8 @@ the version information into the exe; this uses the resource compiler `rc.exe` o
   (`0x80070005`, `-2147024891`, `exit code 1603` …)
 - the lookup window accepts hex, negative decimal or Win32/MSI codes and shows all forms (hex, decimal,
   Win32), the facility and a description
+- codes found in the message: `0x…` HRESULTs, negative decimals, `exit / error / return code N`
+  and the final `error status: N` of a Windows Installer log
 - descriptions: common ConfigMgr, Windows Update, MSI, WMI, WinINet and Win32 codes from the language
   files + on Windows the system message (`FormatMessage`, in the OS language, also from `wininet.dll`)
 - **HTTP status codes** (IIS logs and any log whose definition names its status columns): the details
@@ -482,7 +484,13 @@ Built in: `iisweb.log.def` (IIS web logs `u_ex*.log`, W3C format; HTTP 5xx = err
 substatus, Win32 status, time taken, client IP, user, request, then every other field of the
 `#Fields:` header), `exchconnect.log.def` (Exchange
 Server Transport Connectivity logs `CONNECTLOG*.LOG`, comma-separated W3C-like format),
-`dism.log.def` (`dism.log`) and `cbs.log.def` (`CBS.log`, `CbsPersist_*.log`).
+`dism.log.def` (`dism.log`), `cbs.log.def` (`CBS.log`, `CbsPersist_*.log`) and `msi.log.def`
+(Windows Installer verbose logs `msiexec /l*v` – `*.msi.log`, `MSI*.log` and any file starting with
+`=== Verbose logging started:` or `MSI (s) (`: the date comes from the *Verbose logging started*
+line, so the rows are placed at their real time in a merged view; columns MSI context `s` / `c`,
+process:thread, message; errors are only the real failures – `Return value 3`, `Error 1722.`,
+`returned actual error code 1603`, `@@ERR:`, *Installation failed*, `error status: 1603` – not the
+harmless `Note: 1: 2205 2:  3: Error` lines or `error status: 0`; `Return value 2` = warning).
 
 **Choosing the format** – View → Log format:
 - **Automatic** (default for every opened file): a definition whose `files` patterns match the file
@@ -546,10 +554,12 @@ title.severity = Level
 | `skip` | regex; matching lines are ignored |
 | `unmatched` | lines not matching the pattern: `append` to the previous entry (multi-line entries, default for `regex`), `entry` = own row (default for `w3c`), `skip` |
 | `role.datetime`, `role.message`, `role.component`, `role.thread` | which column(s) fill the standard columns (several are joined with a space, e.g. `role.message = cs-method cs-uri-stem cs-uri-query`); default: the column with the same name (`datetime` also `date` + `time`); without a message column the whole line is the message |
-| `role.severity` | column whose value gives the severity (default `severity`); it stays visible as a column |
+| `role.severity` | column(s) whose value gives the severity (default `severity`; several are joined with a space, e.g. `role.severity = message text`); it stays visible as a column |
 | `severity.error`, `severity.warning` | regexes (case-insensitive) for that value – e.g. `^5\d\d$` for HTTP 5xx; default: error/err/e/fatal/critical/3 and warning/warn/w/2; without a severity column the error/fail/warn keywords are used |
 | `datetime.format` | [chrono format](https://docs.rs/chrono/latest/chrono/format/strftime/index.html)(s) separated by `\|`; ISO-like dates are recognized without it |
 | `timezone` | `local` (default) or `utc` – converted to local time (IIS logs are in UTC) |
+| `header.date` | for logs whose lines have only a time: regex of the line that carries the date (named group `date`, else the first group), e.g. `header.date = ^=== Verbose logging started: (?P<date>\S+)`. The date/time column then holds the time of each line and the date of the last such line is put in front of it (`datetime.format` gets `YYYY-MM-DD <time>`, e.g. `%Y-%m-%d %H:%M:%S:%3f`); rows without a time get the previous date/time; a time more than 12 hours before the previous one is on the next day (midnight) |
+| `header.date.format` | chrono format(s) of that date separated by `\|`; default `%Y-%m-%d \| %d.%m.%Y \| %m/%d/%Y \| %d/%m/%Y \| %Y/%m/%d` (the first that fits wins – a slash date that fits both orders is read month/day) |
 | `columns` | order of the table columns (role or column names); `*` = all the other columns in the order of the pattern / header (e.g. `columns = datetime sc-status message *`); without `*` the columns not listed are hidden; default: the order in the pattern / header |
 | `title.<column>` | column header, e.g. `title.sc-status = Status`, `title.message = Request` |
 | `http_status`, `http_substatus`, `win32_status` | optional: the columns holding an HTTP status, an IIS substatus and a Win32 status code (decimal) – explained in the details pane and in the cell tooltip, e.g. `http_status = sc-status`; a named column missing in the log is ignored; only extra columns (not used by a role) are explained |
@@ -802,7 +812,7 @@ rustrace --lang de AppEnforce.log
 - `src/icon.rs` – the program icon drawn in code (window, start-up window, `.ico` for `build.rs`)
 - `build.rs` – embeds the icon and the version information into `rustrace.exe` (Windows)
 - `lang/*.lang` – built-in translations
-- `logdef/*.def` – built-in log definitions (IIS, Exchange, DISM, CBS)
+- `logdef/*.def` – built-in log definitions (IIS, Exchange, DISM, CBS, Windows Installer)
 - `logsets/*.set` – built-in log sets (ConfigMgr / Intune scenarios)
 - `scripts/package.ps1` – packs the release build into the self-extracting archive and the ZIP
 - `scripts/release.ps1` – the whole GitHub release (checks, version, tests, commit, tag, build, publish)

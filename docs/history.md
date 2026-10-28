@@ -211,6 +211,19 @@ Notes for Claude, linked from `CLAUDE.md`.
     *Software updates* and *Client installation* (two guides) sets use it. One table
     (`src/guides.rs`); a failed open shows the link in the status bar. Tests for URLs / targets,
     the table against the files and the index, the guides of the built-in sets.
+68. #40 Built-in definition for Windows Installer verbose logs (`msi.log.def`): new `header.date`
+    / `header.date.format` keys (date from a header line, time of every line, rows without a time
+    keep the previous one, midnight roll-over), `role.severity` with several columns; MSI rows of
+    the *Client installation* set now stand between 08:02:58 and 08:07:20 instead of at the top;
+    errors only for real failures (`Return value 3`, `Error NNNN.`, `returned actual error code`,
+    `@@ERR:`, `is returning`, failed installation, `error status: [1-9]`), `Return value 2` =
+    warning, the `Note: 1: 2205 / 2228 / 2262` lines and `error status: 0` stay Info. The error
+    code lookup reads `error status: 1603`; `Error NNNN.` numbers are not looked up (MSI message
+    ids ≠ Win32 codes). Guides client-install (steps 2, 3) and client-msi-1603 (step 4, 7)
+    updated; their screenshots still show the old behaviour (noted in the text). Verified with
+    the guide logs in the release build: merged view places the MSI rows at 08:02:58 …, Info off
+    shows no MSI rows. Tests: MSI lines / dates / roll-over / severities, header date orders,
+    own date format, session reset.
 
 ## Ideas not done yet (offered by the owner)
 - `--set "<name>"` command-line option for log sets (#27): would need the set loading, the file

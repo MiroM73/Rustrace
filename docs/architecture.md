@@ -13,7 +13,7 @@ User-facing descriptions are in `README.md`.
 - **Log definitions** (`logdef\*.def`, `src/logdef.rs`): regex with named groups or W3C (`#Fields:`)
   describe other layouts (w3c `separator`: space = IIS with `-` = empty, other = CSV-style values
   with quotes, `-` kept – Exchange); built-in `iisweb.log.def`, `exchconnect.log.def`,
-  `dism.log.def`, `cbs.log.def`, external files
+  `dism.log.def`, `cbs.log.def`, `msi.log.def`, external files
   from `logdef\` next to the exe or `%APPDATA%\RusTrace\logdef` (same name overrides built-in).
   Roles fill the standard columns (message/component/datetime/thread), `role.severity` + regexes give
   the severity, other groups are extra columns (`LogEntry::extra`, `Schema::extra_names`). The table
@@ -32,6 +32,20 @@ User-facing descriptions are in `README.md`.
   View → Log format (Auto = file name → content `detect` → built-in; CMTrace content never uses
   `detect`), reset to Auto for every newly opened file. `unmatched = append` keeps the last entry
   provisional until the next one starts (`ParserState::pending_entry`).
+- MSI verbose logs (#40, `msi.log.def`): `header.date` (regex, group `date` / first group) +
+  `header.date.format` (default `DEFAULT_DATE_FORMATS`, first fitting wins) → `DefState::date`,
+  set in `DefState::parse` before the line is parsed (resets `last_dt` = new session, no
+  roll-over across it). `DefState::header_datetime`: the datetime role text = time only, parsed
+  as `YYYY-MM-DD <time>` with `datetime.format`; empty → `last_dt`; earlier than `last_dt` by
+  more than 12 h → + days, `date` moves on. Without a header line yet the time text stays as it
+  is. `role.severity` is a list (`LogDef::severity_fields`, `Mapping::severity: Vec`): the values
+  of the fields present in the line are joined; none present → keywords. The MSI pattern has one
+  alternative per line kind (`MSI (s|c) (pid:tid) [time]:`, `Action start/ended H:MM:SS:`, the
+  header, any other text) with own message / time groups joined by the roles; every line is an
+  entry, so continuation lines (*Error 25150.*) get their own severity. `errcodes::find_codes`
+  also reads `error status: N`. MSI message numbers in `Error NNNN.` are **not** looked up: they
+  are Windows Installer message ids (1722 = custom action failed), not Win32 codes (1722 = RPC
+  server unavailable) – the existing lookup would explain them wrongly.
 - `columns` order (#41): role / field names; `*` = every column not named in the list, in the
   field order (`LogDef::mapping`; kinds of the named columns collected first so `*` skips them).
   Without `*` unlisted fields are hidden (still extra columns, searchable). The built-in IIS
@@ -418,7 +432,7 @@ User-facing descriptions are in `README.md`.
   program), names via `AssocQueryStringW`. Test `register_and_unregister` uses its own HKCU key.
 
 ## Tests and benchmarks
-- `cargo test` (110 tests: guides table / URLs / log set guides (#39), IIS column order with `*` (#41), follow end pause / resume (#37), rules window default width (#48), keyboard shortcut order (Shift+F3 / Shift+F2 not taken by F3 / F2, #46), log sets (set file parsing / translations / built-in sets, variables, loading priorities, file checks, remote computer names / variables / drive letters / share roots, network error codes, recent computers), HTTP status lookup / class fallback / lookup input parsing and ambiguity / cell values, status column keys of log definitions, command-line parsing (file association, all options, errors, `--restore`, language / time / regex checks, help text), overview buckets incremental = full / pixel runs, readable export with Δ, durations, match bits set / iterate, bookmark file id remap, update releases list / missed versions / check setting migration, merged logs (order by time, appended older rows, formats + rotated parts + re-read, single log unchanged, interleave), store copy_entry / split_off, raw lines of entries (all formats / encodings), filter (parallel = sequential, match bits), date column filter = text filter, updates (versions, release JSON, notes, sha256 file, ZIP, install, restore state), icon / .ico layout, search as you type threshold, status-bar position percentage, file association (registry in an own HKCU test key), search history, store drop_front / move to temp file, rotated parts (naming, merge on open, rotation while watching, replaced
+- `cargo test` (112 tests: MSI verbose log / header dates (#40), guides table / URLs / log set guides (#39), IIS column order with `*` (#41), follow end pause / resume (#37), rules window default width (#48), keyboard shortcut order (Shift+F3 / Shift+F2 not taken by F3 / F2, #46), log sets (set file parsing / translations / built-in sets, variables, loading priorities, file checks, remote computer names / variables / drive letters / share roots, network error codes, recent computers), HTTP status lookup / class fallback / lookup input parsing and ambiguity / cell values, status column keys of log definitions, command-line parsing (file association, all options, errors, `--restore`, language / time / regex checks, help text), overview buckets incremental = full / pixel runs, readable export with Δ, durations, match bits set / iterate, bookmark file id remap, update releases list / missed versions / check setting migration, merged logs (order by time, appended older rows, formats + rotated parts + re-read, single log unchanged, interleave), store copy_entry / split_off, raw lines of entries (all formats / encodings), filter (parallel = sequential, match bits), date column filter = text filter, updates (versions, release JSON, notes, sha256 file, ZIP, install, restore state), icon / .ico layout, search as you type threshold, status-bar position percentage, file association (registry in an own HKCU test key), search history, store drop_front / move to temp file, rotated parts (naming, merge on open, rotation while watching, replaced
   file), export segments by file, time range bounds, column filter syntax, parsers, chunked/ANSI/UTF-16 reading, log definitions (CBS, DISM, IIS,
   Exchange connectivity / CSV separator, choice by name/content, appending across refreshes), store (32-byte record, ISO ↔ ms, push /
   truncate / append, mapped temp file growing past 64 MB, interner), export incl. end-to-end and
