@@ -200,7 +200,7 @@ rustrace.exe \\PC0815\admin$\CCM\Logs\AppEnforce.log \\PC0815\admin$\CCM\Logs\Ap
 ```
 
 `--from` / `--to` accept ISO dates (`2026-10-27 07:00`) or the date format of the UI language;
-`rustrace.exe --help` lists every option. More in the README, section *Command line*.
+`rustrace.exe --help` lists every option. More in [Command line](../command-line.md).
 
 ## What to look for
 

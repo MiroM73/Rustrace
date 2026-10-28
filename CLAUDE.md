@@ -3,8 +3,11 @@
 ## Working with the owner
 - The owner (Miroslav, GitHub `MiroM73`) talks to Claude in **Slovak, informal "ty" form**. Answer in Slovak.
 - Everything inside the repository is in **English**: code, comments, README, commit messages.
-- After every finished change: run the tests, verify the behaviour, update `README.md`, and make a
-  commit with a **detailed English commit message** (what changed, why, how it was verified).
+- After every finished change: run the tests, verify the behaviour, update the user documentation
+  (`README.md` is only a short overview – feature details go into the documents it links in `docs/`:
+  `features.md`, `export.md`, `log-definitions.md`, `log-sets.md`, `languages.md`,
+  `command-line.md`, `keyboard-shortcuts.md`, `source-layout.md`, `development.md`,
+  `releasing.md`), and make a commit with a **detailed English commit message** (what changed, why, how it was verified).
 - The **first block of the README** states that everything (code, logic, architecture, UI design,
   translations, tests, scripts, docs) was created by Claude (Claude Opus 5.5, `claude-opus-5-5`,
   Anthropic) and the owner only specified requirements. Keep it at the top when editing the README.
@@ -16,7 +19,7 @@
 ## What the application is
 A native desktop log viewer in Rust (eframe/egui 0.37) modelled on **CMTrace** from Microsoft
 SCCM / ConfigMgr. Single self-contained executable; main target is Windows. User-facing details
-are in `README.md`.
+are in `docs/features.md` and the other documents linked from `README.md`.
 
 - **`docs/architecture.md`** – how every feature works inside. Read the section of a feature
   before changing it, and update it with the change.

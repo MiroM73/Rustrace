@@ -2,7 +2,9 @@
 
 Notes for Claude: how every feature works inside (names of types, functions, settings,
 measurements). Linked from `CLAUDE.md`; read the section of a feature before changing it.
-User-facing descriptions are in `README.md`.
+User-facing descriptions are in `README.md` (overview, download, building) and the documents it
+links in `docs/` (`features.md`, `export.md`, `log-definitions.md`, `log-sets.md`, `languages.md`,
+`command-line.md`, `keyboard-shortcuts.md`, `source-layout.md`, `development.md`, `releasing.md`).
 
 ## Formats
 - Formats: CMTrace `<![LOG[..]LOG]!><time="" date="" component="" type="" thread="">` incl. multi-line,

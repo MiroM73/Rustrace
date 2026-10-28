@@ -294,6 +294,18 @@ Notes for Claude, linked from `CLAUDE.md`.
     #43 IIS Win32 status texts, #44 search highlight in all cells, #47 Enter after search as you
     type). `release.ps1 1.1.6 -Publish -Yes` under pwsh: tests, tag, GitHub build (~10 min),
     published with the .exe / .zip and their .sha256.
+78. #57 README split: `README.md` (920 → ~110 lines) keeps the AI notice, description, guides,
+    an "at a glance" list, download, building, a documentation table and the license; the rest moved
+    unchanged to `docs/features.md` (bold feature titles became `##` headings, contents line; also
+    start-up window / About, updates, default app, settings path), `docs/export.md`,
+    `log-definitions.md`, `log-sets.md`, `languages.md`, `command-line.md`,
+    `keyboard-shortcuts.md`, `source-layout.md`, `development.md` (tests, CI, test logs,
+    benchmarks, build details), `releasing.md`; each starts with a summary and "← Back to README".
+    Links fixed in the new docs, guides `failed-app-install.md` / `client-install.md`,
+    `architecture.md`, `CLAUDE.md`; the program itself had no README section references.
+    Verified: a script checked that every non-empty line of the old README is in the new files
+    (except the reworded headings / links) and that every relative link and `#anchor` in README,
+    `docs/*.md` and the guides resolves.
 
 ## Ideas not done yet (offered by the owner)
 - `--set "<name>"` command-line option for log sets (#27): would need the set loading, the file
