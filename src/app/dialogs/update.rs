@@ -165,6 +165,7 @@ impl App {
                 }),
             },
             selected: self.selected,
+            follow_paused: self.follow_paused(),
             search_text: self.search_text.clone(),
             search_confirmed: self.search_confirmed,
             search_regex: self.search_regex,
@@ -227,7 +228,10 @@ impl App {
         }
         if let Some(sel) = state.selected.filter(|&s| s < self.entries.len()) {
             self.select_only(Some(sel));
-            if !self.cfg.auto_scroll {
+            if state.follow_paused {
+                self.follow_entry_selected(sel);
+            }
+            if !self.following() {
                 self.scroll_to_selected_after_filter();
             }
         }

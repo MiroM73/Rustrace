@@ -221,7 +221,13 @@ the version information into the exe; this uses the resource compiler `rc.exe` o
   the export of original lines then uses the message texts kept in memory for it
 - other truncation / replacement of the file (also with different content of the same size) is
   detected and the file is read again
-- "Follow end" – sticks to the last line; turns off when you scroll/navigate manually, End turns it on again
+- "Follow end" – sticks to the last line. Selecting a row that is not the last one (click, keyboard,
+  F3 / F2, bookmarks list, overview strip, `--line`) only **pauses** it: the table stays at the
+  row, new rows arrive below it and filter changes keep the row in view; the checkbox turns orange
+  and the status bar shows **⏸ Follow end paused**. It resumes when the selection is cleared
+  (**Esc**, Ctrl+click on the only selected row, a click below the last row), when you reach the
+  last row (End, a click on it, scrolling to the very bottom) or with a click on the status bar
+  item. Unticking the checkbox (or `--no-follow`) turns it off until you tick it again
 
 **Memory**
 - entries are stored compactly: 40 bytes per entry plus the message text; components, threads
@@ -695,7 +701,7 @@ Options can come before or after the files, values as `--line 5` or `--line=5`; 
 repeated, the last one counts. `--line`, `--regex`, `--case` and `--filter` need a FILE /
 `--search`. An invalid option, line number, time, language or regular expression shows a message
 (a window, and on stderr) and the program ends with exit code 2. `--line` and the first search
-match are selected once the log has been read; selecting a row stops following the end, like a
+match are selected once the log has been read; selecting a row pauses following the end, like a
 click on a row. Double-clicking a `.log` file (file association) works as before – it is just a
 FILE. Help → About points to `rustrace.exe --help` as well.
 
@@ -724,7 +730,8 @@ rustrace --lang de AppEnforce.log
 | Ctrl+Shift+S | Export highlighted rows with context |
 | Ctrl+F2 | Add / remove a bookmark on the selected row |
 | F2 / Shift+F2 | Next / previous bookmark |
-| ↑ ↓ PgUp PgDn Home End | Move in the table |
+| ↑ ↓ PgUp PgDn Home End | Move in the table (End / the last row resumes a paused "Follow end") |
+| Esc | Clear the selection (resumes a paused "Follow end") |
 | Shift + mouse wheel | Scroll the table horizontally (when the columns do not fit; also the scroll bar below the table) |
 | Shift + ↑ ↓ PgUp PgDn Home End, Shift + click | Extend the selection |
 | Ctrl + click / Ctrl+A | Add / remove a row / select all rows shown |

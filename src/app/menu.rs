@@ -131,11 +131,9 @@ impl App {
                         }
                     }
                 });
-                if ui
-                    .checkbox(&mut self.cfg.auto_scroll, t!("menu.view.follow"))
-                    .changed()
-                {
-                    self.cfg_dirty = true;
+                let label = self.follow_label("menu.view.follow");
+                if ui.checkbox(&mut self.cfg.auto_scroll, label).changed() {
+                    self.follow_setting_changed();
                 }
                 ui.separator();
                 if ui

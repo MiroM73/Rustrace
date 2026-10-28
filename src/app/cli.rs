@@ -31,6 +31,7 @@ impl App {
         }
         if let Some(follow) = view.follow {
             self.cfg.auto_scroll = follow;
+            self.follow.resume();
         }
         self.time_from = view.from.unwrap_or_default();
         self.time_to = view.to.unwrap_or_default();
@@ -46,7 +47,7 @@ impl App {
     }
 
     /// Selects the row asked for by the command line (after the first full read). Like a click
-    /// on a row this stops following the end.
+    /// on a row this pauses following the end (#37).
     pub(in crate::app) fn apply_cli_select(&mut self, sel: CliSelect) {
         match sel {
             CliSelect::FirstMatch => self.select_first_match(),
@@ -60,9 +61,9 @@ impl App {
                 });
                 match found {
                     Some(i) => {
-                        self.cfg.auto_scroll = false;
                         self.after_filter.scroll_end = false;
                         self.select_only(Some(i));
+                        self.follow_entry_selected(i);
                         self.scroll_to_selected_after_filter();
                     }
                     None => self.info(t!("cli.line_not_found", line = n)),

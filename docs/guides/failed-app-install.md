@@ -87,8 +87,10 @@ Click the newest error row.
 
 ## Step 5 – Look at what happened just before the error
 
-1. Turn **Info** back on and **untick "Follow end"** in the toolbar, so the table stays where you
-   are and does not jump to the newest rows while the logs are refreshed.
+1. Turn **Info** back on. The selected error row stays in view: while a row is selected,
+   *Follow end* is **paused** (orange checkbox, *⏸ Follow end paused* in the status bar), so the
+   table does not jump to the newest rows while the logs are refreshed. **Esc** or **End**
+   resumes following.
 2. Turn on the **Δ time column**: **View → Δ time column** (or right-click any column header).
 
    ![View menu – Δ time column](images/failed-app-install/06-delta-column-menu.png)
@@ -99,7 +101,8 @@ Click the newest error row.
 
 ![Context of the error with the Δ time column and a bookmark](images/failed-app-install/07-context-delta-bookmark.png)
 
-1. *Follow end* is off.
+1. *Follow end* – unticked in this screenshot; with a row selected it is paused anyway, so
+   unticking is not needed any more.
 2. **Δ time `+3 min 37 s`** – the installer process ran for 3½ minutes before it ended with
    `exitcode: 1603`. Gaps of 30 s and more are colored, so long waits stand out. A long run that
    ends with an error usually means the installer did real work and failed late (a custom
@@ -224,7 +227,7 @@ decimal (`-2147023293`) or Win32 / MSI number (`1603`).
 | 1 | File → Open log set… → *Application deployment* | – |
 | 3 | Info off – only warnings and errors | – |
 | 4 | Click the error – the details pane explains the code | Ctrl+E for any code |
-| 5 | Follow end off, View → Δ time column, bookmark + note | Ctrl+F2, F2 |
+| 5 | Follow end paused at the selected row, View → Δ time column, bookmark + note | Ctrl+F2, F2, Esc |
 | 6 | Search the app name + Filter | Ctrl+F, Ctrl+L |
 | 7 | MSI log, search `Return value 3` | Ctrl+O |
 | 8 | Pause, export errors + bookmarks with context | Ctrl+P, Ctrl+Shift+S |

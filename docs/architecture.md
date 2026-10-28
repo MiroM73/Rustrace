@@ -176,6 +176,22 @@ User-facing descriptions are in `README.md`.
 
 ## UI basics
 - Auto refresh: interval in ms / s / min, pause/resume (Ctrl+P), presets, "follow end".
+- Follow end paused (#37, `app/follow.rs`): `cfg.auto_scroll` = the user's setting (checkbox,
+  `--tail` / `--no-follow`, saved); `App::follow: Follow` = runtime pause (not saved, but handed
+  over in `SessionState::follow_paused` after an update). `following()` = setting && !paused is
+  what `stick_to_bottom`, appended rows (`check_loading`), the full reload, the memory-limit drop
+  and the after-filter scrolling use. Pausing: every selection path calls
+  `follow_row_selected(pos)` / `follow_entry_selected(i)` (`select_row` – keyboard, F3, F2,
+  search as you type, bookmarks list; `extend_selection`; `click_row`; right click; overview strip;
+  `--line`; a hidden row pauses) – a row above the last one pauses, the last row resumes.
+  Resuming: `clear_selection` (Esc in `input.rs` unless a popup is open, Ctrl+click on the only
+  selected row, a click below the last drawn row in `table.rs`), the last row, scrolling the table
+  to the bottom with the wheel / a drag (`table.rs`, only when the content is taller than the
+  view), the status bar button, the checkbox (`follow_setting_changed`, ticking scrolls to the
+  end), opening / reloading a log, a selected row that disappears. `refilter_from(0)` scrolls to
+  the selected row when not following, so filter changes keep it in view. Paused is shown by the
+  orange checkbox text (same width – the toolbar must not move under the pointer), "(paused)" in
+  the View menu and the status bar button.
 - Highlight rules: text or regex, case, scope whole row / text only, also-component, order = priority,
   JSON import/export, **separate colors for light and dark theme**; severity + search colors per theme.
   Rules window (`dialogs/rules.rs`, #48): name / pattern fields have fixed widths (`NAME_W`,
@@ -350,12 +366,12 @@ User-facing descriptions are in `README.md`.
   choice, reload language files returns to it). `apply_cli_view` sets search (+
   `search_confirmed`, so short texts search), regex / case / filter mode, `show_sev`
   (`Severities::show_sev`), time range texts (`apply_time_range`), `cfg.auto_scroll` for
-  `--tail` / `--no-follow` (like the toolbar checkbox, so it is remembered), then
+  `--tail` / `--no-follow` (like the toolbar checkbox, so it is remembered; ends a pause), then
   `cli_select = Line(n) | FirstMatch` when files were given. `check_loading` applies it after the
   first `Reset` (a full read returns the whole file at once), `open_files` clears it.
   `Line(n)`: file id of the first FILE itself (`files[id].path == paths[0]` among the files of
   log 0, else its last file – not the rotated parts), the last entry of that file with
-  `line_no ≤ n` (multi-line entries); select + `scroll_to_selected_after_filter`, follow off,
+  `line_no ≤ n` (multi-line entries); select + `scroll_to_selected_after_filter`, follow paused (#37),
   `after_filter.scroll_end` dropped; none → status info `cli.line_not_found`. `FirstMatch` =
   `select_first_match` (waits for a background re-filter). `filter_done` now runs `scroll_end`
   before `select_first`, so a pending first match wins over following the end.
@@ -378,7 +394,7 @@ User-facing descriptions are in `README.md`.
   program), names via `AssocQueryStringW`. Test `register_and_unregister` uses its own HKCU key.
 
 ## Tests and benchmarks
-- `cargo test` (106 tests: rules window default width (#48), keyboard shortcut order (Shift+F3 / Shift+F2 not taken by F3 / F2, #46), log sets (set file parsing / translations / built-in sets, variables, loading priorities, file checks, remote computer names / variables / drive letters / share roots, network error codes, recent computers), HTTP status lookup / class fallback / lookup input parsing and ambiguity / cell values, status column keys of log definitions, command-line parsing (file association, all options, errors, `--restore`, language / time / regex checks, help text), overview buckets incremental = full / pixel runs, readable export with Δ, durations, match bits set / iterate, bookmark file id remap, update releases list / missed versions / check setting migration, merged logs (order by time, appended older rows, formats + rotated parts + re-read, single log unchanged, interleave), store copy_entry / split_off, raw lines of entries (all formats / encodings), filter (parallel = sequential, match bits), date column filter = text filter, updates (versions, release JSON, notes, sha256 file, ZIP, install, restore state), icon / .ico layout, search as you type threshold, status-bar position percentage, file association (registry in an own HKCU test key), search history, store drop_front / move to temp file, rotated parts (naming, merge on open, rotation while watching, replaced
+- `cargo test` (107 tests: follow end pause / resume (#37), rules window default width (#48), keyboard shortcut order (Shift+F3 / Shift+F2 not taken by F3 / F2, #46), log sets (set file parsing / translations / built-in sets, variables, loading priorities, file checks, remote computer names / variables / drive letters / share roots, network error codes, recent computers), HTTP status lookup / class fallback / lookup input parsing and ambiguity / cell values, status column keys of log definitions, command-line parsing (file association, all options, errors, `--restore`, language / time / regex checks, help text), overview buckets incremental = full / pixel runs, readable export with Δ, durations, match bits set / iterate, bookmark file id remap, update releases list / missed versions / check setting migration, merged logs (order by time, appended older rows, formats + rotated parts + re-read, single log unchanged, interleave), store copy_entry / split_off, raw lines of entries (all formats / encodings), filter (parallel = sequential, match bits), date column filter = text filter, updates (versions, release JSON, notes, sha256 file, ZIP, install, restore state), icon / .ico layout, search as you type threshold, status-bar position percentage, file association (registry in an own HKCU test key), search history, store drop_front / move to temp file, rotated parts (naming, merge on open, rotation while watching, replaced
   file), export segments by file, time range bounds, column filter syntax, parsers, chunked/ANSI/UTF-16 reading, log definitions (CBS, DISM, IIS,
   Exchange connectivity / CSV separator, choice by name/content, appending across refreshes), store (32-byte record, ISO ↔ ms, push /
   truncate / append, mapped temp file growing past 64 MB, interner), export incl. end-to-end and

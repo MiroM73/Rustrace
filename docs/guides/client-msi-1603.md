@@ -36,7 +36,7 @@ Start with **ccmsetup.log** – it tells you whether the MSI log is needed at al
 rustrace.exe \\PC0815\admin$\ccmsetup\Logs\ccmsetup.log
 ```
 
-Untick **Follow end** and press **Ctrl+Home**:
+Press **Ctrl+Home** (going to the first row pauses *Follow end*, the view stays there):
 
 ![ccmsetup.log with two attempts](images/client-msi-1603/01-ccmsetup-two-attempts.png)
 

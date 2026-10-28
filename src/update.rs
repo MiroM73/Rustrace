@@ -459,6 +459,8 @@ pub struct SessionState {
     pub format: Option<FormatState>,
     /// Index of the selected entry.
     pub selected: Option<usize>,
+    /// "Follow end" was paused at the selected row (#37).
+    pub follow_paused: bool,
     pub search_text: String,
     pub search_confirmed: bool,
     pub search_regex: bool,

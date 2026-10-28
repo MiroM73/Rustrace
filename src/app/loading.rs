@@ -50,7 +50,7 @@ impl App {
         self.selection_drop_front(k);
         self.code_cache = None;
         // Keep the selected row in view (the rows above it disappeared).
-        if !self.cfg.auto_scroll
+        if !self.following()
             && let Some(p) = pos_selected.and_then(|p| p.checked_sub(gone))
         {
             self.scroll_to = Some(p);
@@ -194,6 +194,7 @@ impl App {
         self.is_match.clear();
         self.committed_len = 0;
         self.select_only(None);
+        self.follow.resume();
         self.time_ref = None;
         self.code_cache = None;
         self.last_refresh = None;
@@ -344,6 +345,7 @@ impl App {
                 self.cancel_filter_job();
                 self.entries = Arc::new(entries);
                 self.select_only(None);
+                self.follow.resume();
                 self.code_cache = None;
                 self.filtered.clear();
                 self.is_match.clear();
@@ -354,7 +356,7 @@ impl App {
                     self.cfg.push_recent(&p);
                     self.cfg_dirty = true;
                 }
-                if self.cfg.auto_scroll {
+                if self.following() {
                     self.scroll_to_end_after_filter();
                 }
             }
@@ -392,17 +394,18 @@ impl App {
                     });
                     // Rows merged in before the selection: only the cursor row is kept.
                     self.select_only(sel);
-                    if !self.cfg.auto_scroll {
+                    if sel.is_none() {
+                        // The selected row is gone: nothing to stay at any more.
+                        self.follow.resume();
+                    }
+                    if !self.following() {
                         self.scroll_to_selected_after_filter();
                     }
                 }
                 self.find_bookmarks_from(changed);
                 self.refilter_from(changed);
                 self.last_refresh_wall = Some(chrono::Local::now());
-                if self.cfg.auto_scroll
-                    && self.filtered.len() != before
-                    && !self.filtered.is_empty()
-                {
+                if self.following() && self.filtered.len() != before && !self.filtered.is_empty() {
                     self.scroll_to = Some(self.filtered.len() - 1);
                 }
             }

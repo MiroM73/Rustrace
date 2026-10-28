@@ -119,6 +119,11 @@ impl App {
         } else {
             self.refilter_here(start, &spec);
         }
+        // Changed filters (severity toggles, search, column filters, time range) keep the
+        // selected row in view while not following the end (#37).
+        if start == 0 && !self.following() && self.selected.is_some() {
+            self.scroll_to_selected_after_filter();
+        }
     }
 
     /// Filters the entries from `start` on this thread.
@@ -235,7 +240,7 @@ impl App {
         if after.select_first {
             self.select_first_match();
         }
-        if after.scroll_selected && !self.cfg.auto_scroll {
+        if after.scroll_selected && !self.following() {
             self.scroll_to_selected_after_filter();
         }
     }
@@ -335,10 +340,8 @@ impl App {
         if let Some(&idx) = self.filtered.get(pos) {
             self.select_only(Some(idx));
             self.scroll_to = Some(pos);
-            // Manual navigation stops following the end, otherwise the table would jump.
-            if pos + 1 < self.filtered.len() {
-                self.cfg.auto_scroll = false;
-            }
+            // Manual navigation pauses following the end (the last row resumes it, #37).
+            self.follow_row_selected(pos);
         }
     }
 }

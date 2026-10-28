@@ -112,8 +112,10 @@ impl App {
         if let Some(pos) = resp.interact_pointer_pos()
             && (resp.clicked() || resp.dragged())
         {
-            self.scroll_to = Some(row_at(pos.y));
-            self.cfg.auto_scroll = false;
+            let row = row_at(pos.y);
+            self.scroll_to = Some(row);
+            // Like a jump to a row: pauses following the end, the bottom resumes it (#37).
+            self.follow_row_selected(row);
         }
         if let Some(pos) = resp.hover_pos() {
             let row = row_at(pos.y);

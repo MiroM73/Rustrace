@@ -176,6 +176,7 @@ impl App {
             Ok(pos) => self.select_row(pos),
             Err(_) => {
                 self.select_only(Some(i));
+                self.follow_entry_selected(i);
                 self.info(t!("bookmarks.hidden"));
             }
         }
