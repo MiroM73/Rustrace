@@ -19,7 +19,8 @@ examples: [docs/guides](docs/guides/README.md), e.g.
 [An application deployment failed](docs/guides/failed-app-install.md),
 [Software updates do not install](docs/guides/software-updates.md),
 [A new ConfigMgr client does not register](docs/guides/client-install.md),
-[The management point / distribution point is not healthy](docs/guides/iis-management-point.md).
+[The management point / distribution point is not healthy](docs/guides/iis-management-point.md),
+[The ConfigMgr client installation fails](docs/guides/client-msi-1603.md).
 
 ## Download
 

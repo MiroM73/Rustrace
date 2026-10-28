@@ -2,8 +2,8 @@
 
     python scripts/gen_guide_logs.py [GUIDE ...]
 
-GUIDE = failed-app-install, software-updates, client-install, iis-management-point
-(default: all). The logs of a guide go to
+GUIDE = failed-app-install, software-updates, client-install, iis-management-point,
+client-msi-1603 (default: all). The logs of a guide go to
 testlogs/guides/<guide>/ (not in git) in the folder layout of a Windows PC (Windows/CCM/Logs, …).
 All names, IDs and GUIDs in them are invented; the output is the same on every run.
 """
@@ -15,6 +15,7 @@ GUIDES = {
     "software-updates": "software_updates.py",
     "client-install": "client_install.py",
     "iis-management-point": "iis_management_point.py",
+    "client-msi-1603": "client_msi_1603.py",
 }
 
 names = sys.argv[1:] or list(GUIDES)

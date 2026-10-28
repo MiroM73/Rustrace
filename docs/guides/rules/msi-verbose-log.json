@@ -1,0 +1,107 @@
+[
+  {
+    "enabled": true,
+    "name": "MSI: harmless note",
+    "pattern": "Note: 1: (2205|2228|2262|2318)\\b",
+    "is_regex": true,
+    "case_sensitive": false,
+    "scope": "Row",
+    "use_fg": true,
+    "fg": [
+      120,
+      120,
+      120,
+      255
+    ],
+    "use_bg": true,
+    "bg": [
+      240,
+      240,
+      240,
+      255
+    ],
+    "fg_dark": [
+      150,
+      150,
+      150,
+      255
+    ],
+    "bg_dark": [
+      40,
+      40,
+      40,
+      255
+    ],
+    "match_component": false
+  },
+  {
+    "enabled": true,
+    "name": "MSI: failure",
+    "pattern": "Return value 3|returned actual error code|^Error \\d+\\.|@@ERR:|Installation failed|error status: [1-9]|is returning [1-9]",
+    "is_regex": true,
+    "case_sensitive": false,
+    "scope": "Row",
+    "use_fg": true,
+    "fg": [
+      255,
+      255,
+      255,
+      255
+    ],
+    "use_bg": true,
+    "bg": [
+      200,
+      40,
+      50,
+      255
+    ],
+    "fg_dark": [
+      255,
+      235,
+      235,
+      255
+    ],
+    "bg_dark": [
+      140,
+      30,
+      40,
+      255
+    ],
+    "match_component": false
+  },
+  {
+    "enabled": true,
+    "name": "MSI: action",
+    "pattern": "^Action (start|ended) [0-9:]+: \\w+",
+    "is_regex": true,
+    "case_sensitive": false,
+    "scope": "Text",
+    "use_fg": true,
+    "fg": [
+      20,
+      60,
+      150,
+      255
+    ],
+    "use_bg": true,
+    "bg": [
+      215,
+      230,
+      255,
+      255
+    ],
+    "fg_dark": [
+      200,
+      220,
+      255,
+      255
+    ],
+    "bg_dark": [
+      35,
+      55,
+      95,
+      255
+    ],
+    "match_component": false
+  }
+]
