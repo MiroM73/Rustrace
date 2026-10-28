@@ -126,8 +126,11 @@ Import the rules from [`docs/guides/rules/msi-verbose-log.json`](rules/msi-verbo
    - **MSI: action** – the action name in `Action start / ended` lines in blue (text only), so the
      sequence of actions is easy to follow.
 2. **Import…** adds the rules from a JSON file (the window may need to be made wider to show all
-   columns).
-3. **Export…** saves your rules as JSON – to share them with colleagues.
+   columns). Importing the file again does not duplicate them: a rule with the same name and
+   pattern is skipped, or updated when the file has other colors; the window says how many rules
+   were added / updated / skipped.
+3. **Export…** shows the list of your rules with a checkbox each – untick the ones you do not want
+   to share and press **Export N rules…** to save the ticked ones as JSON.
 
 The rules apply to every log – they only match MSI text.
 

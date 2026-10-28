@@ -131,7 +131,7 @@ pub enum HighlightScope {
     Text,
 }
 
-#[derive(Clone, Serialize, Deserialize, Debug)]
+#[derive(Clone, PartialEq, Serialize, Deserialize, Debug)]
 #[serde(default)]
 pub struct HighlightRule {
     pub enabled: bool,
@@ -196,6 +196,44 @@ impl HighlightRule {
             self.bg_dark = self.bg;
         }
     }
+}
+
+/// What importing highlight rules did (#51).
+#[derive(Debug, Default, PartialEq, Eq)]
+pub struct RuleImport {
+    pub added: usize,
+    pub updated: usize,
+    pub skipped: usize,
+}
+
+/// Adds imported highlight rules to `rules` without creating duplicates (#51): a rule with the
+/// same name and pattern as an existing one replaces it in place when any other setting differs
+/// (colors, scope, regex, …; the existing rule keeps its On state) and is skipped when it is the
+/// same. Other rules are appended in the order of the file.
+pub fn import_rules(rules: &mut Vec<HighlightRule>, imported: Vec<HighlightRule>) -> RuleImport {
+    let mut res = RuleImport::default();
+    for mut r in imported {
+        r.fill_missing_dark();
+        match rules
+            .iter_mut()
+            .find(|e| e.name == r.name && e.pattern == r.pattern)
+        {
+            Some(e) => {
+                r.enabled = e.enabled;
+                if *e == r {
+                    res.skipped += 1;
+                } else {
+                    *e = r;
+                    res.updated += 1;
+                }
+            }
+            None => {
+                rules.push(r);
+                res.added += 1;
+            }
+        }
+    }
+    res
 }
 
 impl Default for HighlightRule {
@@ -651,6 +689,66 @@ impl Config {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn importing_rules_twice_creates_no_duplicates() {
+        // The shared rule file of the guide client-msi-1603 (#51).
+        let file = include_str!("../docs/guides/rules/msi-verbose-log.json");
+        let parse = || serde_json::from_str::<Vec<HighlightRule>>(file).unwrap();
+        let mut rules = Config::default_rules();
+        let base = rules.len();
+        let first = import_rules(&mut rules, parse());
+        assert_eq!(
+            first,
+            RuleImport {
+                added: 3,
+                updated: 0,
+                skipped: 0
+            }
+        );
+        let second = import_rules(&mut rules, parse());
+        assert_eq!(
+            second,
+            RuleImport {
+                added: 0,
+                updated: 0,
+                skipped: 3
+            }
+        );
+        assert_eq!(rules.len(), base + 3);
+
+        // A newer version of the file with other colors updates the rule in place and keeps
+        // whether the user turned it off; a new rule is appended.
+        rules[base].enabled = false;
+        let mut newer = parse();
+        newer[0].bg = [1, 2, 3, 255];
+        newer[0].bg_dark = UNSET; // older file without dark colors: filled from the light ones
+        newer.push(HighlightRule {
+            name: "MSI: other".into(),
+            pattern: "x".into(),
+            ..HighlightRule::default()
+        });
+        let third = import_rules(&mut rules, newer);
+        assert_eq!(
+            third,
+            RuleImport {
+                added: 1,
+                updated: 1,
+                skipped: 2
+            }
+        );
+        assert_eq!(rules.len(), base + 4);
+        assert_eq!(rules[base].bg, [1, 2, 3, 255]);
+        assert_eq!(rules[base].bg_dark, [1, 2, 3, 255]);
+        assert!(!rules[base].enabled);
+        assert_eq!(rules[base + 3].name, "MSI: other");
+
+        // Same name, other pattern = another rule.
+        let mut other = parse();
+        other.truncate(1);
+        other[0].pattern.push('x');
+        assert_eq!(import_rules(&mut rules, other).added, 1);
+    }
 
     #[test]
     fn remote_computers_newest_first() {

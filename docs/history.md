@@ -306,6 +306,16 @@ Notes for Claude, linked from `CLAUDE.md`.
     Verified: a script checked that every non-empty line of the old README is in the new files
     (except the reworded headings / links) and that every relative link and `#anchor` in README,
     `docs/*.md` and the guides resolves.
+79. #51 Highlight rules import / export: Import… no longer appends duplicates – a rule with the
+    same name and pattern is skipped (same settings) or updated in place (other colors, scope …,
+    the On state of the existing rule kept); the window reports "N added, N updated, N already
+    present (skipped)". Export… shows a checkbox per rule (all ticked, All / None) and writes only
+    the ticked rules. Import from a URL (optional in the issue) not done. Verified: unit tests
+    `importing_rules_twice_creates_no_duplicates` (the guide's msi-verbose-log.json twice →
+    3 rules, newer colors → updated, dark colors filled), `exporting_ticked_rules_only`,
+    `export_choice_moves_with_the_rule`; release build driven by clicks: importing the file twice
+    → 3 added, then 0 added / 3 skipped, 6 rules; None + the three MSI rules ticked → the written
+    JSON holds exactly those three (config.json backed up and restored).
 
 ## Ideas not done yet (offered by the owner)
 - `--set "<name>"` command-line option for log sets (#27): would need the set loading, the file

@@ -151,7 +151,13 @@ The logs of one troubleshooting scenario in one step – details in [Log sets](l
 - the window opens wide enough for the whole table (up to the size of the main window); long names
   and patterns are shown in full in the tooltip of their field; a narrower window shows a
   horizontal scroll bar
-- import/export of rules as JSON (e.g. to share with colleagues)
+- import/export of rules as JSON (e.g. to share with colleagues):
+  - **Import…** never creates duplicates: a rule with the same name and pattern as an existing one
+    is skipped, or updated in place when its colors or other settings differ (the existing rule
+    stays on / off as you set it); the window shows "Import: N added, N updated, N already
+    present (skipped)"
+  - **Export…** lists the rules with a checkbox each (all ticked, *All* / *None*); **Export N
+    rules…** saves only the ticked ones, e.g. just the MSI rules of a guide
 - error / warning / search match, bookmark and long-gap (Δ column) colors are configurable
   (Highlighting → Colors…)
 - right-click a row: copy, search component, create a rule for the component, explain error code
