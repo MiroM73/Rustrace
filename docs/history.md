@@ -233,6 +233,14 @@ Notes for Claude, linked from `CLAUDE.md`.
     background thread on the shared `Arc<LogStore>` with progress and cancel. Verified: unit tests
     (scopes, cells of every column, column choice, cancel, quoting / guard, separators, encodings);
     release build on the 400 MB test log: 1 896 613 rows → 258 MB CSV in ~3 s, UI responsive.
+70. #32 part 2 – Excel (.xlsx): own minimal writer (streaming ZIP + inline-string worksheets, no
+    `rust_xlsxwriter`, so no new dependency and no binary growth); typed cells (Excel dates with
+    `yyyy-mm-dd hh:mm:ss.000`, numbers, Δ seconds `0.000`, text never a formula), bold frozen header
+    with AutoFilter, column widths, split at 1 048 576 rows (`Log (2)` …), cells cut at 32 767
+    characters with a notice, optional row colors of rules / severities (light theme). Verified:
+    unit tests (ZIP read back by the updater's unzip, workbook parts, styles, split, truncation,
+    escaping, column names, date serials); Excel 2016 via COM opens the sample and the 1.9 M-row
+    export (two sheets, all rows, Double dates, AutoFilter, frozen header, colors); 135 MB in ~8 s.
 
 ## Ideas not done yet (offered by the owner)
 - `--set "<name>"` command-line option for log sets (#27): would need the set loading, the file

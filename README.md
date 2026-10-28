@@ -356,7 +356,7 @@ the version information into the exe; this uses the resource compiler `rc.exe` o
   only while the log is read from the beginning (first load, full reload) the Export… button waits
   with "Reading the log…"
 
-**Export table – CSV** (File → Export table (CSV / Excel)…, Ctrl+Shift+E; row context menu →
+**Export table – CSV / Excel** (File → Export table (CSV / Excel)…, Ctrl+Shift+E; row context menu →
 Export selected rows to CSV / Excel…) – the **parsed** log as a real table for Excel / Power BI,
 tickets or colleagues without RusTrace: every column is a spreadsheet column
 - **rows** (with a live count): the whole parsed log (all merged logs / rotated parts), the rows
@@ -377,6 +377,15 @@ tickets or colleagues without RusTrace: every column is a spreadsheet column
   UTF-16 LE; header row on / off; dates as ISO `2026-10-27 19:49:05.123` (default, sorts correctly)
   or as in the table; RFC 4180 quoting (values with the separator, a quote or a line break in quotes,
   quotes doubled) – **multi-line messages stay in one cell**
+- **Excel (.xlsx)** – written by RusTrace itself (no Excel needed, no extra library): **real typed
+  cells** – the date/time is an Excel date with the format `yyyy-mm-dd hh:mm:ss.000` (sortable,
+  filterable by date), line numbers, block numbers and Δ (seconds) are numbers, everything else is
+  text (log text is never evaluated as a formula); bold **frozen header row with AutoFilter**,
+  sensible column widths (the message column wide); optional **Export with colors** – the row text
+  and background of the highlight rules and of errors / warnings as in the table (light theme).
+  Excel limits: more than 1 048 576 rows continue on the next sheet (`Log`, `Log (2)`, …, every one
+  with its header); a cell longer than 32 767 characters is cut with `…` and the status bar says how
+  many were cut. The whole 400 MB test log: two sheets, 135 MB, about 8 s
 - **Safe for Excel** (default on): log text starting with `=`, `+`, `-`, `@` (or a tab / CR) gets a
   leading `'`, so a spreadsheet never runs it as a formula (CSV / formula injection)
 - runs in a background thread straight from the parsed entries (no copy of the log): the whole 400 MB
@@ -806,7 +815,8 @@ rustrace --lang de AppEnforce.log
 - `src/httpstatus.rs` – HTTP status / IIS substatus descriptions, lookup input parsing (+ tests)
 - `src/guides.rs` – the guides of Help → Guides: table of guide files and titles, GitHub URLs (+ tests)
 - `src/fileassoc.rs` – Windows file association for `.log` / `.lo_` (registry, status, + tests)
-- `src/tabexport/` – table export (CSV …): rows of a scope, column model, cell values, writers (+ tests)
+- `src/tabexport/` – table export: rows of a scope, column model, cell values, CSV writer,
+  minimal XLSX writer and the streaming ZIP writer it uses (+ tests)
 - `src/export.rs` – export around highlighted rows: range merging, date/time filter and input
   parsing, last-N blocks, output formats (+ tests)
 - `src/i18n.rs` – localization: language files, fallback, `t!()` macro (+ tests)

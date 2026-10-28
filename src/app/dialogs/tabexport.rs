@@ -1,7 +1,7 @@
 //! Export table window (#32, Ctrl+Shift+E): rows, columns, format and its options.
 
 use crate::app::*;
-use crate::tabexport::{Col, Scope, csv::CsvEncoding};
+use crate::tabexport::{Col, Scope, TableFormat, csv::CsvEncoding};
 
 impl App {
     pub(in crate::app) fn table_export_window(&mut self, ctx: &egui::Context) {
@@ -203,6 +203,32 @@ impl App {
     fn table_export_format_ui(&mut self, ui: &mut egui::Ui) -> bool {
         let mut changed = false;
         let s = &mut self.cfg.table_export;
+        ui.horizontal(|ui| {
+            ui.label(t!("tabexport.format"));
+            changed |= ui
+                .radio_value(&mut s.format, TableFormat::Csv, t!("tabexport.format.csv"))
+                .changed();
+            changed |= ui
+                .radio_value(
+                    &mut s.format,
+                    TableFormat::Xlsx,
+                    t!("tabexport.format.xlsx"),
+                )
+                .on_hover_text(t!("tabexport.format.xlsx.tip"))
+                .changed();
+        });
+        let csv = s.format == TableFormat::Csv;
+        if !csv {
+            changed |= ui
+                .checkbox(&mut s.xlsx_colors, t!("tabexport.xlsx.colors"))
+                .on_hover_text(t!("tabexport.xlsx.colors.tip"))
+                .changed();
+            changed |= ui.checkbox(&mut s.header, t!("tabexport.header")).changed();
+            changed |= ui
+                .checkbox(&mut s.severity_english, t!("tabexport.severity_english"))
+                .changed();
+            return changed;
+        }
         egui::Grid::new("tabexport_csv")
             .num_columns(2)
             .spacing([12.0, 6.0])

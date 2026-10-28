@@ -2,12 +2,13 @@
 //! by `crate::tabexport` in a background thread. The dialog is `dialogs/tabexport.rs`.
 
 use crate::app::*;
-use crate::tabexport::{self, Col, ColumnSpec, Control, DeltaFrom, Rows, Scope};
+use crate::tabexport::{self, Col, ColumnSpec, Control, DeltaFrom, Rows, Scope, TableFormat};
+use std::io::Write as _;
 
 /// A table export running in a background thread.
 pub(in crate::app) struct TableExportJob {
-    /// Number of rows written, or the error (`None` = cancelled).
-    rx: mpsc::Receiver<Result<usize, Option<String>>>,
+    /// (rows written, cells cut at the Excel limit), or the error (`None` = cancelled).
+    rx: mpsc::Receiver<Result<(usize, usize), Option<String>>>,
     pub(in crate::app) ctl: Control,
     pub(in crate::app) total: usize,
     target: PathBuf,
@@ -237,8 +238,12 @@ impl App {
             .and_then(|p| p.file_stem())
             .map(|s| s.to_string_lossy().into_owned())
             .unwrap_or_else(|| "log".into());
+        let filter = match format {
+            TableFormat::Csv => t!("tabexport.filter.csv"),
+            TableFormat::Xlsx => t!("tabexport.filter.xlsx"),
+        };
         let mut dlg = rfd::FileDialog::new()
-            .add_filter(t!("tabexport.filter.csv"), &[ext])
+            .add_filter(filter, &[ext])
             .set_file_name(format!("{stem}_export.{ext}"));
         if let Some(dir) = self.cur_path.as_ref().and_then(|p| p.parent()) {
             dlg = dlg.set_directory(dir);
@@ -254,6 +259,11 @@ impl App {
             s.csv_encoding,
             s.safe_for_excel,
         );
+        let xlsx_opts = tabexport::xlsx::XlsxOptions {
+            colors: s.xlsx_colors,
+            sheet_name: t!("tabexport.sheet.log"),
+            ..Default::default()
+        };
         let ctl = Control::default();
         let total = rows.len();
         let (tx, rx) = mpsc::channel();
@@ -262,13 +272,37 @@ impl App {
         let spawned = std::thread::Builder::new()
             .name("rustrace-tabexport".into())
             .spawn(move || {
-                let res = (|| -> std::io::Result<usize> {
+                let res = (|| -> std::io::Result<(usize, usize)> {
                     let file = std::io::BufWriter::new(std::fs::File::create(&path)?);
-                    let mut w = tabexport::csv::CsvWriter::new(file, opts)?;
-                    let n =
-                        tabexport::write_table(&ctx, &rows, &cols, s.header, &mut w, &thread_ctl)?;
-                    w.finish()?;
-                    Ok(n)
+                    match format {
+                        TableFormat::Csv => {
+                            let mut w = tabexport::csv::CsvWriter::new(file, opts)?;
+                            let n = tabexport::write_table(
+                                &ctx,
+                                &rows,
+                                &cols,
+                                s.header,
+                                &mut w,
+                                &thread_ctl,
+                            )?;
+                            w.finish()?;
+                            Ok((n, 0))
+                        }
+                        TableFormat::Xlsx => {
+                            let mut w = tabexport::xlsx::XlsxWriter::new(file, xlsx_opts);
+                            let n = tabexport::write_table(
+                                &ctx,
+                                &rows,
+                                &cols,
+                                s.header,
+                                &mut w,
+                                &thread_ctl,
+                            )?;
+                            let cut = w.truncated;
+                            w.finish()?.flush()?;
+                            Ok((n, cut))
+                        }
+                    }
                 })();
                 let res = res.map_err(|e| {
                     // A cancelled or failed export leaves no half-written file.
@@ -307,12 +341,19 @@ impl App {
                 let target = job.target.clone();
                 self.table_export_job = None;
                 match res {
-                    Ok(rows) => {
+                    Ok((rows, cut)) => {
                         self.status_error = None;
-                        self.status_info = Some((
-                            t!("tabexport.done", rows = rows, path = target.display()),
-                            Instant::now() + Duration::from_secs(5),
-                        ));
+                        let msg = if cut > 0 {
+                            t!(
+                                "tabexport.done.truncated",
+                                rows = rows,
+                                path = target.display(),
+                                cells = cut
+                            )
+                        } else {
+                            t!("tabexport.done", rows = rows, path = target.display())
+                        };
+                        self.status_info = Some((msg, Instant::now() + Duration::from_secs(5)));
                     }
                     Err(None) => self.info(t!("tabexport.cancelled")),
                     Err(Some(e)) => self.status_error = Some(t!("error.export", error = e)),

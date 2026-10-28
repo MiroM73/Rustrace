@@ -367,6 +367,22 @@ User-facing descriptions are in `README.md`.
   formula guard only for `Cell::Text`), decimal comma with `;`, `system_list_separator` =
   `GetLocaleInfoEx(LOCALE_SLIST)`. Measured (release, 400 MB CMTrace, 1.9 M rows, 5 columns):
   258 MB CSV in ~3 s.
+- XLSX (#32 part 2, `tabexport/xlsx.rs`, own writer instead of `rust_xlsxwriter` – no new
+  dependency, the binary grows by a few kB only): `zip.rs` streams every part through a
+  `DeflateEncoder<Vec<u8>>` (fast level, drained to the file every 1 MB) and patches CRC / sizes in
+  the local header afterwards (output must be `Seek`; no ZIP64 → error above 4 GB). Worksheets use
+  inline strings (no shared-string table in memory), `<cols>` widths per `Col` before
+  `<sheetData>`, frozen pane + `autoFilter` + hidden `_xlnm._FilterDatabase` defined name per
+  sheet. Styles are collected while streaming (`Styles::get`: (kind General / Date numFmt 164 /
+  Seconds 165 / Header bold, font color, fill) → xf index) and `styles.xml`, `workbook.xml`, the
+  rels and `[Content_Types].xml` are written last (ZIP order does not matter). Dates = serial
+  `ms / 86 400 000 + 25 569` (store ms are local time). Split at `max_rows` (header repeated, names
+  `Log`, `Log (2)`; `sheet_name` sanitizes, `unique_name`), text over `MAX_CELL_CHARS` cut with
+  `…` (`truncated` → status message), XML-invalid control characters dropped. `small_sheet` /
+  `new_data_sheet` / `front` for the Summary / Statistics / per-file sheets (part 3).
+  Checked with Excel 2016 via COM (`RUSTRACE_XLSX_OUT=<file> cargo test xlsx_sample -- --ignored`
+  writes a sample): opens without repair, Double cells for numbers and dates, AutoFilter, frozen
+  row, colors. Measured: 1.9 M rows → 2 sheets, 135 MB, ~8 s.
 
 ## Updates
 - **Updates** (#15, #31, `src/update.rs`, `src/http.rs`): Help → Check for updates; GitHub API
@@ -453,7 +469,7 @@ User-facing descriptions are in `README.md`.
   program), names via `AssocQueryStringW`. Test `register_and_unregister` uses its own HKCU key.
 
 ## Tests and benchmarks
-- `cargo test` (119 tests: table export scopes / cells / columns / cancel / CSV (#32), MSI verbose log / header dates (#40), guides table / URLs / log set guides (#39), IIS column order with `*` (#41), follow end pause / resume (#37), rules window default width (#48), keyboard shortcut order (Shift+F3 / Shift+F2 not taken by F3 / F2, #46), log sets (set file parsing / translations / built-in sets, variables, loading priorities, file checks, remote computer names / variables / drive letters / share roots, network error codes, recent computers), HTTP status lookup / class fallback / lookup input parsing and ambiguity / cell values, status column keys of log definitions, command-line parsing (file association, all options, errors, `--restore`, language / time / regex checks, help text), overview buckets incremental = full / pixel runs, readable export with Δ, durations, match bits set / iterate, bookmark file id remap, update releases list / missed versions / check setting migration, merged logs (order by time, appended older rows, formats + rotated parts + re-read, single log unchanged, interleave), store copy_entry / split_off, raw lines of entries (all formats / encodings), filter (parallel = sequential, match bits), date column filter = text filter, updates (versions, release JSON, notes, sha256 file, ZIP, install, restore state), icon / .ico layout, search as you type threshold, status-bar position percentage, file association (registry in an own HKCU test key), search history, store drop_front / move to temp file, rotated parts (naming, merge on open, rotation while watching, replaced
+- `cargo test` (123 tests: table export scopes / cells / columns / cancel / CSV / XLSX / ZIP writer (#32), MSI verbose log / header dates (#40), guides table / URLs / log set guides (#39), IIS column order with `*` (#41), follow end pause / resume (#37), rules window default width (#48), keyboard shortcut order (Shift+F3 / Shift+F2 not taken by F3 / F2, #46), log sets (set file parsing / translations / built-in sets, variables, loading priorities, file checks, remote computer names / variables / drive letters / share roots, network error codes, recent computers), HTTP status lookup / class fallback / lookup input parsing and ambiguity / cell values, status column keys of log definitions, command-line parsing (file association, all options, errors, `--restore`, language / time / regex checks, help text), overview buckets incremental = full / pixel runs, readable export with Δ, durations, match bits set / iterate, bookmark file id remap, update releases list / missed versions / check setting migration, merged logs (order by time, appended older rows, formats + rotated parts + re-read, single log unchanged, interleave), store copy_entry / split_off, raw lines of entries (all formats / encodings), filter (parallel = sequential, match bits), date column filter = text filter, updates (versions, release JSON, notes, sha256 file, ZIP, install, restore state), icon / .ico layout, search as you type threshold, status-bar position percentage, file association (registry in an own HKCU test key), search history, store drop_front / move to temp file, rotated parts (naming, merge on open, rotation while watching, replaced
   file), export segments by file, time range bounds, column filter syntax, parsers, chunked/ANSI/UTF-16 reading, log definitions (CBS, DISM, IIS,
   Exchange connectivity / CSV separator, choice by name/content, appending across refreshes), store (32-byte record, ISO ↔ ms, push /
   truncate / append, mapped temp file growing past 64 MB, interner), export incl. end-to-end and

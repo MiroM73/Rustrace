@@ -6,6 +6,8 @@
 //! holds an `Arc` of it while the app keeps new read results waiting (like the background filter).
 
 pub mod csv;
+pub mod xlsx;
+mod zip;
 
 use crate::colfilter::DateLayout;
 use crate::errcodes;
@@ -43,12 +45,14 @@ pub enum Scope {
 pub enum TableFormat {
     #[default]
     Csv,
+    Xlsx,
 }
 
 impl TableFormat {
     pub fn extension(self) -> &'static str {
         match self {
             TableFormat::Csv => "csv",
+            TableFormat::Xlsx => "xlsx",
         }
     }
 }
@@ -69,6 +73,8 @@ pub struct Settings {
     pub safe_for_excel: bool,
     /// The severity column in English instead of the UI language.
     pub severity_english: bool,
+    /// Excel: row colors of the highlight rules and severities (light palette).
+    pub xlsx_colors: bool,
     /// Chosen columns per log type (name of the log definition, "" = CMTrace): (key, on) in order.
     pub columns: BTreeMap<String, Vec<(String, bool)>>,
 }
@@ -84,6 +90,7 @@ impl Default for Settings {
             iso_dates: true,
             safe_for_excel: true,
             severity_english: false,
+            xlsx_colors: false,
             columns: BTreeMap::new(),
         }
     }
