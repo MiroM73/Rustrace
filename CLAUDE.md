@@ -37,7 +37,7 @@ Feature index (file → section of `docs/architecture.md`):
 - Details pane message / raw line – `app/details.rs` → Raw line
 - Renderer (glow, wgpu fallback), repaint rules – `src/main.rs` → Renderer and refresh frames
 - Search, filters, background re-filter, date column filter – `src/filter.rs`, `src/colfilter.rs`, `app/filter.rs` → Filtering
-- Table, horizontal scrolling, column filters – `app/table.rs` → Table
+- Table, horizontal scrolling, column filters, empty plain-text columns hidden (#49) – `app/table.rs`, `app/loading.rs` → Table
 - Overview strip – `src/overview.rs`, `app/strip.rs` → Overview strip
 - Δ time column – `app/delta.rs` → Delta column
 - Several selected rows, copying – `app/selection.rs` → Selection
@@ -91,7 +91,7 @@ Feature index (file → section of `docs/architecture.md`):
   `egui::MenuBar::new().ui(..)`, `ui.close()`, `egui::Id::unique(..)` (not `Id::new`).
 
 ## Commands
-- `cargo build --release` → `target\release\rustrace.exe`; `cargo test` (136 tests; what they
+- `cargo build --release` → `target\release\rustrace.exe`; `cargo test` (138 tests; what they
   cover: `docs/architecture.md` → Tests and benchmarks).
 - `cargo fmt` + `cargo clippy --all-targets --locked -- -D warnings` – the code is rustfmt-clean and
   clippy-clean; CI (`.github/workflows/ci.yml`) fails otherwise. Formatting-only commits go into

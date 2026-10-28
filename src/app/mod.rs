@@ -193,6 +193,8 @@ pub struct App {
     /// The log of every file (index = file id) and the log definition of every log.
     file_sources: Vec<usize>,
     source_defs: Vec<Option<Arc<LogDef>>>,
+    /// Some entry has a Component / Date/time / Thread value (#49: empty ones are not shown).
+    std_filled: [bool; 3],
     /// The logs of a merged view are read with different formats.
     mixed_formats: bool,
     encoding_name: &'static str,
@@ -432,6 +434,7 @@ impl App {
             paths: Vec::new(),
             file_sources: Vec::new(),
             source_defs: Vec::new(),
+            std_filled: [false; 3],
             mixed_formats: false,
             encoding_name: "",
             file_size: 0,

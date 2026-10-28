@@ -65,6 +65,24 @@ impl App {
         }
     }
 
+    /// The columns shown in the table (#49): `columns` without the standard columns (Component,
+    /// Date/time, Thread) that no entry has a value in, when every log of the view is read by the
+    /// built-in parser (plain text). Log definitions keep all their columns.
+    pub(in crate::app) fn table_columns(&self) -> Vec<LogColumn> {
+        let builtin = self.source_defs.iter().all(Option::is_none);
+        visible_columns(self.columns(), self.std_filled, builtin)
+    }
+
+    /// Notes which standard columns have a value, from entry `from` on (0 = all entries again).
+    pub(in crate::app) fn update_filled_columns(&mut self, from: usize) {
+        let known = if from == 0 {
+            [false; 3]
+        } else {
+            self.std_filled
+        };
+        self.std_filled = filled_columns(&self.entries, from, known);
+    }
+
     /// Table columns: the columns of the log type, plus the File column first when the log is
     /// merged from several files (rotated parts) and the Δ time column after the date/time.
     pub(in crate::app) fn columns(&self) -> Vec<LogColumn> {
@@ -357,6 +375,7 @@ impl App {
                 self.filtered.clear();
                 self.is_match.clear();
                 self.bookmarks_after_reset(old_files.unwrap_or_default());
+                self.update_filled_columns(0);
                 self.refilter_from(0);
                 self.last_refresh_wall = Some(chrono::Local::now());
                 if let Some(p) = self.pending_recent.take() {
@@ -410,6 +429,7 @@ impl App {
                     }
                 }
                 self.find_bookmarks_from(changed);
+                self.update_filled_columns(changed);
                 self.refilter_from(changed);
                 self.last_refresh_wall = Some(chrono::Local::now());
                 if self.following() && self.filtered.len() != before && !self.filtered.is_empty() {
@@ -516,5 +536,106 @@ impl App {
             self.cfg_dirty = true;
             self.info(t!("progress.cancelled"));
         }
+    }
+}
+
+/// `filled` plus the standard columns (Component, Date/time, Thread) that have a value in an
+/// entry from `from` on; stops as soon as all of them have one (a CMTrace log: the first entry).
+fn filled_columns(entries: &LogStore, from: usize, mut filled: [bool; 3]) -> [bool; 3] {
+    for i in from..entries.len() {
+        if filled == [true; 3] {
+            break;
+        }
+        let e = entries.at(i);
+        filled[0] |= !e.component.is_empty();
+        filled[1] |= entries.has_datetime(i);
+        filled[2] |= !e.thread.is_empty();
+    }
+    filled
+}
+
+/// `cols` without the standard columns that have no value in any entry (`filled` = Component,
+/// Date/time, Thread), when `builtin` (every log read by the built-in parser, #49).
+fn visible_columns(cols: Vec<LogColumn>, filled: [bool; 3], builtin: bool) -> Vec<LogColumn> {
+    if !builtin {
+        return cols;
+    }
+    cols.into_iter()
+        .filter(|c| match c.kind {
+            ColumnKind::Role(Role::Component) => filled[0],
+            ColumnKind::Role(Role::DateTime) => filled[1],
+            ColumnKind::Role(Role::Thread) => filled[2],
+            _ => true,
+        })
+        .collect()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn kinds(cols: &[LogColumn]) -> Vec<ColumnKind> {
+        cols.iter().map(|c| c.kind).collect()
+    }
+
+    #[test]
+    fn empty_standard_columns_are_hidden() {
+        let cols = Schema::default().columns;
+        let msg = ColumnKind::Role(Role::Message);
+        // Plain text: only the message (the line number column is always there).
+        assert_eq!(
+            kinds(&visible_columns(cols.clone(), [false; 3], true)),
+            [msg]
+        );
+        // CMTrace (or plain text merged with a CMTrace log): everything.
+        assert_eq!(visible_columns(cols.clone(), [true; 3], true), cols);
+        // A column appears as soon as one entry has a value.
+        assert_eq!(
+            kinds(&visible_columns(cols.clone(), [false, true, false], true)),
+            [msg, ColumnKind::Role(Role::DateTime)]
+        );
+        // Log definitions keep their columns.
+        assert_eq!(visible_columns(cols.clone(), [false; 3], false), cols);
+    }
+
+    #[test]
+    fn filled_columns_of_plain_text_and_cmtrace() {
+        let dir = std::env::temp_dir().join(format!("rustrace-filled-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let plain = dir.join("test.log");
+        std::fs::write(&plain, "Setup started\nCopying files\nDone\n").unwrap();
+        let cm = dir.join("cm.log");
+        std::fs::write(
+            &cm,
+            "<![LOG[Hello]LOG]!><time=\"10:00:00.000+000\" date=\"10-27-2026\" \
+             component=\"Comp\" context=\"\" type=\"1\" thread=\"42\" file=\"\">\n",
+        )
+        .unwrap();
+        let read = |paths: &[PathBuf]| match LogSet::new(paths, false)
+            .poll(&Progress::default())
+            .unwrap()
+        {
+            ReadResult::Reset {
+                mut committed,
+                provisional,
+            } => {
+                committed.append(provisional);
+                committed
+            }
+            _ => panic!("full read expected"),
+        };
+        let plain_only = read(std::slice::from_ref(&plain));
+        assert_eq!(plain_only.len(), 3);
+        assert_eq!(filled_columns(&plain_only, 0, [false; 3]), [false; 3]);
+        // Merged with a CMTrace log: its values keep the columns.
+        let merged = read(&[plain.clone(), cm.clone()]);
+        assert_eq!(merged.len(), 4);
+        assert_eq!(filled_columns(&merged, 0, [false; 3]), [true; 3]);
+        // Appended rows: only the new ones are looked at, the known flags stay.
+        assert_eq!(
+            filled_columns(&plain_only, 3, [true, false, true]),
+            [true, false, true]
+        );
+        std::fs::remove_dir_all(&dir).ok();
     }
 }

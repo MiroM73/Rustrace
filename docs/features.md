@@ -10,7 +10,11 @@ Everything RusTrace can do, area by area.
 
 - CMTrace / ConfigMgr format `<![LOG[...]LOG]!><time=... type=...>` including multi-line messages
 - the older SMS format `message $$<component><date time><thread=...>`
-- plain text (severity from the words error / fail / warn – can be turned off)
+- plain text (severity from the words error / fail / warn – can be turned off); the table shows
+  only the columns that have values – a plain text log without dates, components and threads
+  shows just **Line** and **Message**, with the message over the whole width. A column appears
+  as soon as a row has a value in it; in a merged view it stays when any log fills it (e.g.
+  plain text + a CMTrace log). CMTrace logs and log definitions always keep their columns
 - **any other layout described by a log definition** – built in: **IIS web logs** (W3C),
   **Exchange Transport Connectivity logs**, **dism.log**, **CBS.log**; your own in `logdef\*.def` (see [Log definitions](log-definitions.md))
 - encodings UTF-8, UTF-16 LE/BE (by BOM), ANSI (Windows-1250)

@@ -128,7 +128,7 @@ impl App {
     /// column headers when there are several rows).
     pub(in crate::app) fn copy_table(&mut self, ctx: &egui::Context) {
         let rows = self.selection();
-        let columns = self.columns();
+        let columns = self.table_columns();
         let mut out = String::new();
         if rows.len() > 1 {
             let headers: Vec<String> = std::iter::once(t!("column.line"))

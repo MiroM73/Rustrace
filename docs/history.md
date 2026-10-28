@@ -316,6 +316,16 @@ Notes for Claude, linked from `CLAUDE.md`.
     `export_choice_moves_with_the_rule`; release build driven by clicks: importing the file twice
     → 3 added, then 0 added / 3 skipped, 6 rules; None + the three MSI rules ticked → the written
     JSON holds exactly those three (config.json backed up and restored).
+80. #49 Plain text logs: the empty Component, Date / time and Thread columns are hidden – a log
+    read by the built-in parser without values there shows only Line and Message (full width).
+    Per view: in a merged view a column stays when any log fills it; recomputed for appended rows
+    only (a value makes the column appear); log definitions (incl. MSI) and CMTrace unchanged.
+    View → Columns menu (optional) not done. Verified: unit tests
+    `empty_standard_columns_are_hidden`, `filled_columns_of_plain_text_and_cmtrace` (a real
+    plain text file, plain text merged with a CMTrace log, appended rows); release build
+    screenshots: a 5-line free-text `test.log` → Line + Message only; `test.log` + AppEnforce.log
+    → File, Message, Component, Date / time, Thread; client.msi.log → Date / time, MSI,
+    Process:thread, Message as before.
 
 ## Ideas not done yet (offered by the owner)
 - `--set "<name>"` command-line option for log sets (#27): would need the set loading, the file
