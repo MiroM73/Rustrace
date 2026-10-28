@@ -17,7 +17,9 @@ highlighted rows with their context and a translatable user interface.
 **Guides** – step-by-step help for real situations with annotated screenshots and command-line
 examples: [docs/guides](docs/guides/README.md), e.g.
 [An application deployment failed](docs/guides/failed-app-install.md),
-[Software updates do not install](docs/guides/software-updates.md).
+[Software updates do not install](docs/guides/software-updates.md),
+[A new ConfigMgr client does not register](docs/guides/client-install.md),
+[The management point / distribution point is not healthy](docs/guides/iis-management-point.md).
 
 ## Download
 
