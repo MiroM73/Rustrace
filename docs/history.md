@@ -241,6 +241,13 @@ Notes for Claude, linked from `CLAUDE.md`.
     unit tests (ZIP read back by the updater's unzip, workbook parts, styles, split, truncation,
     escaping, column names, date serials); Excel 2016 via COM opens the sample and the 1.9 M-row
     export (two sheets, all rows, Double dates, AutoFilter, frozen header, colors); 135 MB in ~8 s.
+71. #32 part 3 – Excel Summary sheet (version, export time, log type, files, entries, exported rows,
+    search, severities, column filters, time range, counts, first / last time, data sheets, cut
+    cells), Statistics sheet (errors / warnings per component, top 20 error codes with
+    explanation, entries per hour) and optionally one data sheet per source file. Verified: unit
+    tests (counts, sheet order Summary → Statistics → files, rows split by file); Excel 2016 via COM
+    on the merged client-install guide logs: Summary 17 rows, Statistics with 0x80072EE7 × 16 and 4
+    hours, five file sheets (incl. the rotated LocationServices.lo_) with AutoFilter.
 
 ## Ideas not done yet (offered by the owner)
 - `--set "<name>"` command-line option for log sets (#27): would need the set loading, the file

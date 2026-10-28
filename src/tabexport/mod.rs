@@ -6,6 +6,7 @@
 //! holds an `Arc` of it while the app keeps new read results waiting (like the background filter).
 
 pub mod csv;
+pub mod stats;
 pub mod xlsx;
 mod zip;
 
@@ -75,6 +76,12 @@ pub struct Settings {
     pub severity_english: bool,
     /// Excel: row colors of the highlight rules and severities (light palette).
     pub xlsx_colors: bool,
+    /// Excel: a Summary sheet (files, log type, time range, counts, export settings).
+    pub xlsx_summary: bool,
+    /// Excel: a Statistics sheet (per component, top error codes, entries per hour).
+    pub xlsx_statistics: bool,
+    /// Excel: one data sheet per source file of a merged view.
+    pub xlsx_sheet_per_file: bool,
     /// Chosen columns per log type (name of the log definition, "" = CMTrace): (key, on) in order.
     pub columns: BTreeMap<String, Vec<(String, bool)>>,
 }
@@ -91,6 +98,9 @@ impl Default for Settings {
             safe_for_excel: true,
             severity_english: false,
             xlsx_colors: false,
+            xlsx_summary: true,
+            xlsx_statistics: true,
+            xlsx_sheet_per_file: false,
             columns: BTreeMap::new(),
         }
     }
@@ -236,6 +246,8 @@ pub enum Rows {
     List(Vec<usize>),
     /// Inclusive blocks (highlighted rows with context); the block number is a column.
     Blocks(Vec<(usize, usize)>),
+    /// (entry, block number) – a part of `Blocks` (one sheet per source file).
+    Numbered(Vec<(usize, usize)>),
 }
 
 impl Rows {
@@ -244,7 +256,17 @@ impl Rows {
             Rows::All(n) => *n,
             Rows::List(v) => v.len(),
             Rows::Blocks(b) => b.iter().map(|(a, b)| b - a + 1).sum(),
+            Rows::Numbered(v) => v.len(),
         }
+    }
+
+    /// The rows of one source file (block numbers kept).
+    pub fn of_file(&self, store: &LogStore, file: u16) -> Rows {
+        Rows::Numbered(
+            self.iter()
+                .filter(|&(i, _)| i < store.len() && store.file(i) == file)
+                .collect(),
+        )
     }
 
     pub fn is_empty(&self) -> bool {
@@ -261,6 +283,7 @@ impl Rows {
                     .enumerate()
                     .flat_map(|(n, &(a, z))| (a..=z).map(move |i| (i, n + 1))),
             ),
+            Rows::Numbered(v) => Box::new(v.iter().copied()),
         }
     }
 }
@@ -572,6 +595,22 @@ pub fn write_table(
     sink: &mut dyn TableSink,
     ctl: &Control,
 ) -> io::Result<usize> {
+    write_table_stats(ctx, rows, cols, header, sink, ctl, None, 0)
+}
+
+/// `write_table` that also counts the rows into `stats`; `done_before` = rows of earlier
+/// sheets (for the progress).
+#[allow(clippy::too_many_arguments)]
+pub fn write_table_stats(
+    ctx: &Context,
+    rows: &Rows,
+    cols: &[ColumnSpec],
+    header: bool,
+    sink: &mut dyn TableSink,
+    ctl: &Control,
+    mut stats: Option<&mut stats::Stats>,
+    done_before: usize,
+) -> io::Result<usize> {
     if header {
         sink.header(cols)?;
     }
@@ -583,10 +622,13 @@ pub fn write_table(
         }
         let (cells, look) = maker.row(cols, idx, block);
         sink.row(&cells, look)?;
+        if let Some(s) = stats.as_deref_mut() {
+            s.add(&ctx.store.at(idx));
+        }
         n += 1;
-        ctl.check(n)?;
+        ctl.check(done_before + n)?;
     }
-    ctl.done.store(n, Ordering::Relaxed);
+    ctl.done.store(done_before + n, Ordering::Relaxed);
     Ok(n)
 }
 

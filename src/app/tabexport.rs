@@ -264,6 +264,7 @@ impl App {
             sheet_name: t!("tabexport.sheet.log"),
             ..Default::default()
         };
+        let extras = self.table_export_extras(scope, rows.len());
         let ctl = Control::default();
         let total = rows.len();
         let (tx, rx) = mpsc::channel();
@@ -289,17 +290,17 @@ impl App {
                             Ok((n, 0))
                         }
                         TableFormat::Xlsx => {
-                            let mut w = tabexport::xlsx::XlsxWriter::new(file, xlsx_opts);
-                            let n = tabexport::write_table(
+                            let (mut out, n, cut) = tabexport::stats::write_xlsx(
+                                file,
                                 &ctx,
                                 &rows,
                                 &cols,
                                 s.header,
-                                &mut w,
+                                xlsx_opts,
+                                &extras,
                                 &thread_ctl,
                             )?;
-                            let cut = w.truncated;
-                            w.finish()?.flush()?;
+                            out.flush()?;
                             Ok((n, cut))
                         }
                     }
@@ -322,6 +323,102 @@ impl App {
                 })
             }
             Err(e) => self.status_error = Some(t!("error.thread", error = e)),
+        }
+    }
+
+    /// Summary / Statistics sheets and their translated texts.
+    fn table_export_extras(&mut self, scope: Scope, rows: usize) -> tabexport::stats::XlsxExtras {
+        let s = &self.cfg.table_export;
+        let (summary, statistics, per_file) =
+            (s.xlsx_summary, s.xlsx_statistics, s.xlsx_sheet_per_file);
+        let mut info: Vec<(String, String)> = vec![
+            (t!("tabexport.sum.version"), format!("RusTrace {VERSION}")),
+            (
+                t!("tabexport.sum.time"),
+                chrono::Local::now().format("%Y-%m-%d %H:%M:%S").to_string(),
+            ),
+            (t!("tabexport.sum.format"), self.format_name()),
+        ];
+        for (i, f) in self.files.iter().enumerate() {
+            let path = f
+                .path
+                .as_ref()
+                .map_or_else(|| self.file_label(i as u16), |p| p.display().to_string());
+            info.push((t!("tabexport.sum.file"), path));
+        }
+        info.push((t!("tabexport.sum.entries"), self.entries.len().to_string()));
+        let scope_key = match scope {
+            Scope::All => "tabexport.scope.all",
+            Scope::Visible => "tabexport.scope.visible",
+            Scope::Selected => "tabexport.scope.selected",
+            Scope::Bookmarked => "tabexport.scope.bookmarked",
+            Scope::Highlighted => "tabexport.scope.highlighted",
+        };
+        info.push((t!("tabexport.sum.scope"), t!(scope_key, count = rows)));
+        if !self.search_text.is_empty() {
+            let mode = if self.filter_mode {
+                t!("tabexport.sum.search.filter")
+            } else {
+                t!("tabexport.sum.search.highlight")
+            };
+            info.push((
+                t!("tabexport.sum.search"),
+                format!("{} ({mode})", self.search_text),
+            ));
+        }
+        let shown: Vec<String> = [
+            ("severity.info.plural", 0),
+            ("severity.warning.plural", 1),
+            ("severity.error.plural", 2),
+        ]
+        .iter()
+        .filter(|(_, i)| self.show_sev[*i])
+        .map(|(k, _)| t!(k))
+        .collect();
+        info.push((t!("tabexport.sum.severities"), shown.join(", ")));
+        let columns = self.columns();
+        for c in &columns {
+            if let Some(f) = self.col_filter_text.get(&c.kind).filter(|f| !f.is_empty()) {
+                info.push((
+                    t!("tabexport.sum.column_filter"),
+                    format!("{}: {f}", Self::column_title(c)),
+                ));
+            }
+        }
+        if !self.time_from.is_empty() || !self.time_to.is_empty() {
+            info.push((
+                t!("tabexport.sum.time_range"),
+                format!("{} – {}", self.time_from, self.time_to),
+            ));
+        }
+        tabexport::stats::XlsxExtras {
+            summary,
+            statistics,
+            sheet_per_file: per_file,
+            texts: tabexport::stats::SheetTexts {
+                summary_name: t!("tabexport.sheet.summary"),
+                statistics_name: t!("tabexport.sheet.statistics"),
+                summary: info,
+                rows: t!("tabexport.sum.rows"),
+                errors: t!("severity.error.plural"),
+                warnings: t!("severity.warning.plural"),
+                first: t!("tabexport.sum.first"),
+                last: t!("tabexport.sum.last"),
+                sheets: t!("tabexport.sum.sheets"),
+                truncated: t!("tabexport.sum.truncated"),
+                per_component: t!("tabexport.stat.per_component"),
+                component: t!("column.component"),
+                top_codes: t!(
+                    "tabexport.stat.top_codes",
+                    count = tabexport::stats::TOP_CODES
+                ),
+                code: t!("tabexport.stat.code"),
+                count: t!("tabexport.stat.count"),
+                description: t!("tabexport.stat.description"),
+                per_hour: t!("tabexport.stat.per_hour"),
+                hour: t!("tabexport.stat.hour"),
+                entries: t!("tabexport.stat.entries"),
+            },
         }
     }
 

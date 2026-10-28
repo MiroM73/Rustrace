@@ -156,8 +156,8 @@ struct Sheet {
     name: String,
     /// Number of the `sheetN.xml` file.
     file: usize,
-    /// Shown before the data sheets (Summary, Statistics).
-    front: bool,
+    /// Shown before the data sheets in this order (Summary 0, Statistics 1).
+    front: Option<u8>,
     /// Range of the AutoFilter (`A1:H100`).
     filter: Option<String>,
 }
@@ -266,13 +266,11 @@ impl<W: Write + Seek> XlsxWriter<W> {
     }
 
     /// Number of data sheets written so far.
-    #[cfg_attr(not(test), allow(dead_code))] // used by the Summary / Statistics sheets
     pub fn data_sheets(&self) -> usize {
-        self.sheets.iter().filter(|s| !s.front).count()
+        self.sheets.iter().filter(|s| s.front.is_none()).count()
     }
 
     /// The next data rows go to a new sheet with this name (one sheet per source file).
-    #[allow(dead_code)] // used by the sheet per source file
     pub fn new_data_sheet(&mut self, name: &str) -> io::Result<()> {
         self.end_sheet()?;
         self.base = sheet_name(name);
@@ -298,7 +296,7 @@ impl<W: Write + Seek> XlsxWriter<W> {
     fn start_sheet(
         &mut self,
         name: String,
-        front: bool,
+        front: Option<u8>,
         cols: &[(Col, f32)],
         freeze: bool,
     ) -> io::Result<()> {
@@ -368,7 +366,7 @@ impl<W: Write + Seek> XlsxWriter<W> {
             )
         };
         let widths: Vec<(Col, f32)> = self.cols.iter().map(|c| (c.col, width(c.col))).collect();
-        self.start_sheet(name, false, &widths, self.header)?;
+        self.start_sheet(name, None, &widths, self.header)?;
         self.open = true;
         self.rows = 0;
         if self.header {
@@ -447,14 +445,13 @@ impl<W: Write + Seek> XlsxWriter<W> {
     }
 
     /// A small sheet written at once (Summary, Statistics); `front` = before the data sheets.
-    #[cfg_attr(not(test), allow(dead_code))] // used by the Summary / Statistics sheets
     pub fn small_sheet(
         &mut self,
         name: &str,
         widths: &[f32],
         rows: &[Vec<Cell<'_>>],
         bold_rows: &[usize],
-        front: bool,
+        front: Option<u8>,
     ) -> io::Result<()> {
         self.end_sheet()?;
         let cols: Vec<(Col, f32)> = widths.iter().map(|&w| (Col::Message, w)).collect();
@@ -484,8 +481,9 @@ impl<W: Write + Seek> XlsxWriter<W> {
             self.open_data_sheet()?;
         }
         self.end_sheet()?;
-        let mut order: Vec<&Sheet> = self.sheets.iter().filter(|s| s.front).collect();
-        order.extend(self.sheets.iter().filter(|s| !s.front));
+        let mut order: Vec<&Sheet> = self.sheets.iter().filter(|s| s.front.is_some()).collect();
+        order.sort_by_key(|s| s.front);
+        order.extend(self.sheets.iter().filter(|s| s.front.is_none()));
 
         let mut ct = String::from(
             r#"<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
@@ -685,7 +683,7 @@ mod tests {
             &[20.0, 40.0],
             &[vec![Cell::Text("a".into())]],
             &[0],
-            true,
+            Some(0),
         )
         .unwrap();
         assert_eq!(w.truncated, 5);

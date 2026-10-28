@@ -386,6 +386,13 @@ tickets or colleagues without RusTrace: every column is a spreadsheet column
   Excel limits: more than 1 048 576 rows continue on the next sheet (`Log`, `Log (2)`, …, every one
   with its header); a cell longer than 32 767 characters is cut with `…` and the status bar says how
   many were cut. The whole 400 MB test log: two sheets, 135 MB, about 8 s
+- Excel extra sheets (each can be turned off): **Summary** – RusTrace version, export time, log
+  type, the files, entries in the log, which rows were exported, search text, severities shown,
+  column filters, time range, rows / errors / warnings in the export, first and last date/time,
+  number of data sheets, cut cells; **Statistics** – errors and warnings per component, the 20 most
+  frequent error codes (in error / warning rows) with their explanation, entries / errors / warnings
+  per hour (a quick start for a pivot table or a chart); for merged logs optionally **one sheet per
+  source file** (otherwise one sheet with the File column)
 - **Safe for Excel** (default on): log text starting with `=`, `+`, `-`, `@` (or a tab / CR) gets a
   leading `'`, so a spreadsheet never runs it as a formula (CSV / formula injection)
 - runs in a background thread straight from the parsed entries (no copy of the log): the whole 400 MB

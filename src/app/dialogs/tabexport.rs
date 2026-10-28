@@ -227,6 +227,24 @@ impl App {
             changed |= ui
                 .checkbox(&mut s.severity_english, t!("tabexport.severity_english"))
                 .changed();
+            changed |= ui
+                .checkbox(&mut s.xlsx_summary, t!("tabexport.xlsx.summary"))
+                .on_hover_text(t!("tabexport.xlsx.summary.tip"))
+                .changed();
+            changed |= ui
+                .checkbox(&mut s.xlsx_statistics, t!("tabexport.xlsx.statistics"))
+                .on_hover_text(t!("tabexport.xlsx.statistics.tip"))
+                .changed();
+            changed |= ui
+                .add_enabled(
+                    self.files.len() > 1,
+                    egui::Checkbox::new(
+                        &mut s.xlsx_sheet_per_file,
+                        t!("tabexport.xlsx.sheet_per_file"),
+                    ),
+                )
+                .on_hover_text(t!("tabexport.xlsx.sheet_per_file.tip"))
+                .changed();
             return changed;
         }
         egui::Grid::new("tabexport_csv")
