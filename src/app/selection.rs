@@ -63,13 +63,12 @@ impl App {
         }
         self.selected = Some(idx);
         self.scroll_to = Some(pos);
-        if pos + 1 < self.filtered.len() {
-            self.cfg.auto_scroll = false;
-        }
+        self.follow_row_selected(pos);
     }
 
     /// A click on a row: alone, Ctrl = add / remove the row, Shift = range from the anchor,
-    /// Ctrl+Shift = add the range (like the lists of Windows Explorer).
+    /// Ctrl+Shift = add the range (like the lists of Windows Explorer). A row above the last one
+    /// pauses following the end, the last row resumes it (#37).
     pub(in crate::app) fn click_row(&mut self, idx: usize, mods: Modifiers) {
         if mods.shift {
             if let Ok(pos) = self.filtered.binary_search(&idx) {
@@ -85,10 +84,17 @@ impl App {
                 self.sel.set(s, true);
             }
             self.sel.set(idx, on);
+            if self.sel.count() == 0 {
+                // Ctrl+click on the only selected row clears the selection (#37).
+                self.clear_selection();
+                return;
+            }
             self.selected = Some(idx);
             self.sel_anchor = Some(idx);
+            self.follow_entry_selected(idx);
         } else {
             self.select_only(Some(idx));
+            self.follow_entry_selected(idx);
         }
     }
 

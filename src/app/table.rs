@@ -179,7 +179,7 @@ impl App {
             .resizable(true)
             .sense(Sense::click())
             .auto_shrink([false, false])
-            .stick_to_bottom(self.cfg.auto_scroll)
+            .stick_to_bottom(self.following())
             .cell_layout(Layout::left_to_right(Align::Center))
             .column(Column::initial(60.0).at_least(40.0).clip(true));
         // With many columns (e.g. IIS) a narrower message leaves room for the others.
@@ -233,313 +233,360 @@ impl App {
         let mut delta_on = self.cfg.delta_column;
         let kinds: Vec<ColumnKind> = columns.iter().map(|c| c.kind).collect();
 
-        tb.header(header_h, |mut h| {
-            for (i, title) in headers.into_iter().enumerate() {
-                let (cell, _) = h.col(|ui| {
-                    // Under the widgets of the cell, so the filter field keeps its clicks.
-                    let resp =
-                        ui.interact(ui.max_rect(), ui.scope_id().with("header"), Sense::click());
-                    resp.context_menu(|ui| {
-                        ui.checkbox(&mut delta_on, t!("delta.column"))
-                            .on_hover_text(t!("delta.column.tip"));
-                        ui.weak(t!("delta.more_in_view"));
-                    });
-                    ui.vertical(|ui| {
-                        ui.add(egui::Label::new(RichText::new(title).strong()).selectable(false));
-                        if !show_filters {
-                            return;
-                        }
-                        if i == 0 {
-                            // The line column: button that clears all column filters.
-                            if ui
-                                .add_enabled(any_filter, egui::Button::new("✖").small())
-                                .on_hover_text(t!("filter.clear"))
-                                .clicked()
-                            {
-                                clear_filters = true;
-                            }
-                        } else if kinds[i - 1] == ColumnKind::Delta {
-                            // Computed column: nothing to filter.
-                        } else {
-                            let text = &mut filter_texts[i - 1];
-                            let active = ColumnFilter::parse(text).is_some();
-                            let mut edit = egui::TextEdit::singleline(text)
-                                .id_salt(("column_filter", i))
-                                .hint_text(t!("filter.hint"))
-                                .desired_width(f32::INFINITY);
-                            if active {
-                                edit = edit.background_color(
-                                    c32(self.cfg.palette(self.dark).search.1).gamma_multiply(0.35),
-                                );
-                            }
-                            filters_changed |=
-                                ui.add(edit).on_hover_text(t!("filter.tip")).changed();
-                        }
-                    });
-                });
-                header_bottom = header_bottom.max(cell.bottom());
-                if i == 0 {
-                    edges.0 = cell.left();
-                }
-                if i == last_col {
-                    edges.1 = cell.left();
-                }
-            }
-        })
-        .body(|body| {
-            let st = self.status_columns();
-            let status_cols = [st.http, st.substatus, st.win32].map(|c| c.map(ColumnKind::Extra));
-            body.rows(row_h, self.filtered.len(), |mut row| {
-                let r = row.index();
-                drawn = Some(drawn.map_or((r, r), |(a, b)| (a.min(r), b.max(r))));
-                let idx = self.filtered[r];
-                let e = self.entries.at(idx);
-                let is_sel = self.sel.get(idx);
-                row.set_selected(is_sel);
-
-                let (fg, bg) = if is_sel {
-                    (None, None)
-                } else {
-                    self.row_colors(&e)
-                };
-                let fg_col = fg.unwrap_or(default_fg);
-
-                let paint_bg = |ui: &mut egui::Ui| {
-                    if let Some(bg) = bg {
-                        let r = ui.max_rect().expand2(gap);
-                        ui.painter().rect_filled(r, 0.0, bg);
-                    }
-                };
-                let simple = |ui: &mut egui::Ui, s: &str| {
-                    paint_bg(ui);
-                    ui.add(
-                        egui::Label::new(RichText::new(s).font(font.clone()).color(fg_col))
-                            .truncate()
-                            .selectable(false),
-                    );
-                };
-
-                // Line number; a bookmarked row has the cell in the bookmark colors (#22).
-                let (_, line_cell) = row.col(|ui| match self.bookmark_note(idx) {
-                    Some(_) => {
-                        let (bfg, bbg) = self.cfg.palette(self.dark).bookmark;
-                        ui.painter()
-                            .rect_filled(ui.max_rect().expand2(gap), 0.0, c32(bbg));
-                        ui.add(
-                            egui::Label::new(
-                                RichText::new(format!("🔖{}", e.line_no))
-                                    .font(font.clone())
-                                    .color(c32(bfg)),
-                            )
-                            .truncate()
-                            .selectable(false),
+        // Bottom of the last row when it is drawn: a click below it clears the selection (#37).
+        let mut last_row_bottom: Option<f32> = None;
+        let n_rows = self.filtered.len();
+        let body_out = tb
+            .header(header_h, |mut h| {
+                for (i, title) in headers.into_iter().enumerate() {
+                    let (cell, _) = h.col(|ui| {
+                        // Under the widgets of the cell, so the filter field keeps its clicks.
+                        let resp = ui.interact(
+                            ui.max_rect(),
+                            ui.scope_id().with("header"),
+                            Sense::click(),
                         );
-                    }
-                    None => simple(ui, &e.line_no.to_string()),
-                });
-                if let Some(note) = self.bookmark_note(idx) {
-                    let tip = if note.is_empty() {
-                        t!("bookmarks.tip")
-                    } else {
-                        note.to_owned()
-                    };
-                    line_cell.on_hover_text(tip);
-                }
-                for c in &columns {
-                    match c.kind {
-                        ColumnKind::Role(Role::Message) => {
-                            row.col(|ui| {
-                                paint_bg(ui);
-                                let hit = self.is_match.get(idx);
-                                let text = self.message_cell_text(ui, e.message, hit, &font);
-                                let spans = self.text_spans(&text, hit);
-                                let job = build_job(&text, &spans, fg_col, &font);
-                                ui.add(egui::Label::new(job).truncate().selectable(false));
-                            });
-                        }
-                        ColumnKind::Role(Role::Component) => {
-                            row.col(|ui| simple(ui, e.component));
-                        }
-                        ColumnKind::Role(Role::Thread) => {
-                            row.col(|ui| simple(ui, e.thread));
-                        }
-                        // A merged view of several logs: a color mark per log.
-                        ColumnKind::File if self.cfg.color_files && self.is_merged() => {
-                            row.col(|ui| {
-                                paint_bg(ui);
-                                let log = self.file_sources.get(e.file as usize).copied();
-                                let mut job = LayoutJob::default();
-                                job.append(
-                                    "■ ",
-                                    0.0,
-                                    TextFormat::simple(
-                                        font.clone(),
-                                        log.map_or(fg_col, |l| self.log_color(l)),
-                                    ),
-                                );
-                                job.append(
-                                    &self.file_label(e.file),
-                                    0.0,
-                                    TextFormat::simple(font.clone(), fg_col),
-                                );
-                                ui.add(egui::Label::new(job).truncate().selectable(false));
-                            });
-                        }
-                        ColumnKind::Delta => {
-                            row.col(|ui| {
-                                let (text, long) = self.delta_cell(idx);
-                                let color = if long {
-                                    let (gfg, gbg) = self.cfg.palette(self.dark).gap;
-                                    ui.painter().rect_filled(
-                                        ui.max_rect().expand2(gap),
-                                        0.0,
-                                        c32(gbg),
+                        resp.context_menu(|ui| {
+                            ui.checkbox(&mut delta_on, t!("delta.column"))
+                                .on_hover_text(t!("delta.column.tip"));
+                            ui.weak(t!("delta.more_in_view"));
+                        });
+                        ui.vertical(|ui| {
+                            ui.add(
+                                egui::Label::new(RichText::new(title).strong()).selectable(false),
+                            );
+                            if !show_filters {
+                                return;
+                            }
+                            if i == 0 {
+                                // The line column: button that clears all column filters.
+                                if ui
+                                    .add_enabled(any_filter, egui::Button::new("✖").small())
+                                    .on_hover_text(t!("filter.clear"))
+                                    .clicked()
+                                {
+                                    clear_filters = true;
+                                }
+                            } else if kinds[i - 1] == ColumnKind::Delta {
+                                // Computed column: nothing to filter.
+                            } else {
+                                let text = &mut filter_texts[i - 1];
+                                let active = ColumnFilter::parse(text).is_some();
+                                let mut edit = egui::TextEdit::singleline(text)
+                                    .id_salt(("column_filter", i))
+                                    .hint_text(t!("filter.hint"))
+                                    .desired_width(f32::INFINITY);
+                                if active {
+                                    edit = edit.background_color(
+                                        c32(self.cfg.palette(self.dark).search.1)
+                                            .gamma_multiply(0.35),
                                     );
-                                    c32(gfg)
-                                } else {
-                                    paint_bg(ui);
-                                    fg_col
-                                };
-                                ui.add(
-                                    egui::Label::new(
-                                        RichText::new(text).font(font.clone()).color(color),
-                                    )
-                                    .truncate()
-                                    .selectable(false),
-                                );
-                            });
+                                }
+                                filters_changed |=
+                                    ui.add(edit).on_hover_text(t!("filter.tip")).changed();
+                            }
+                        });
+                    });
+                    header_bottom = header_bottom.max(cell.bottom());
+                    if i == 0 {
+                        edges.0 = cell.left();
+                    }
+                    if i == last_col {
+                        edges.1 = cell.left();
+                    }
+                }
+            })
+            .body(|body| {
+                let st = self.status_columns();
+                let status_cols =
+                    [st.http, st.substatus, st.win32].map(|c| c.map(ColumnKind::Extra));
+                body.rows(row_h, self.filtered.len(), |mut row| {
+                    let r = row.index();
+                    drawn = Some(drawn.map_or((r, r), |(a, b)| (a.min(r), b.max(r))));
+                    let idx = self.filtered[r];
+                    let e = self.entries.at(idx);
+                    let is_sel = self.sel.get(idx);
+                    row.set_selected(is_sel);
+
+                    let (fg, bg) = if is_sel {
+                        (None, None)
+                    } else {
+                        self.row_colors(&e)
+                    };
+                    let fg_col = fg.unwrap_or(default_fg);
+
+                    let paint_bg = |ui: &mut egui::Ui| {
+                        if let Some(bg) = bg {
+                            let r = ui.max_rect().expand2(gap);
+                            ui.painter().rect_filled(r, 0.0, bg);
                         }
-                        kind => {
-                            let (_, cell) = row.col(|ui| simple(ui, &self.cell_text(&e, kind)));
-                            // Status columns of the log definition (#28): explanation as a
-                            // tooltip, computed only while the cell is hovered.
-                            if status_cols.contains(&Some(kind))
-                                && cell.hovered()
-                                && let Some(tip) = self.status_tip(&e, kind)
-                            {
-                                cell.on_hover_text(tip);
+                    };
+                    let simple = |ui: &mut egui::Ui, s: &str| {
+                        paint_bg(ui);
+                        ui.add(
+                            egui::Label::new(RichText::new(s).font(font.clone()).color(fg_col))
+                                .truncate()
+                                .selectable(false),
+                        );
+                    };
+
+                    // Line number; a bookmarked row has the cell in the bookmark colors (#22).
+                    let (_, line_cell) = row.col(|ui| match self.bookmark_note(idx) {
+                        Some(_) => {
+                            let (bfg, bbg) = self.cfg.palette(self.dark).bookmark;
+                            ui.painter()
+                                .rect_filled(ui.max_rect().expand2(gap), 0.0, c32(bbg));
+                            ui.add(
+                                egui::Label::new(
+                                    RichText::new(format!("🔖{}", e.line_no))
+                                        .font(font.clone())
+                                        .color(c32(bfg)),
+                                )
+                                .truncate()
+                                .selectable(false),
+                            );
+                        }
+                        None => simple(ui, &e.line_no.to_string()),
+                    });
+                    if let Some(note) = self.bookmark_note(idx) {
+                        let tip = if note.is_empty() {
+                            t!("bookmarks.tip")
+                        } else {
+                            note.to_owned()
+                        };
+                        line_cell.on_hover_text(tip);
+                    }
+                    for c in &columns {
+                        match c.kind {
+                            ColumnKind::Role(Role::Message) => {
+                                row.col(|ui| {
+                                    paint_bg(ui);
+                                    let hit = self.is_match.get(idx);
+                                    let text = self.message_cell_text(ui, e.message, hit, &font);
+                                    let spans = self.text_spans(&text, hit);
+                                    let job = build_job(&text, &spans, fg_col, &font);
+                                    ui.add(egui::Label::new(job).truncate().selectable(false));
+                                });
+                            }
+                            ColumnKind::Role(Role::Component) => {
+                                row.col(|ui| simple(ui, e.component));
+                            }
+                            ColumnKind::Role(Role::Thread) => {
+                                row.col(|ui| simple(ui, e.thread));
+                            }
+                            // A merged view of several logs: a color mark per log.
+                            ColumnKind::File if self.cfg.color_files && self.is_merged() => {
+                                row.col(|ui| {
+                                    paint_bg(ui);
+                                    let log = self.file_sources.get(e.file as usize).copied();
+                                    let mut job = LayoutJob::default();
+                                    job.append(
+                                        "■ ",
+                                        0.0,
+                                        TextFormat::simple(
+                                            font.clone(),
+                                            log.map_or(fg_col, |l| self.log_color(l)),
+                                        ),
+                                    );
+                                    job.append(
+                                        &self.file_label(e.file),
+                                        0.0,
+                                        TextFormat::simple(font.clone(), fg_col),
+                                    );
+                                    ui.add(egui::Label::new(job).truncate().selectable(false));
+                                });
+                            }
+                            ColumnKind::Delta => {
+                                row.col(|ui| {
+                                    let (text, long) = self.delta_cell(idx);
+                                    let color = if long {
+                                        let (gfg, gbg) = self.cfg.palette(self.dark).gap;
+                                        ui.painter().rect_filled(
+                                            ui.max_rect().expand2(gap),
+                                            0.0,
+                                            c32(gbg),
+                                        );
+                                        c32(gfg)
+                                    } else {
+                                        paint_bg(ui);
+                                        fg_col
+                                    };
+                                    ui.add(
+                                        egui::Label::new(
+                                            RichText::new(text).font(font.clone()).color(color),
+                                        )
+                                        .truncate()
+                                        .selectable(false),
+                                    );
+                                });
+                            }
+                            kind => {
+                                let (_, cell) = row.col(|ui| simple(ui, &self.cell_text(&e, kind)));
+                                // Status columns of the log definition (#28): explanation as a
+                                // tooltip, computed only while the cell is hovered.
+                                if status_cols.contains(&Some(kind))
+                                    && cell.hovered()
+                                    && let Some(tip) = self.status_tip(&e, kind)
+                                {
+                                    cell.on_hover_text(tip);
+                                }
                             }
                         }
                     }
-                }
 
-                let resp = row.response();
-                if resp.clicked() {
-                    clicked = Some(idx);
-                }
-                // Right click on a row outside the selection selects it (like Explorer).
-                if resp.secondary_clicked() && !is_sel {
-                    right_clicked = Some(idx);
-                }
-                let multi = self.multi_selected() && is_sel;
-                resp.context_menu(|ui| {
-                    if multi {
-                        ui.weak(t!("selection.summary", count = self.sel.count()));
+                    let resp = row.response();
+                    if r + 1 == n_rows {
+                        last_row_bottom = Some(resp.rect.bottom());
+                    }
+                    if resp.clicked() {
+                        clicked = Some(idx);
+                    }
+                    // Right click on a row outside the selection selects it (like Explorer).
+                    if resp.secondary_clicked() && !is_sel {
+                        right_clicked = Some(idx);
+                    }
+                    let multi = self.multi_selected() && is_sel;
+                    resp.context_menu(|ui| {
+                        if multi {
+                            ui.weak(t!("selection.summary", count = self.sel.count()));
+                            ui.separator();
+                        }
+                        let key = if self.is_bookmarked(idx) {
+                            "context.bookmark.remove"
+                        } else {
+                            "context.bookmark.add"
+                        };
+                        if ui
+                            .button(format!("🔖 {}   {}", t!(key), kb("Ctrl+F2")))
+                            .clicked()
+                        {
+                            action = Some(RowAction::ToggleBookmark(idx));
+                            ui.close();
+                        }
+                        if ui
+                            .add_enabled(
+                                e.timestamp().is_some(),
+                                egui::Button::new(format!("⏱ {}", t!("context.time_reference"))),
+                            )
+                            .on_hover_text(t!("context.time_reference.tip"))
+                            .clicked()
+                        {
+                            action = Some(RowAction::SetTimeReference(idx));
+                            ui.close();
+                        }
                         ui.separator();
-                    }
-                    let key = if self.is_bookmarked(idx) {
-                        "context.bookmark.remove"
-                    } else {
-                        "context.bookmark.add"
-                    };
-                    if ui
-                        .button(format!("🔖 {}   {}", t!(key), kb("Ctrl+F2")))
-                        .clicked()
-                    {
-                        action = Some(RowAction::ToggleBookmark(idx));
-                        ui.close();
-                    }
-                    if ui
-                        .add_enabled(
-                            e.timestamp().is_some(),
-                            egui::Button::new(format!("⏱ {}", t!("context.time_reference"))),
-                        )
-                        .on_hover_text(t!("context.time_reference.tip"))
-                        .clicked()
-                    {
-                        action = Some(RowAction::SetTimeReference(idx));
-                        ui.close();
-                    }
-                    ui.separator();
-                    let copy_key = if multi {
-                        "context.copy_messages"
-                    } else {
-                        "context.copy_message"
-                    };
-                    if ui
-                        .button(format!("{}   {}", t!(copy_key), kb("Ctrl+C")))
-                        .clicked()
-                    {
-                        action = Some(RowAction::CopyMessages);
-                        ui.close();
-                    }
-                    if ui
-                        .button(format!(
-                            "{}   {}",
-                            t!("context.copy_row"),
-                            kb("Ctrl+Shift+C")
-                        ))
-                        .clicked()
-                    {
-                        action = Some(RowAction::CopyTable);
-                        ui.close();
-                    }
-                    if ui
-                        .add_enabled(
-                            self.copy_job.is_none(),
-                            egui::Button::new(t!("context.copy_original")),
-                        )
-                        .on_hover_text(t!("context.copy_original.tip"))
-                        .clicked()
-                    {
-                        action = Some(RowAction::CopyOriginal);
-                        ui.close();
-                    }
-                    if ui
-                        .button(format!("📤 {}", t!("context.export_selected")))
-                        .clicked()
-                    {
-                        action = Some(RowAction::ExportSelected);
-                        ui.close();
-                    }
-                    let codes = errcodes::find_codes(e.message);
-                    if !codes.is_empty() {
-                        ui.separator();
-                        for v in codes {
-                            let code = if v < 0x1_0000 {
-                                v.to_string()
-                            } else {
-                                format!("0x{v:08X}")
-                            };
+                        let copy_key = if multi {
+                            "context.copy_messages"
+                        } else {
+                            "context.copy_message"
+                        };
+                        if ui
+                            .button(format!("{}   {}", t!(copy_key), kb("Ctrl+C")))
+                            .clicked()
+                        {
+                            action = Some(RowAction::CopyMessages);
+                            ui.close();
+                        }
+                        if ui
+                            .button(format!(
+                                "{}   {}",
+                                t!("context.copy_row"),
+                                kb("Ctrl+Shift+C")
+                            ))
+                            .clicked()
+                        {
+                            action = Some(RowAction::CopyTable);
+                            ui.close();
+                        }
+                        if ui
+                            .add_enabled(
+                                self.copy_job.is_none(),
+                                egui::Button::new(t!("context.copy_original")),
+                            )
+                            .on_hover_text(t!("context.copy_original.tip"))
+                            .clicked()
+                        {
+                            action = Some(RowAction::CopyOriginal);
+                            ui.close();
+                        }
+                        if ui
+                            .button(format!("📤 {}", t!("context.export_selected")))
+                            .clicked()
+                        {
+                            action = Some(RowAction::ExportSelected);
+                            ui.close();
+                        }
+                        let codes = errcodes::find_codes(e.message);
+                        if !codes.is_empty() {
+                            ui.separator();
+                            for v in codes {
+                                let code = if v < 0x1_0000 {
+                                    v.to_string()
+                                } else {
+                                    format!("0x{v:08X}")
+                                };
+                                if ui
+                                    .button(format!(
+                                        "🔎 {}",
+                                        t!("context.explain_code", code = code)
+                                    ))
+                                    .clicked()
+                                {
+                                    action = Some(RowAction::ExplainCode(v));
+                                    ui.close();
+                                }
+                            }
+                        }
+                        if !e.component.is_empty() {
+                            ui.separator();
                             if ui
-                                .button(format!("🔎 {}", t!("context.explain_code", code = code)))
+                                .button(t!("context.search_component", component = e.component))
                                 .clicked()
                             {
-                                action = Some(RowAction::ExplainCode(v));
+                                action = Some(RowAction::SearchComponent(idx));
+                                ui.close();
+                            }
+                            if ui
+                                .button(t!("context.highlight_component", component = e.component))
+                                .clicked()
+                            {
+                                action = Some(RowAction::RuleFromComponent(idx));
                                 ui.close();
                             }
                         }
-                    }
-                    if !e.component.is_empty() {
-                        ui.separator();
-                        if ui
-                            .button(t!("context.search_component", component = e.component))
-                            .clicked()
-                        {
-                            action = Some(RowAction::SearchComponent(idx));
-                            ui.close();
-                        }
-                        if ui
-                            .button(t!("context.highlight_component", component = e.component))
-                            .clicked()
-                        {
-                            action = Some(RowAction::RuleFromComponent(idx));
-                            ui.close();
-                        }
-                    }
+                    });
                 });
             });
+
+        // "Follow end" paused at a selected row (#37): scrolling the table to the very bottom
+        // (mouse wheel, dragging the scroll bar) resumes it.
+        if self.follow_paused() {
+            let scrollable = body_out.content_size.y > body_out.inner_rect.height() + 1.0;
+            let bottom = body_out.content_size.y - body_out.inner_rect.height();
+            let at_bottom = body_out.state.clamped_offset().y >= bottom - 2.0;
+            let user_scrolled = parent.rect_contains_pointer(view)
+                && parent
+                    .input(|i| i.smooth_scroll_delta.y < 0.0 || i.pointer.is_decidedly_dragging());
+            if scrollable && at_bottom && user_scrolled {
+                self.follow.resume();
+            }
+        }
+        // A click into the empty area below the last row clears the selection (#37).
+        let empty_click = parent.input(|i| {
+            i.pointer
+                .primary_clicked()
+                .then(|| i.pointer.interact_pos())
+                .flatten()
         });
+        if clicked.is_none()
+            && let (Some(pos), Some(bottom)) = (empty_click, last_row_bottom)
+            && pos.y > bottom
+            && body_out.inner_rect.contains(pos)
+            && parent.ctx().layer_id_at(pos) == Some(parent.layer_id())
+            && self.selected.is_some()
+        {
+            self.clear_selection();
+        }
 
         // Natural width: all columns up to the last one plus its minimum width (the last column
         // fills the rest when everything fits).
@@ -579,6 +626,7 @@ impl App {
         }
         if let Some(i) = right_clicked {
             self.select_only(Some(i));
+            self.follow_entry_selected(i);
         }
         if clear_filters {
             self.col_filter_text.clear();

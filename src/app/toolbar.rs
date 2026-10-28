@@ -104,15 +104,25 @@ impl App {
             .response
             .on_hover_text(t!("toolbar.presets"));
 
+            // Paused (#37): the same text in orange, so the toolbar does not move under the
+            // pointer; the status bar shows "Follow end paused" as well.
+            let (label, tip) = if self.follow_paused() {
+                (
+                    RichText::new(t!("toolbar.follow")).color(ORANGE),
+                    t!("toolbar.follow.paused.tip"),
+                )
+            } else {
+                (
+                    RichText::new(t!("toolbar.follow")),
+                    t!("toolbar.follow.tip"),
+                )
+            };
             if ui
-                .checkbox(&mut self.cfg.auto_scroll, t!("toolbar.follow"))
-                .on_hover_text(t!("toolbar.follow.tip"))
+                .checkbox(&mut self.cfg.auto_scroll, label)
+                .on_hover_text(tip)
                 .changed()
             {
-                self.cfg_dirty = true;
-                if self.cfg.auto_scroll && !self.filtered.is_empty() {
-                    self.scroll_to = Some(self.filtered.len() - 1);
-                }
+                self.follow_setting_changed();
             }
 
             ui.separator();

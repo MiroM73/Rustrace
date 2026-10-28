@@ -172,6 +172,19 @@ Notes for Claude, linked from `CLAUDE.md`.
     solid scroll bar style, scroll offset reset on opening. Verified on Xvfb: 3 default + 3 MSI
     rules fully visible in a 1400 × 900 window (English and German), 1000 × 800 shows the
     horizontal bar and starts at the left; unit test for the width.
+63. #37 Follow end paused while a row is selected: `cfg.auto_scroll` stays the user's setting, a
+    runtime `Follow` pause (`app/follow.rs`) is set by every selection path above the last row and
+    cleared by Esc (new: clears the selection), Ctrl+click on the only selected row, a click below
+    the last row, the last row (End, click, ↓ / PgDn), scrolling to the bottom, the status bar
+    button, the checkbox, reloading. Filter changes keep the selected row in view. Paused shown by
+    the orange checkbox (first version changed the label to "(paused)", which moved the toolbar
+    buttons under the pointer – a click meant for Info hit the checkbox), "(paused)" in the View
+    menu and *⏸ Follow end paused* in the status bar. `SessionState::follow_paused` keeps it
+    over an update restart. Verified on Xvfb with an appended client.msi.log: click on row 107 →
+    paused, 40 appended rows do not scroll, Info off / on keeps row 107 centered, Esc → selection
+    cleared and the view follows new rows, End on a row → follows, mouse wheel to the bottom →
+    follows. Guides (client-install, client-msi-1603, failed-app-install) no longer tell users to
+    untick Follow end.
 
 ## Ideas not done yet (offered by the owner)
 - `--set "<name>"` command-line option for log sets (#27): would need the set loading, the file

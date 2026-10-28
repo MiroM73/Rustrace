@@ -38,6 +38,7 @@ Feature index (file → section of `docs/architecture.md`):
 - Δ time column – `app/delta.rs` → Delta column
 - Several selected rows, copying – `app/selection.rs` → Selection
 - Bookmarks – `app/bookmarks.rs`, `dialogs/bookmarks.rs` → Bookmarks
+- Follow end paused while a row is selected (#37) – `app/follow.rs` → UI basics
 - Error codes, HTTP / IIS status codes (#28) – `src/errcodes.rs`, `src/httpstatus.rs`, `app/details.rs`,
   `dialogs/lookup.rs` → Table (error code lookup, HTTP / IIS status codes), Log definitions
 - Export with context – `src/export.rs`, `dialogs/export.rs` → Export
@@ -84,7 +85,7 @@ Feature index (file → section of `docs/architecture.md`):
   `egui::MenuBar::new().ui(..)`, `ui.close()`, `egui::Id::unique(..)` (not `Id::new`).
 
 ## Commands
-- `cargo build --release` → `target\release\rustrace.exe`; `cargo test` (106 tests; what they
+- `cargo build --release` → `target\release\rustrace.exe`; `cargo test` (107 tests; what they
   cover: `docs/architecture.md` → Tests and benchmarks).
 - `cargo fmt` + `cargo clippy --all-targets --locked -- -D warnings` – the code is rustfmt-clean and
   clippy-clean; CI (`.github/workflows/ci.yml`) fails otherwise. Formatting-only commits go into

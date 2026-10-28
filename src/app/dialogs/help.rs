@@ -26,6 +26,7 @@ impl App {
                         ("Ctrl+Shift+S", "help.export"),
                         ("↑ ↓ PgUp PgDn Home", "help.navigate"),
                         ("End", "help.end"),
+                        ("Esc", "help.clear_selection"),
                         ("Shift + ↑ ↓ PgUp PgDn", "help.extend"),
                         ("Ctrl / Shift + click", "help.select_click"),
                         ("Ctrl+A", "help.select_all"),

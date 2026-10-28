@@ -51,7 +51,9 @@ A return code 0 only says that the *installation* worked – registration comes 
 3. The status bar: **4 logs merged**, *CMTrace / plain text* – the ConfigMgr logs are CMTrace
    logs, the MSI log is read as plain text.
 
-Untick **Follow end** in the toolbar before you start reading, so the view stays where you are.
+You do not need to untick **Follow end**: as soon as you select a row, following the end is
+paused (orange checkbox, *⏸ Follow end paused* in the status bar) and the view stays where you are.
+Press **Esc** or **End** when you want to follow the newest rows again.
 
 ## Step 3 – Errors and warnings
 

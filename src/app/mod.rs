@@ -37,6 +37,7 @@ mod delta;
 mod details;
 mod dialogs;
 mod filter;
+mod follow;
 mod input;
 mod loading;
 mod logdefs;
@@ -50,6 +51,7 @@ mod widgets;
 
 use cli::*;
 use details::RowCodes;
+use follow::Follow;
 use statusbar::*;
 use strip::*;
 use table::*;
@@ -251,6 +253,8 @@ pub struct App {
     rules: Vec<CompiledRule>,
     rule_errors: Vec<Option<String>>,
 
+    /// "Follow end" paused while a row is selected (#37); not saved.
+    follow: Follow,
     show_rules: bool,
     /// The rules window was shown in the previous frame (#48: start scrolled to the left).
     rules_was_open: bool,
@@ -446,6 +450,7 @@ impl App {
             overview_dirty: 0,
             rules: Vec::new(),
             rule_errors: Vec::new(),
+            follow: Follow::default(),
             show_rules: false,
             rules_was_open: false,
             show_colors: false,

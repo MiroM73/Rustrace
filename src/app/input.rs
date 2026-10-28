@@ -119,12 +119,20 @@ impl App {
             )
         });
         // Several rows (#25): Ctrl+A = all shown rows, Ctrl+Shift+C = copy as a table.
-        let (all, copy_table) = ctx.input_mut(|i| {
+        // Esc clears the selection and resumes a paused "Follow end" (#37); not while a menu or
+        // popup is open (Esc closes it).
+        let popup_open = egui::Popup::is_any_open(ctx);
+        let (all, copy_table, esc) = ctx.input_mut(|i| {
             (
                 i.consume_key(Modifiers::COMMAND, Key::A),
                 i.consume_key(Modifiers::COMMAND | Modifiers::SHIFT, Key::C),
+                !popup_open && i.consume_key(Modifiers::NONE, Key::Escape),
             )
         });
+        if esc && self.selected.is_some() {
+            self.clear_selection();
+            return;
+        }
         if all {
             self.select_all_visible();
         }
@@ -139,7 +147,7 @@ impl App {
         } else if home {
             Some(0)
         } else if end {
-            self.cfg.auto_scroll = true;
+            // The last row resumes a paused "Follow end" (#37).
             Some(n - 1)
         } else {
             None

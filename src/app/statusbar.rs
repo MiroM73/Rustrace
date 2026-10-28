@@ -119,6 +119,19 @@ impl App {
                 } else {
                     ui.colored_label(ORANGE, format!("⏸ {}", t!("status.paused")));
                 }
+                if self.follow_paused() {
+                    ui.separator();
+                    if ui
+                        .button(
+                            RichText::new(format!("⏸ {}", t!("status.follow_paused")))
+                                .color(ORANGE),
+                        )
+                        .on_hover_text(t!("toolbar.follow.paused.tip"))
+                        .clicked()
+                    {
+                        self.resume_follow();
+                    }
+                }
                 if let Some(time) = &self.last_refresh_wall {
                     ui.separator();
                     ui.label(t!("status.last_change", time = time.format("%H:%M:%S")));
