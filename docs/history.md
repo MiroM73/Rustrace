@@ -289,6 +289,11 @@ Notes for Claude, linked from `CLAUDE.md`.
     before. Guide client-msi-1603 step 6: the warning note replaced. Verified: unit test
     `enter_after_typing_keeps_the_first_match`; release build driven by keystrokes on the guide's
     client.msi.log: type `Return value 3` → line 91, Enter → still line 91, Enter → line 92.
+77. Release v1.1.6 – the minor number raised by the 8 issues done since v1.0.8 (#32 table export,
+    #39 guides in Help, #40 MSI log definition, #41 IIS column order, #42 numeric column filters,
+    #43 IIS Win32 status texts, #44 search highlight in all cells, #47 Enter after search as you
+    type). `release.ps1 1.1.6 -Publish -Yes` under pwsh: tests, tag, GitHub build (~10 min),
+    published with the .exe / .zip and their .sha256.
 
 ## Ideas not done yet (offered by the owner)
 - `--set "<name>"` command-line option for log sets (#27): would need the set loading, the file
