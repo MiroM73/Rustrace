@@ -106,6 +106,20 @@ impl App {
                     ui.close();
                     self.show_export = true;
                 }
+                if ui
+                    .add_enabled(
+                        self.cur_path.is_some(),
+                        egui::Button::new(format!(
+                            "📊 {}   {}",
+                            t!("menu.file.export_table"),
+                            kb("Ctrl+Shift+E")
+                        )),
+                    )
+                    .clicked()
+                {
+                    ui.close();
+                    self.open_table_export(None);
+                }
                 ui.separator();
                 if ui.button(t!("menu.file.exit")).clicked() {
                     ui.ctx().send_viewport_cmd(egui::ViewportCommand::Close);

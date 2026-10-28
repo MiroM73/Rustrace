@@ -32,6 +32,7 @@ impl App {
                         ("Ctrl+F2", "help.bookmark"),
                         ("F2 / Shift+F2", "help.bookmark_next"),
                         ("Ctrl+Shift+S", "help.export"),
+                        ("Ctrl+Shift+E", "help.export_table"),
                         ("↑ ↓ PgUp PgDn Home", "help.navigate"),
                         ("End", "help.end"),
                         ("Esc", "help.clear_selection"),

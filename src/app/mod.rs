@@ -46,6 +46,7 @@ mod menu;
 mod selection;
 mod statusbar;
 mod strip;
+mod tabexport;
 mod table;
 mod toolbar;
 mod widgets;
@@ -55,6 +56,7 @@ use details::RowCodes;
 use follow::Follow;
 use statusbar::*;
 use strip::*;
+use tabexport::{ColumnChoice, TableExportJob};
 use table::*;
 use widgets::*;
 
@@ -168,6 +170,7 @@ enum RowAction {
     CopyTable,
     CopyOriginal,
     ExportSelected,
+    ExportSelectedTable,
     RuleFromComponent(usize),
     SearchComponent(usize),
 }
@@ -310,6 +313,10 @@ pub struct App {
     export_hits: Option<(ExportKey, Vec<usize>)>,
     /// Export running in a background thread; the result is a status message.
     export_job: Option<mpsc::Receiver<Result<String, String>>>,
+    /// Table export (#32): window, column choice of the open log type, running export.
+    show_table_export: bool,
+    table_export_cols: Option<ColumnChoice>,
+    table_export_job: Option<TableExportJob>,
     /// Newest timestamp in the log, cached per data generation.
     latest_ts: Option<(u64, Option<String>)>,
     /// The mouse pointer is over the log text (table or message in the details pane) in this frame.
@@ -486,6 +493,9 @@ impl App {
             export_selected: false,
             export_hits: None,
             export_job: None,
+            show_table_export: false,
+            table_export_cols: None,
+            table_export_job: None,
             latest_ts: None,
             hover_log: false,
             defs: Arc::new(Vec::new()),
@@ -681,10 +691,12 @@ impl eframe::App for App {
         self.bookmarks_window(&ctx);
         self.log_sets_window(&ctx);
         self.export_window(&ctx);
+        self.table_export_window(&ctx);
         self.def_updates_window(&ctx);
         self.update_window(&ctx);
         self.poll_update(&ctx);
         self.check_export();
+        self.check_table_export();
         self.check_copy_job(&ctx);
 
         // The window becomes visible after its first frame; the splash goes with the second one.

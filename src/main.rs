@@ -25,6 +25,7 @@ mod overview;
 mod parser;
 mod splash;
 mod store;
+mod tabexport;
 mod timefmt;
 mod update;
 

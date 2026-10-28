@@ -516,6 +516,13 @@ impl App {
                             action = Some(RowAction::ExportSelected);
                             ui.close();
                         }
+                        if ui
+                            .button(format!("📊 {}", t!("context.export_selected_table")))
+                            .clicked()
+                        {
+                            action = Some(RowAction::ExportSelectedTable);
+                            ui.close();
+                        }
                         let codes = errcodes::find_codes(e.message);
                         if !codes.is_empty() {
                             ui.separator();
@@ -653,6 +660,9 @@ impl App {
                 RowAction::ExportSelected => {
                     self.export_selected = true;
                     self.show_export = true;
+                }
+                RowAction::ExportSelectedTable => {
+                    self.open_table_export(Some(crate::tabexport::Scope::Selected))
                 }
                 RowAction::SearchComponent(i) => {
                     self.search_text = self.entries.at(i).component.to_owned();

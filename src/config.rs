@@ -326,6 +326,8 @@ pub struct Config {
     /// Every row visible in the table (search filter, severity toggles) is a highlighted row;
     /// the rules / errors / warnings / search criteria are not used. Context lines still come from the whole file.
     pub export_visible_only: bool,
+    /// Table export – CSV / Excel (#32).
+    pub table_export: crate::tabexport::Settings,
 
     /// Keep the message text of files of at least `temp_file_threshold_mb` MB in a memory-mapped
     /// temporary file instead of the process memory.
@@ -425,6 +427,7 @@ impl Default for Config {
             export_last_enabled: false,
             export_last_blocks: 10,
             export_visible_only: false,
+            table_export: crate::tabexport::Settings::default(),
             temp_file_enabled: true,
             temp_file_threshold_mb: 100,
             merge_rotated: true,

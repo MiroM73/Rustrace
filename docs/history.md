@@ -224,6 +224,15 @@ Notes for Claude, linked from `CLAUDE.md`.
     the guide logs in the release build: merged view places the MSI rows at 08:02:58 …, Info off
     shows no MSI rows. Tests: MSI lines / dates / roll-over / severities, header date orders,
     own date format, session reset.
+69. #32 part 1 – table export as CSV: File → Export table (CSV / Excel)… (Ctrl+Shift+E), row context
+    menu → Export selected rows to CSV / Excel…; rows: whole log / shown / selected / bookmarked /
+    highlighted with context (blocks); column checklist with order, remembered per log type,
+    additional columns severity text, source path, highlight rule, bookmark note, error code
+    explanation, raw lines, block; CSV separator (Windows list separator by default), UTF-8 BOM /
+    UTF-8 / UTF-16 LE, header, ISO or UI dates, RFC 4180 quoting, formula-injection guard;
+    background thread on the shared `Arc<LogStore>` with progress and cancel. Verified: unit tests
+    (scopes, cells of every column, column choice, cancel, quoting / guard, separators, encodings);
+    release build on the 400 MB test log: 1 896 613 rows → 258 MB CSV in ~3 s, UI responsive.
 
 ## Ideas not done yet (offered by the owner)
 - `--set "<name>"` command-line option for log sets (#27): would need the set loading, the file

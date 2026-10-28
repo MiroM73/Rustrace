@@ -8,6 +8,10 @@ impl App {
     /// 2. above the size limit the oldest entries are removed (down to ¾ of the limit, so this
     ///    happens rarely and in one go).
     pub(in crate::app) fn enforce_memory_limits(&mut self) {
+        // A table export reads the entries in its thread; the limits apply after it (#32).
+        if self.table_export_running() {
+            return;
+        }
         let mb = |v: u32| (v as usize) << 20;
         if self.cfg.temp_file_enabled
             && !self.entries.is_mapped()
@@ -257,7 +261,8 @@ impl App {
     pub(in crate::app) fn check_loading(&mut self) {
         // While a background re-filter uses the entries the result waits (only a moment), so
         // appending does not have to stop the re-filter.
-        if self.filter_job.is_some() {
+        // The same for a table export (#32): its thread reads the entries.
+        if self.filter_job.is_some() || self.table_export_running() {
             return;
         }
         let Some(l) = &self.loading else { return };

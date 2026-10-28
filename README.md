@@ -356,6 +356,33 @@ the version information into the exe; this uses the resource compiler `rc.exe` o
   only while the log is read from the beginning (first load, full reload) the Export… button waits
   with "Reading the log…"
 
+**Export table – CSV** (File → Export table (CSV / Excel)…, Ctrl+Shift+E; row context menu →
+Export selected rows to CSV / Excel…) – the **parsed** log as a real table for Excel / Power BI,
+tickets or colleagues without RusTrace: every column is a spreadsheet column
+- **rows** (with a live count): the whole parsed log (all merged logs / rotated parts), the rows
+  shown in the table (search filter, severity toggles, column filters, time range), the selected
+  rows, the bookmarked rows, or the highlighted rows with context – the plan of *Export highlighted
+  rows* (its criteria, lines before / after, since, last N blocks; ⚙ Settings opens it) with a
+  **Block** column numbering the blocks
+- **columns**: by default the columns of the table in their order (line, file, date/time, Δ,
+  component, thread, message, the columns of the log definition); tick / untick and reorder them
+  with ↑ ↓ – the choice is remembered **per log type**. Additional columns: **Severity** as text
+  (UI language or English), **Source file** (full path), **Highlight rule** (the first matching
+  rule – handy for filtering), **Bookmark note**, **Error code explanation** (`0x80070005 – Access
+  is denied.` like the details pane), **Raw line(s)** (the original text, read from the file),
+  **Block**; Δ is in seconds (since the previous exported row, or as set for the Δ column)
+- **CSV options**: separator comma / semicolon / tab, default the **Windows list separator** (`;`
+  for SK / CS / DE, so Excel opens the file correctly on a double click; numbers with a fraction then
+  use a decimal comma); encoding **UTF-8 with BOM** (default, Excel recognizes it), UTF-8 without BOM,
+  UTF-16 LE; header row on / off; dates as ISO `2026-10-27 19:49:05.123` (default, sorts correctly)
+  or as in the table; RFC 4180 quoting (values with the separator, a quote or a line break in quotes,
+  quotes doubled) – **multi-line messages stay in one cell**
+- **Safe for Excel** (default on): log text starting with `=`, `+`, `-`, `@` (or a tab / CR) gets a
+  leading `'`, so a spreadsheet never runs it as a formula (CSV / formula injection)
+- runs in a background thread straight from the parsed entries (no copy of the log): the whole 400 MB
+  test log (1.9 million rows) is written in about 3 s; progress and **Cancel** in the window and in
+  the status bar, a cancelled export leaves no file. New rows read meanwhile are added after it.
+
 **Search**
 - text or regex, Aa = match case; the number of matches (or an invalid-regex warning) and the ✖ clear
   button are shown right after the search field
@@ -748,6 +775,7 @@ rustrace --lang de AppEnforce.log
 | Ctrl+H | Highlight rules |
 | Ctrl+E | Error code lookup |
 | Ctrl+Shift+S | Export highlighted rows with context |
+| Ctrl+Shift+E | Export table (CSV / Excel) |
 | Ctrl+F2 | Add / remove a bookmark on the selected row |
 | F2 / Shift+F2 | Next / previous bookmark |
 | ↑ ↓ PgUp PgDn Home End | Move in the table (End / the last row resumes a paused "Follow end") |
@@ -778,6 +806,7 @@ rustrace --lang de AppEnforce.log
 - `src/httpstatus.rs` – HTTP status / IIS substatus descriptions, lookup input parsing (+ tests)
 - `src/guides.rs` – the guides of Help → Guides: table of guide files and titles, GitHub URLs (+ tests)
 - `src/fileassoc.rs` – Windows file association for `.log` / `.lo_` (registry, status, + tests)
+- `src/tabexport/` – table export (CSV …): rows of a scope, column model, cell values, writers (+ tests)
 - `src/export.rs` – export around highlighted rows: range merging, date/time filter and input
   parsing, last-N blocks, output formats (+ tests)
 - `src/i18n.rs` – localization: language files, fallback, `t!()` macro (+ tests)
