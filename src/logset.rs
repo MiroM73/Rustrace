@@ -10,6 +10,7 @@
 //! | `name.<language>` | name in a language, e.g. `name.sk`, `name.de`, `name.pt-br` |
 //! | `description`, `description.<language>` | one or two sentences shown under the name |
 //! | `file` | a log of the set; one line per log, in the order shown |
+//! | `guide` | optional, repeatable: a guide for the scenario – a file name of `docs/guides/` (opened on GitHub) or a URL / path (#39) |
 //!
 //! Unknown keys and lines without `=` are ignored (a newer set file still loads in an older
 //! version). Paths may use the variables `%CCMLOGS%` (ConfigMgr client logs), `%WINDIR%`,
@@ -49,6 +50,8 @@ pub struct LogSetDef {
     descriptions: BTreeMap<String, String>,
     /// The `file` lines as written (with variables).
     pub files: Vec<String>,
+    /// The `guide` lines (guide file names, URLs or paths, #39).
+    pub guides: Vec<String>,
 }
 
 /// The text of a language: `code` itself, its base language ("de-AT" → "de"), then the default.
@@ -71,6 +74,7 @@ impl LogSetDef {
             names: BTreeMap::new(),
             descriptions: BTreeMap::new(),
             files: Vec::new(),
+            guides: Vec::new(),
         };
         for line in text.lines() {
             let line = line.trim_start_matches('\u{feff}').trim();
@@ -93,6 +97,7 @@ impl LogSetDef {
                     set.descriptions.insert(lang.to_owned(), v.to_owned());
                 }
                 "file" if lang.is_empty() => set.files.push(v.to_owned()),
+                "guide" if lang.is_empty() => set.guides.push(v.to_owned()),
                 _ => {}
             }
         }
@@ -465,7 +470,8 @@ mod tests {
     fn parse_set_file() {
         let text = "\u{feff}# comment\nname = Deployment\nname.sk = Nasadenie\nNAME.DE = Bereitstellung\n\
                     description = Apps\nfile = %CCMLOGS%\\AppEnforce.log\n\nno equals sign here\n\
-                    unknown.key = ignored\nfile = %WINDIR%\\ccmsetup\\Logs\\ccmsetup.log\nfile =\n";
+                    unknown.key = ignored\nfile = %WINDIR%\\ccmsetup\\Logs\\ccmsetup.log\nfile =\n\
+                    guide = failed-app-install.md\nguide = https://intranet/logs\n";
         let s = LogSetDef::parse("dep.set", text, None).unwrap();
         assert_eq!(
             s.files,
@@ -480,6 +486,7 @@ mod tests {
         assert_eq!(s.name("cs"), "Deployment");
         assert_eq!(s.description("sk"), Some("Apps"));
         assert_eq!(s.key(), "predefined/dep.set");
+        assert_eq!(s.guides, ["failed-app-install.md", "https://intranet/logs"]);
 
         let unnamed = LogSetDef::parse("My Set.set", "file = C:\\a.log", None).unwrap();
         assert_eq!(unnamed.name("en"), "My Set");
@@ -497,6 +504,9 @@ mod tests {
                     s.descriptions.contains_key(code),
                     "{id}: description.{code}"
                 );
+            }
+            for g in &s.guides {
+                assert!(crate::guides::title_key(g).is_some(), "{id}: guide {g}");
             }
             for f in &s.files {
                 assert!(resolve(f, &vars()).is_ok(), "{id}: {f}");

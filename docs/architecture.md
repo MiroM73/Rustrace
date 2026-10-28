@@ -13,7 +13,7 @@ User-facing descriptions are in `README.md`.
 - **Log definitions** (`logdef\*.def`, `src/logdef.rs`): regex with named groups or W3C (`#Fields:`)
   describe other layouts (w3c `separator`: space = IIS with `-` = empty, other = CSV-style values
   with quotes, `-` kept – Exchange); built-in `iisweb.log.def`, `exchconnect.log.def`,
-  `dism.log.def`, `cbs.log.def`, external files
+  `dism.log.def`, `cbs.log.def`, `msi.log.def`, external files
   from `logdef\` next to the exe or `%APPDATA%\RusTrace\logdef` (same name overrides built-in).
   Roles fill the standard columns (message/component/datetime/thread), `role.severity` + regexes give
   the severity, other groups are extra columns (`LogEntry::extra`, `Schema::extra_names`). The table
@@ -32,6 +32,25 @@ User-facing descriptions are in `README.md`.
   View → Log format (Auto = file name → content `detect` → built-in; CMTrace content never uses
   `detect`), reset to Auto for every newly opened file. `unmatched = append` keeps the last entry
   provisional until the next one starts (`ParserState::pending_entry`).
+- MSI verbose logs (#40, `msi.log.def`): `header.date` (regex, group `date` / first group) +
+  `header.date.format` (default `DEFAULT_DATE_FORMATS`, first fitting wins) → `DefState::date`,
+  set in `DefState::parse` before the line is parsed (resets `last_dt` = new session, no
+  roll-over across it). `DefState::header_datetime`: the datetime role text = time only, parsed
+  as `YYYY-MM-DD <time>` with `datetime.format`; empty → `last_dt`; earlier than `last_dt` by
+  more than 12 h → + days, `date` moves on. Without a header line yet the time text stays as it
+  is. `role.severity` is a list (`LogDef::severity_fields`, `Mapping::severity: Vec`): the values
+  of the fields present in the line are joined; none present → keywords. The MSI pattern has one
+  alternative per line kind (`MSI (s|c) (pid:tid) [time]:`, `Action start/ended H:MM:SS:`, the
+  header, any other text) with own message / time groups joined by the roles; every line is an
+  entry, so continuation lines (*Error 25150.*) get their own severity. `errcodes::find_codes`
+  also reads `error status: N`. MSI message numbers in `Error NNNN.` are **not** looked up: they
+  are Windows Installer message ids (1722 = custom action failed), not Win32 codes (1722 = RPC
+  server unavailable) – the existing lookup would explain them wrongly.
+- `columns` order (#41): role / field names; `*` = every column not named in the list, in the
+  field order (`LogDef::mapping`; kinds of the named columns collected first so `*` skips them).
+  Without `*` unlisted fields are hidden (still extra columns, searchable). The built-in IIS
+  definition uses `… message *` (status columns first, no `#Fields:` field lost); a later
+  `#Fields:` header (merge) appends its new columns at the end.
 - Status columns (#28): optional keys `http_status` / `http_substatus` / `win32_status` →
   `LogDef::status` → `Schema::status` (`StatusFields`, column **names**); the UI resolves them to
   extra column indexes by name (`StatusFields::resolve` → `StatusColumns`, `App::status_columns`), so a
@@ -328,6 +347,68 @@ User-facing descriptions are in `README.md`.
   and `start_export` copies everything it needs (blocks, lines, file paths) before the thread
   starts. `LogSet::loaded` is set for a single log too (`poll_single`).
 
+## Table export
+- **Table export** (#32, `src/tabexport/` pure + tested, `app/tabexport.rs`, window
+  `dialogs/tabexport.rs`, Ctrl+Shift+E – consumed before Ctrl+E, #46). `Scope` → `Rows`
+  (`All(n)` / `List` = `filtered`, `sel.ones()`, `bookmark_rows` / `Blocks` = `export_plan()` with
+  `export_selected` taken out for the call); `Col` (table columns + `ADDITIONAL`: severity text,
+  path, rule, note, codes, raw, block), keys `line`, `extra:<name>` … saved per log type
+  (`cfg.table_export.columns[schema.name]`, `column_choice` = saved order, unknown keys dropped,
+  new columns appended – table ones ticked). `Context` is moved into the `rustrace-tabexport`
+  thread: `Arc<LogStore>` (no copy), file labels / paths / encodings, rules (light colors), notes,
+  severity names, `DateLayout` or ISO, `DeltaFrom` (Visible → previous exported row, Log, Reference).
+  While the thread holds the `Arc`, `check_loading` leaves read results waiting and
+  `enforce_memory_limits` returns (like the background filter; `entries_mut` needs a unique
+  `Arc`). `CellMaker::row` → `Cell` (Text / Int / Seconds / Date{ms,text}) + `RowLook` (first
+  whole-row rule, else severity palette); codes cached per code, raw lines via
+  `parser::RawReader` (one open file per file id). `write_table` → `TableSink`; `Control` = done
+  counter + cancel flag checked every 1024 rows (`Interrupted` → the partial file is removed).
+  CSV (`tabexport/csv.rs`): BOM / UTF-16 LE, CRLF, `push_field` (RFC 4180, `\r\n` → `\n`,
+  formula guard only for `Cell::Text`), decimal comma with `;`, `system_list_separator` =
+  `GetLocaleInfoEx(LOCALE_SLIST)`. Measured (release, 400 MB CMTrace, 1.9 M rows, 5 columns):
+  258 MB CSV in ~3 s.
+- XLSX (#32 part 2, `tabexport/xlsx.rs`, own writer instead of `rust_xlsxwriter` – no new
+  dependency, the binary grows by a few kB only): `zip.rs` streams every part through a
+  `DeflateEncoder<Vec<u8>>` (fast level, drained to the file every 1 MB) and patches CRC / sizes in
+  the local header afterwards (output must be `Seek`; no ZIP64 → error above 4 GB). Worksheets use
+  inline strings (no shared-string table in memory), `<cols>` widths per `Col` before
+  `<sheetData>`, frozen pane + `autoFilter` + hidden `_xlnm._FilterDatabase` defined name per
+  sheet. Styles are collected while streaming (`Styles::get`: (kind General / Date numFmt 164 /
+  Seconds 165 / Header bold, font color, fill) → xf index) and `styles.xml`, `workbook.xml`, the
+  rels and `[Content_Types].xml` are written last (ZIP order does not matter). Dates = serial
+  `ms / 86 400 000 + 25 569` (store ms are local time). Split at `max_rows` (header repeated, names
+  `Log`, `Log (2)`; `sheet_name` sanitizes, `unique_name`), text over `MAX_CELL_CHARS` cut with
+  `…` (`truncated` → status message), XML-invalid control characters dropped. `small_sheet` /
+  `new_data_sheet` / `front` for the Summary / Statistics / per-file sheets (part 3).
+  Checked with Excel 2016 via COM (`RUSTRACE_XLSX_OUT=<file> cargo test xlsx_sample -- --ignored`
+  writes a sample): opens without repair, Double cells for numbers and dates, AutoFilter, frozen
+  row, colors. Measured: 1.9 M rows → 2 sheets, 135 MB, ~8 s.
+- Summary / Statistics / sheet per file (#32 part 3, `tabexport/stats.rs`): `write_xlsx` drives
+  the workbook; `write_table_stats` feeds every written entry into `Stats` (counts, first / last
+  timestamp, per component (errors, warnings), `find_codes` of error / warning messages, per hour
+  `ts.div_euclid(3 600 000)`), `done_before` keeps the progress over several sheets. Sheet per file:
+  the file ids in row order → `Rows::of_file` (`Rows::Numbered`, block numbers kept) →
+  `XlsxWriter::new_data_sheet(label)` (names sanitized / unique). The small sheets are written
+  after the data (they need the counts) with `front: Some(rank)` – the workbook lists them first
+  (Summary 0, Statistics 1). Texts come translated from the UI thread (`SheetTexts`,
+  `App::table_export_extras`: version, time, `format_name`, file paths, scope, search + filter
+  mode, `show_sev`, column filters, time range).
+- Part 4: `tabexport::Job` + `run` (format by `TableFormat`, removes the file on error / cancel) is
+  shared by the window thread and `--export`. `jsonl.rs` (`Col::json_key`: extra columns by name,
+  dates `ms_to_iso`, empty cells left out, `serde_json` string escaping), `html.rs` (inline CSS,
+  `<details>` for multi-line cells, `RowLook` as `style`, no scripts). Presets:
+  `Settings::presets: Vec<(name, Settings)>` (stored without their own presets, `apply_preset`
+  keeps the list; `table_export_cols` reset after applying). `open_after` → `App::open_exported`
+  (`open::that_detached`; Show in folder = `explorer.exe /select,"path"` via `raw_arg`),
+  `table_export_last`. Context menu Copy as CSV / Copy for Excel: `copy_selection_as_table` →
+  `CsvWriter` into a `Vec` in a `rustrace-copy` thread, result through the existing `copy_job`
+  channel. `--export` (`src/batch.rs`, `cli::Options::export`, `NeedsFile`): `LogSet` read once
+  (defs, merge_rotated from the config), `FilterSpec` from the view options (search + filter,
+  severities, `parse_range_bound`), `FilterSpec::run`, columns = saved choice or table columns,
+  rules compiled from the config; `attach_console` (`AttachConsole(ATTACH_PARENT_PROCESS)`) before
+  printing, no message boxes; exit 0 / 1 / 2. Measured: 400 MB log, `--errors --export x.csv` →
+  95 133 rows in ~5 s (mostly reading).
+
 ## Updates
 - **Updates** (#15, #31, `src/update.rs`, `src/http.rs`): Help → Check for updates; GitHub API
   `releases?per_page=100` via WinHTTP FFI (system proxy / certs, follows redirects);
@@ -384,6 +465,18 @@ User-facing descriptions are in `README.md`.
   before `select_first`, so a pending first match wins over following the end.
 - Help → About: row "Command line" (`about.cmdline`) pointing to `rustrace.exe --help`.
 
+## Guides
+- **Guides** (#39, `src/guides.rs` pure + tested): `GUIDES` = (language key of the title, file in
+  `docs/guides/`) in menu order, `INDEX` = `README.md`; `url(REPOSITORY, file)` =
+  `{repo}/blob/master/docs/guides/<file>`. Help → Guides submenu (`app/menu.rs`), About row
+  `about.guides` (`dialogs/help.rs`), log set window: `LogSetDef::guides` (repeatable `guide` key)
+  → 📖 buttons next to the set combo; `guides::target` = a plain file name → GitHub URL, anything
+  with `/ \ :` (URL, path) as it is; title = the translated `title_key` or the value itself.
+  `App::open_link` → `open::that_detached`, on error `error.open_link` with the link in the status
+  bar. Test `table_matches_the_guide_files`: every table file exists and is in the index, every
+  `docs/guides/*.md` is in the table; built-in sets' guides must be in the table. Adding a guide =
+  one `GUIDES` line + `help.guide.*` keys.
+
 ## Localization and settings
 - Localization: built-in en / sk / cs / de; external `<code>.lang` files load **without recompiling**
   from `lang\` next to the exe or `%APPDATA%\RusTrace\lang`; fallback to English.
@@ -401,7 +494,7 @@ User-facing descriptions are in `README.md`.
   program), names via `AssocQueryStringW`. Test `register_and_unregister` uses its own HKCU key.
 
 ## Tests and benchmarks
-- `cargo test` (107 tests: follow end pause / resume (#37), rules window default width (#48), keyboard shortcut order (Shift+F3 / Shift+F2 not taken by F3 / F2, #46), log sets (set file parsing / translations / built-in sets, variables, loading priorities, file checks, remote computer names / variables / drive letters / share roots, network error codes, recent computers), HTTP status lookup / class fallback / lookup input parsing and ambiguity / cell values, status column keys of log definitions, command-line parsing (file association, all options, errors, `--restore`, language / time / regex checks, help text), overview buckets incremental = full / pixel runs, readable export with Δ, durations, match bits set / iterate, bookmark file id remap, update releases list / missed versions / check setting migration, merged logs (order by time, appended older rows, formats + rotated parts + re-read, single log unchanged, interleave), store copy_entry / split_off, raw lines of entries (all formats / encodings), filter (parallel = sequential, match bits), date column filter = text filter, updates (versions, release JSON, notes, sha256 file, ZIP, install, restore state), icon / .ico layout, search as you type threshold, status-bar position percentage, file association (registry in an own HKCU test key), search history, store drop_front / move to temp file, rotated parts (naming, merge on open, rotation while watching, replaced
+- `cargo test` (130 tests: table export scopes / cells / columns / cancel / CSV / XLSX / ZIP writer / statistics / sheet per file / JSONL / HTML / presets / `--export` (#32), MSI verbose log / header dates (#40), guides table / URLs / log set guides (#39), IIS column order with `*` (#41), follow end pause / resume (#37), rules window default width (#48), keyboard shortcut order (Shift+F3 / Shift+F2 not taken by F3 / F2, #46), log sets (set file parsing / translations / built-in sets, variables, loading priorities, file checks, remote computer names / variables / drive letters / share roots, network error codes, recent computers), HTTP status lookup / class fallback / lookup input parsing and ambiguity / cell values, status column keys of log definitions, command-line parsing (file association, all options, errors, `--restore`, language / time / regex checks, help text), overview buckets incremental = full / pixel runs, readable export with Δ, durations, match bits set / iterate, bookmark file id remap, update releases list / missed versions / check setting migration, merged logs (order by time, appended older rows, formats + rotated parts + re-read, single log unchanged, interleave), store copy_entry / split_off, raw lines of entries (all formats / encodings), filter (parallel = sequential, match bits), date column filter = text filter, updates (versions, release JSON, notes, sha256 file, ZIP, install, restore state), icon / .ico layout, search as you type threshold, status-bar position percentage, file association (registry in an own HKCU test key), search history, store drop_front / move to temp file, rotated parts (naming, merge on open, rotation while watching, replaced
   file), export segments by file, time range bounds, column filter syntax, parsers, chunked/ANSI/UTF-16 reading, log definitions (CBS, DISM, IIS,
   Exchange connectivity / CSV separator, choice by name/content, appending across refreshes), store (32-byte record, ISO ↔ ms, push /
   truncate / append, mapped temp file growing past 64 MB, interner), export incl. end-to-end and

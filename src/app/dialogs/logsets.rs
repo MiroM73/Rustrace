@@ -237,6 +237,7 @@ impl App {
         let mut open = true;
         let (mut chosen, mut recheck, mut open_logs, mut close, mut own_folder) =
             (None, false, false, false, false);
+        let mut guide: Option<String> = None;
         let lang = self.lang_code.clone();
         let recent = self.cfg.remote_computers.clone();
         egui::Window::new(format!("📑 {}", t!("logset.title")))
@@ -264,6 +265,23 @@ impl App {
                                 }
                             }
                         });
+                    // Guides of the scenario (#39): built-in ones by their title, others by name.
+                    for g in dlg.set().map(|s| s.guides.as_slice()).unwrap_or_default() {
+                        let title = guides::title_key(g).map_or_else(|| g.clone(), |k| t!(k));
+                        let target = guides::target(REPOSITORY, g);
+                        let tip = if guides::title_key(g).is_some() {
+                            t!("menu.help.guides.tip")
+                        } else {
+                            target.clone()
+                        };
+                        if ui
+                            .button(format!("📖 {title}"))
+                            .on_hover_text(tip)
+                            .clicked()
+                        {
+                            guide = Some(target);
+                        }
+                    }
                 });
                 if let Some(s) = dlg.set() {
                     if let Some(d) = s.description(&lang) {
@@ -342,6 +360,9 @@ impl App {
                 }
             });
 
+        if let Some(link) = guide {
+            self.open_link(&link);
+        }
         if own_folder && let Some(dir) = logset::user_set_dir() {
             let res = std::fs::create_dir_all(&dir).and_then(|_| open::that_detached(&dir));
             if let Err(e) = res {

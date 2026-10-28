@@ -39,6 +39,12 @@ impl App {
         if export_key && self.cur_path.is_some() {
             self.show_export = true;
         }
+        // Before Ctrl+E (the lookup): `consume_key` ignores an extra Shift (#46).
+        let table_export_key =
+            ctx.input_mut(|i| i.consume_key(Modifiers::COMMAND | Modifiers::SHIFT, Key::E));
+        if table_export_key && self.cur_path.is_some() {
+            self.open_table_export(None);
+        }
         let (open, f5, ctrl_f5, ctrl_f, (f3, sh_f3), pause, ctrl_h, ctrl_l, ctrl_e) = ctx
             .input_mut(|i| {
                 (

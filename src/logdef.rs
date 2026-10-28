@@ -15,11 +15,13 @@
 //! | `skip` | regex; matching lines are ignored |
 //! | `unmatched` | lines not matching `pattern`: `append` to the previous entry (default for `regex`), `entry` = own entry (default for `w3c`), `skip` |
 //! | `role.message`, `role.component`, `role.thread`, `role.datetime` | columns (one or more, joined by a space) that fill the standard columns; default: the column with that name (`datetime` also `date` + `time`) |
-//! | `role.severity` | column whose value gives the severity; default: `severity` |
+//! | `role.severity` | column(s) whose value gives the severity (several are joined by a space); default: `severity` |
 //! | `severity.error`, `severity.warning` | regexes (case-insensitive) for the severity value |
 //! | `datetime.format` | chrono format(s) of the date/time, separated by `\|`, e.g. `%Y-%m-%d %H:%M:%S` |
 //! | `timezone` | `local` (default) or `utc` (converted to local time) |
-//! | `columns` | order of the columns in the table (role names or column names); default: order in the pattern / header |
+//! | `header.date` | regex for a line that carries the date of the following lines (group `date`, else the first group), e.g. `=== Verbose logging started: (?P<date>\S+)` – the date/time column then holds only a time; rows without a time get the previous date/time, a time more than 12 hours before the previous one is on the next day (#40) |
+//! | `header.date.format` | chrono format(s) of that date, separated by `\|`; default: `%Y-%m-%d`, `%d.%m.%Y`, `%m/%d/%Y`, `%d/%m/%Y`, `%Y/%m/%d` |
+//! | `columns` | order of the columns in the table (role names or column names, `*` = all the other columns in the order of the pattern / header); columns not listed are hidden unless `*` is used; default: order in the pattern / header |
 //! | `title.<column>` | column header (`title.message = Request`) |
 //! | `http_status`, `http_substatus`, `win32_status` | columns with an HTTP status, an IIS substatus and a Win32 status code (decimal) – explained in the details pane, in the cell tooltip and in the error code lookup (#28); optional, a missing column is ignored |
 //!
@@ -45,6 +47,7 @@ const BUILTIN: &[(&str, &str)] = &[
         include_str!("../logdef/exchconnect.log.def"),
     ),
     ("iisweb.log.def", include_str!("../logdef/iisweb.log.def")),
+    ("msi.log.def", include_str!("../logdef/msi.log.def")),
 ];
 
 /// Date/time formats tried when `datetime.format` does not match.
@@ -53,6 +56,18 @@ const DEFAULT_DT_FORMATS: &[&str] = &[
     "%Y-%m-%dT%H:%M:%S%.f",
     "%Y/%m/%d %H:%M:%S%.f",
 ];
+
+/// Date formats of `header.date` lines when `header.date.format` is not given (the order of the
+/// OS locale is not known: day.month with dots, month/day with slashes first).
+const DEFAULT_DATE_FORMATS: &str = "%Y-%m-%d | %d.%m.%Y | %m/%d/%Y | %d/%m/%Y | %Y/%m/%d";
+
+/// Splits a list of chrono formats ("a | b").
+fn formats(s: &str) -> Vec<String> {
+    s.split('|')
+        .map(|x| x.trim().to_owned())
+        .filter(|x| !x.is_empty())
+        .collect()
+}
 
 /// Standard columns every log has (filled by the CMTrace parser or by a definition's roles).
 #[derive(Clone, Copy, PartialEq, Eq, Debug, Hash, serde::Serialize, serde::Deserialize)]
@@ -282,11 +297,15 @@ pub struct LogDef {
     unmatched: Unmatched,
     /// Column names for each `Role` (indexed by `Role as usize`); empty = default.
     roles: [Vec<String>; 4],
-    severity_field: Option<String>,
+    /// Columns of `role.severity` (empty = `severity`).
+    severity_fields: Vec<String>,
     sev_error: Regex,
     sev_warning: Regex,
     dt_formats: Vec<String>,
     utc: bool,
+    /// `header.date`: a line with the date of the following lines (#40).
+    header_date: Option<Regex>,
+    header_date_formats: Vec<String>,
     columns: Option<Vec<String>>,
     /// Lower-case column name → header.
     titles: HashMap<String, String>,
@@ -376,6 +395,8 @@ impl LogDef {
                     | "severity.warning"
                     | "datetime.format"
                     | "timezone"
+                    | "header.date"
+                    | "header.date.format"
                     | "columns"
                     | "http_status"
                     | "http_substatus"
@@ -466,7 +487,7 @@ impl LogDef {
             skip: optional("skip", false)?,
             unmatched,
             roles,
-            severity_field: get("role.severity").map(str::to_owned),
+            severity_fields: get("role.severity").map(list).unwrap_or_default(),
             sev_error: build_regex(
                 "severity.error",
                 get("severity.error").unwrap_or("^(e|err|error|fatal|critical|crit|3)$"),
@@ -477,15 +498,10 @@ impl LogDef {
                 get("severity.warning").unwrap_or("^(w|warn|warning|2)$"),
                 true,
             )?,
-            dt_formats: get("datetime.format")
-                .map(|f| {
-                    f.split('|')
-                        .map(|x| x.trim().to_owned())
-                        .filter(|x| !x.is_empty())
-                        .collect()
-                })
-                .unwrap_or_default(),
+            dt_formats: get("datetime.format").map(formats).unwrap_or_default(),
             utc,
+            header_date: optional("header.date", false)?,
+            header_date_formats: formats(get("header.date.format").unwrap_or(DEFAULT_DATE_FORMATS)),
             columns: get("columns").map(list),
             titles,
             default_fields: get("fields").map(list).unwrap_or_default(),
@@ -539,9 +555,15 @@ impl LogDef {
                 .into_iter()
                 .find(|r| roles[*r as usize].contains(&i))
         };
-        let severity = names.iter().position(|f| {
-            f.eq_ignore_ascii_case(self.severity_field.as_deref().unwrap_or("severity"))
-        });
+        let find = |n: &str| names.iter().position(|f| f.eq_ignore_ascii_case(n));
+        let severity: Vec<usize> = if self.severity_fields.is_empty() {
+            find("severity").into_iter().collect()
+        } else {
+            self.severity_fields
+                .iter()
+                .filter_map(|n| find(n))
+                .collect()
+        };
         let mut extra = Vec::new();
         for (i, n) in names.iter().enumerate() {
             if !n.is_empty() && role_of(i).is_none() {
@@ -573,11 +595,29 @@ impl LogDef {
         };
         match &self.columns {
             Some(list) => {
-                for n in list {
+                let named = |n: &str| -> Option<(ColumnKind, Option<String>)> {
                     if let Some(r) = Role::from_key(n) {
-                        push(ColumnKind::Role(r), title(r.key()));
-                    } else if let Some(i) = names.iter().position(|f| f.eq_ignore_ascii_case(n)) {
-                        let (k, t) = field_column(i, schema);
+                        Some((ColumnKind::Role(r), title(r.key())))
+                    } else {
+                        let i = names.iter().position(|f| f.eq_ignore_ascii_case(n))?;
+                        Some(field_column(i, schema))
+                    }
+                };
+                // `*` = every column not named in the list, in the order of the fields (#41).
+                let listed: Vec<ColumnKind> = list
+                    .iter()
+                    .filter_map(|n| named(n))
+                    .map(|(k, _)| k)
+                    .collect();
+                for n in list {
+                    if n == "*" {
+                        for (i, _) in names.iter().enumerate().filter(|(_, f)| !f.is_empty()) {
+                            let (k, t) = field_column(i, schema);
+                            if !listed.contains(&k) {
+                                push(k, t);
+                            }
+                        }
+                    } else if let Some((k, t)) = named(n) {
                         push(k, t);
                     }
                 }
@@ -615,8 +655,16 @@ impl LogDef {
     /// Converts the date/time text to the ISO form used everywhere ("YYYY-MM-DD HH:MM:SS.mmm").
     /// Text that does not parse is kept as it is.
     fn parse_datetime(&self, s: &str) -> String {
+        match self.parse_naive(s) {
+            Some(dt) => iso(dt),
+            None => s.to_owned(),
+        }
+    }
+
+    /// The date/time text in local time (`None` = it does not parse).
+    fn parse_naive(&self, s: &str) -> Option<chrono::NaiveDateTime> {
         if s.is_empty() {
-            return String::new();
+            return None;
         }
         let formats = self
             .dt_formats
@@ -625,24 +673,38 @@ impl LogDef {
             .chain(DEFAULT_DT_FORMATS.iter().copied());
         for f in formats {
             if let Ok(dt) = chrono::NaiveDateTime::parse_from_str(s, f) {
-                let dt = if self.utc {
+                return Some(if self.utc {
                     use chrono::TimeZone;
                     chrono::Local.from_utc_datetime(&dt).naive_local()
                 } else {
                     dt
-                };
-                return dt.format("%Y-%m-%d %H:%M:%S%.3f").to_string();
+                });
             }
         }
-        s.to_owned()
+        None
+    }
+
+    /// The date of a `header.date` line (`None` = not such a line or the date does not parse).
+    fn header_date(&self, line: &str) -> Option<chrono::NaiveDate> {
+        let c = self.header_date.as_ref()?.captures(line)?;
+        let text = c.name("date").or_else(|| c.get(1))?.as_str().trim();
+        self.header_date_formats
+            .iter()
+            .find_map(|f| chrono::NaiveDate::parse_from_str(text, f).ok())
     }
 }
+
+fn iso(dt: chrono::NaiveDateTime) -> String {
+    dt.format("%Y-%m-%d %H:%M:%S%.3f").to_string()
+}
+
+impl LogDef {}
 
 /// Which field fills what (computed from the field names).
 #[derive(Clone, Debug)]
 struct Mapping {
     roles: [Vec<usize>; 4],
-    severity: Option<usize>,
+    severity: Vec<usize>,
     /// (field index, extra column index)
     extra: Vec<(usize, usize)>,
     extra_len: usize,
@@ -666,6 +728,9 @@ pub struct DefState {
     header_seen: bool,
     /// An entry was parsed (the extra column indexes are in use).
     entries_parsed: bool,
+    /// `header.date`: the date of the last header line and the last date/time (#40).
+    date: Option<chrono::NaiveDate>,
+    last_dt: Option<chrono::NaiveDateTime>,
 }
 
 impl DefState {
@@ -690,6 +755,8 @@ impl DefState {
             map,
             header_seen: false,
             entries_parsed: false,
+            date: None,
+            last_dt: None,
         }
     }
 
@@ -738,6 +805,11 @@ impl DefState {
         if def.skip.as_ref().is_some_and(|re| re.is_match(line)) {
             return DefLine::Skip;
         }
+        if let Some(d) = def.header_date(line) {
+            // A new logging session (e.g. appended to the same file): no roll-over across it.
+            self.date = Some(d);
+            self.last_dt = None;
+        }
         match &def.kind {
             Kind::W3c(sep) => {
                 self.entries_parsed = true;
@@ -753,8 +825,35 @@ impl DefState {
         }
     }
 
+    /// Date/time of an entry with `header.date`: the header date + the time of the line; no
+    /// time = the previous date/time; a time more than 12 hours before the previous one = the
+    /// next day (midnight).
+    fn header_datetime(&mut self, time: &str) -> String {
+        if time.is_empty() {
+            return self.last_dt.map(iso).unwrap_or_default();
+        }
+        let Some(date) = self.date else {
+            return time.to_owned();
+        };
+        let Some(mut dt) = self
+            .def
+            .parse_naive(&format!("{} {time}", date.format("%Y-%m-%d")))
+        else {
+            return time.to_owned();
+        };
+        if let Some(last) = self.last_dt
+            && dt + chrono::Duration::hours(12) < last
+        {
+            let days = (last - dt).num_days() + 1;
+            dt += chrono::Duration::days(days);
+            self.date = Some(dt.date());
+        }
+        self.last_dt = Some(dt);
+        iso(dt)
+    }
+
     fn build<'a>(
-        &self,
+        &mut self,
         line_no: usize,
         line: &str,
         kw: bool,
@@ -774,15 +873,24 @@ impl DefState {
             }
             out
         };
+        let dt_text = join(&self.map.roles[Role::DateTime as usize]);
+        let datetime = if self.def.header_date.is_some() {
+            self.header_datetime(&dt_text)
+        } else {
+            self.def.parse_datetime(&dt_text)
+        };
         let m = &self.map;
         let message = if m.roles[Role::Message as usize].is_empty() {
             line.to_owned()
         } else {
             join(&m.roles[Role::Message as usize])
         };
-        let severity = match m.severity.and_then(&get) {
-            Some(v) => self.def.severity_of(v),
-            None => keyword_sev(&message, kw),
+        // Severity columns that are in the line (none = the keywords of the message).
+        let sev_values: Vec<&str> = m.severity.iter().filter_map(|&i| get(i)).collect();
+        let severity = if sev_values.is_empty() {
+            keyword_sev(&message, kw)
+        } else {
+            self.def.severity_of(&sev_values.join(" "))
         };
         let mut extra = vec![String::new(); m.extra_len];
         for &(f, e) in &m.extra {
@@ -793,9 +901,7 @@ impl DefState {
         LogEntry {
             line_no,
             component: join(&m.roles[Role::Component as usize]),
-            datetime: self
-                .def
-                .parse_datetime(&join(&m.roles[Role::DateTime as usize])),
+            datetime,
             thread: join(&m.roles[Role::Thread as usize]),
             severity,
             message,
@@ -1151,7 +1257,8 @@ mod tests {
                 "cbs.log.def",
                 "dism.log.def",
                 "exchconnect.log.def",
-                "iisweb.log.def"
+                "iisweb.log.def",
+                "msi.log.def"
             ]
         );
     }
@@ -1277,8 +1384,242 @@ mod tests {
             .iter()
             .filter_map(|c| c.title.as_deref())
             .collect();
-        assert_eq!(titles, ["Server IP", "Request", "Status", "Time (ms)"]);
+        assert_eq!(titles, ["Status", "Time (ms)", "Request", "Server IP"]);
         assert_eq!(s.columns[0].kind, ColumnKind::Role(Role::DateTime));
+    }
+
+    /// Built-in IIS columns (#41): status columns first, every other field of any `#Fields:` set
+    /// after the request (`*`), none lost.
+    #[test]
+    fn iis_status_columns_first() {
+        let titles = |lines: &[&str]| -> Vec<String> {
+            let (_, s) = parse_lines(builtin("iisweb.log.def"), lines);
+            s.columns
+                .iter()
+                .map(|c| c.title.clone().unwrap_or_else(|| format!("{:?}", c.kind)))
+                .collect()
+        };
+        // The default IIS field set (no header yet).
+        assert_eq!(
+            titles(&[]),
+            [
+                "Role(DateTime)",
+                "Status",
+                "Substatus",
+                "Win32 status",
+                "Time (ms)",
+                "Client IP",
+                "User",
+                "Request",
+                "Server IP",
+                "Port",
+                "User agent",
+                "Referer"
+            ]
+        );
+        // Fields the definition does not name stay visible in their header order.
+        assert_eq!(
+            titles(&[
+                "#Fields: date time s-sitename s-computername s-ip cs-method cs-uri-stem cs-uri-query s-port cs-username c-ip cs-version cs(User-Agent) cs(Cookie) cs(Referer) cs-host sc-status sc-substatus sc-win32-status sc-bytes cs-bytes time-taken",
+                "2026-10-23 08:00:01 W3SVC1 MP01 10.0.0.5 GET /a - 443 - 10.0.0.9 HTTP/1.1 x - - mp01 200 0 0 100 200 15",
+            ]),
+            [
+                "Role(DateTime)",
+                "Status",
+                "Substatus",
+                "Win32 status",
+                "Time (ms)",
+                "Client IP",
+                "User",
+                "Request",
+                "s-sitename",
+                "s-computername",
+                "Server IP",
+                "Port",
+                "cs-version",
+                "User agent",
+                "cs(Cookie)",
+                "Referer",
+                "cs-host",
+                "sc-bytes",
+                "cs-bytes"
+            ]
+        );
+    }
+
+    /// `columns` without `*` hides the columns it does not name (own definitions rely on it).
+    #[test]
+    fn columns_without_star_hide_the_rest() {
+        let def = LogDef::parse(
+            "x.def",
+            "pattern = ^(?P<a>\\S+) (?P<b>\\S+) (?P<message>.*)$\ncolumns = b message\n",
+            None,
+        )
+        .unwrap();
+        let (e, s) = parse_lines(Arc::new(def), &["1 2 text"]);
+        let titles: Vec<&str> = s
+            .columns
+            .iter()
+            .filter_map(|c| c.title.as_deref())
+            .collect();
+        assert_eq!(titles, ["b"]);
+        assert_eq!(s.columns.len(), 2);
+        assert_eq!(extra(&e[0], &s, "a"), "1");
+    }
+
+    /// Windows Installer verbose log (#40): date from the header line, the time of every line,
+    /// rows without a time keep the previous one, midnight, only real failures are errors.
+    #[test]
+    fn msi_verbose_log() {
+        let def = builtin("msi.log.def");
+        assert!(def.matches_file("client.msi.log"));
+        assert!(def.matches_file("MSI1a2b3.LOG"));
+        assert!(!def.matches_file("ccmsetup.log"));
+        assert!(def.detects(&["=== Verbose logging started: 28.10.2026  08:02:58  Build type: SHIP UNICODE 5.00.10011.00 ==="]));
+        assert!(def.detects(&["MSI (c) (D0!3C) [08:02:58:887]: x"]));
+        let (e, s) = parse_lines(
+            def,
+            &[
+                "=== Verbose logging started: 28.10.2026  23:59:58  Build type: SHIP UNICODE 5.00.10011.00  Calling process: C:\\WINDOWS\\ccmsetup\\ccmsetup.exe ===",
+                "MSI (s) (2C:1C) [23:59:58:887]: Resetting cached policy values",
+                "Action start 23:59:59: LaunchConditions.",
+                "MSI (s) (2C:A4) [23:59:59:538]: Note: 1: 2205 2:  3: Error ",
+                "MSI (s) (2C:1C) [00:00:01:541]: Note: 1: 2228 2:  3: Error 4: SELECT `Message` FROM `Error` WHERE `Error` = 1707 ",
+                "MSI (s) (2C:1C) [00:00:02:001]: Product: Configuration Manager Client -- Error 25150. Setup was unable to register",
+                "Error 25150. Setup was unable to register the endpoint",
+                "CustomAction CcmRegisterHostingConfiguration returned actual error code 1603 (note this may not be 100% accurate)",
+                "Action ended 0:00:03: CcmRegisterHostingConfiguration. Return value 3.",
+                "Action ended 0:00:04: INSTALL. Return value 2.",
+                "MSI (s) (2C:B8) [00:00:05:228]: Windows Installer installed the product. Installation success or error status: 0.",
+                "MSI (s) (2C:B8) [00:00:05:229]: Windows Installer installed the product. Installation success or error status: 1603.",
+                "MSI (c) (D0!3C) [00:00:05:300]: Product: X -- Installation failed.",
+                "=== Verbose logging stopped: 29.10.2026  00:00:06 ===",
+            ],
+        );
+        assert_eq!(e.len(), 14);
+        let dt: Vec<&str> = e.iter().map(|x| x.datetime.as_str()).collect();
+        assert_eq!(
+            dt,
+            [
+                "2026-10-28 23:59:58.000",
+                "2026-10-28 23:59:58.887",
+                "2026-10-28 23:59:59.000",
+                "2026-10-28 23:59:59.538",
+                "2026-10-29 00:00:01.541",
+                "2026-10-29 00:00:02.001",
+                "2026-10-29 00:00:02.001",
+                "2026-10-29 00:00:02.001",
+                "2026-10-29 00:00:03.000",
+                "2026-10-29 00:00:04.000",
+                "2026-10-29 00:00:05.228",
+                "2026-10-29 00:00:05.229",
+                "2026-10-29 00:00:05.300",
+                "2026-10-29 00:00:06.000",
+            ]
+        );
+        let sev: Vec<Severity> = e.iter().map(|x| x.severity).collect();
+        use Severity::{Error as E, Info as I, Warning as W};
+        assert_eq!(sev, [I, I, I, I, I, E, E, E, E, W, I, E, E, I]);
+        assert_eq!(e[1].message, "Resetting cached policy values");
+        assert_eq!(e[1].thread, "2C:1C");
+        assert_eq!(extra(&e[1], &s, "context"), "s");
+        assert_eq!(extra(&e[12], &s, "context"), "c");
+        assert_eq!(e[12].thread, "D0!3C");
+        assert_eq!(e[2].message, "Action start 23:59:59: LaunchConditions.");
+        assert!(
+            e[0].message
+                .starts_with("=== Verbose logging started: 28.10.2026")
+        );
+        let titles: Vec<String> = s
+            .columns
+            .iter()
+            .map(|c| c.title.clone().unwrap_or_else(|| format!("{:?}", c.kind)))
+            .collect();
+        assert_eq!(
+            titles,
+            ["Role(DateTime)", "MSI", "Process:thread", "Role(Message)"]
+        );
+    }
+
+    /// `header.date` in the date orders of different locales; lines before the header keep
+    /// their time text; a new session header resets the roll-over.
+    #[test]
+    fn header_date_formats() {
+        let def = |extra: &str| {
+            Arc::new(
+                LogDef::parse(
+                    "h.def",
+                    &format!(
+                        "pattern = ^(?:\\[(?P<datetime>[0-9:]+)\\] )?(?P<message>.*)$\n\
+                         header.date = ^Started (?P<date>\\S+)\n\
+                         datetime.format = %Y-%m-%d %H:%M:%S\n{extra}"
+                    ),
+                    None,
+                )
+                .unwrap(),
+            )
+        };
+        let dates = |d: Arc<LogDef>, header: &str| -> Vec<String> {
+            parse_lines(d, &["[07:00:00] before", header, "[08:00:00] x", "no time"])
+                .0
+                .into_iter()
+                .map(|e| e.datetime)
+                .collect()
+        };
+        for header in [
+            "Started 28.10.2026",
+            "Started 10/28/2026",
+            "Started 28/10/2026",
+            "Started 2026-10-28",
+            "Started 2026/10/28",
+        ] {
+            assert_eq!(
+                dates(def(""), header),
+                [
+                    "07:00:00",
+                    "",
+                    "2026-10-28 08:00:00.000",
+                    "2026-10-28 08:00:00.000"
+                ],
+                "{header}"
+            );
+        }
+        // Month/day first when both fit (US); an own format wins.
+        assert_eq!(
+            dates(def(""), "Started 03/04/2026")[2],
+            "2026-03-04 08:00:00.000"
+        );
+        assert_eq!(
+            dates(def("header.date.format = %d/%m/%Y"), "Started 03/04/2026")[2],
+            "2026-04-03 08:00:00.000"
+        );
+        // Times going back a little (other threads) stay on the same day; a new header resets.
+        let (e, _) = parse_lines(
+            def(""),
+            &[
+                "Started 28.10.2026",
+                "[23:00:00] a",
+                "[22:59:59] b",
+                "[01:00:00] c",
+                "Started 28.10.2026",
+                "[00:30:00] d",
+            ],
+        );
+        let dt: Vec<&str> = e.iter().map(|x| x.datetime.as_str()).collect();
+        assert_eq!(
+            dt,
+            [
+                "",
+                "2026-10-28 23:00:00.000",
+                "2026-10-28 22:59:59.000",
+                "2026-10-29 01:00:00.000",
+                "",
+                "2026-10-28 00:30:00.000"
+            ]
+        );
+        assert!(
+            LogDef::parse("x.def", "pattern = (?P<message>.*)\nheader.date = (", None).is_err()
+        );
     }
 
     /// Exchange Transport Connectivity log (issue #13): comma-separated `#Fields:` and values,
@@ -1411,10 +1752,10 @@ mod tests {
             titles,
             [
                 "Role(DateTime)",
-                "Server IP",
-                "Request",
-                "Client IP",
                 "Status",
+                "Client IP",
+                "Request",
+                "Server IP",
                 "Time (ms)"
             ]
         );
@@ -1479,7 +1820,8 @@ mod tests {
                 ("iisweb.log.def", 1),
                 ("cbs.log.def", 0),
                 ("dism.log.def", 0),
-                ("exchconnect.log.def", 0)
+                ("exchconnect.log.def", 0),
+                ("msi.log.def", 0)
             ]
         );
         assert!(set.defs[0].is_own() && !set.defs[0].same_as(&set.defs[3]));
@@ -1499,7 +1841,8 @@ mod tests {
                 "next to exe",
                 "Windows CBS log",
                 "DISM log",
-                "Exchange Transport Connectivity log"
+                "Exchange Transport Connectivity log",
+                "Windows Installer log (MSI)"
             ]
         );
         // The texts for the notice are there whatever the filter is.
@@ -1511,7 +1854,8 @@ mod tests {
                 "cbs.log.def",
                 "dism.log.def",
                 "exchconnect.log.def",
-                "iisweb.log.def"
+                "iisweb.log.def",
+                "msi.log.def"
             ]
         );
         assert_eq!(

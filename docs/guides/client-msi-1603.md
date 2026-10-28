@@ -21,7 +21,7 @@ client does not register, see [A new ConfigMgr client does not register](client-
 | Log | What it tells you |
 |---|---|
 | `C:\Windows\ccmsetup\Logs\ccmsetup.log` | The bootstrapper (CMTrace format): download of the client files, prerequisites, the start of `client.msi`, its **exit code**, the failed **action** and the error messages, retries and the **return code** of ccmsetup. |
-| `C:\Windows\ccmsetup\Logs\client.msi.log` | The verbose Windows Installer log of the client (plain text, **no dates**, thousands of lines on a real computer): every action, custom action and the rollback. The place where the real cause is written. |
+| `C:\Windows\ccmsetup\Logs\client.msi.log` | The verbose Windows Installer log of the client (times only – the date is in the first line; thousands of lines on a real computer): every action, custom action and the rollback. The place where the real cause is written. Read with the built-in definition *Windows Installer log (MSI)*. |
 
 ccmsetup return codes: **0** success, **6** error, **7** reboot required, **8** setup already
 running, **9** prerequisite evaluation failure, **10** setup manifest hash validation failure.
@@ -87,22 +87,28 @@ A WMI error in a custom action of the client MSI points to a damaged **WMI repos
 computer. To be sure – and for every 1603 where ccmsetup.log does not show the action – open the
 MSI log.
 
-## Step 4 – client.msi.log: why "Errors" does not help here
+## Step 4 – client.msi.log: errors only
 
-Open `client.msi.log` (in a second RusTrace window, or instead of ccmsetup.log) and turn **Info**
-off:
+Open `client.msi.log` (in a second RusTrace window, or add it to the view with **File → Add log
+to view…** – its rows are merged by time, the date comes from its first line) and turn **Info**
+off. The built-in definition *Windows Installer log (MSI)* (#40) marks only the **real failures**:
+`@@ERR:25150`, *Error 25150.*, `returned actual error code 1603`, every `Return value 3`,
+*Installation failed* and `error status: 1603` (explained in the details pane as MSI 1603). The
+harmless `Note: 1: 2205 2:  3: Error` / `Note: 1: 2228 … Error …` lines (Windows Installer looks
+for optional tables the package does not have – they are in almost every MSI log) stay Info.
 
-![Keyword "errors" in the MSI log](images/client-msi-1603/04-msi-keyword-errors.png)
+![Keyword "errors" in an older version](images/client-msi-1603/04-msi-keyword-errors.png)
 
-1. The MSI log has no severity, so RusTrace marks lines that contain the words *error*, *fail*,
-   *warn*. Lines like `Note: 1: 2205 2:  3: Error` and `Note: 1: 2228 … Error …` are **harmless**:
-   Windows Installer looks for optional tables that the package does not have. They are in
-   almost every MSI log.
-2. Even the summary line `Windows Installer installed the product … Installation success or
-   error status: 1603` is marked because of the word *error*.
-3. **Shown 10 of 122** – and the most important line, `Return value 3`, is **not** among them.
+The screenshot shows an older version, which read the MSI log as plain text and marked lines by
+the words *error*, *fail*, *warn*:
 
-So in MSI logs search instead of filtering by severity (steps 5 and 6).
+1. the harmless `Note: …` lines were "errors",
+2. so was the summary line `… Installation success or error status: 1603` (here rightly),
+3. **Shown 10 of 122** – and the most important line, `Return value 3`, was **not** among them.
+
+The highlight rules of step 5 are still useful: they gray out the notes and color the action
+names, also when the log is opened as plain text (another definition chosen in View → Log format,
+an older version).
 
 ## Step 5 – Highlight rules for MSI logs
 
@@ -155,8 +161,9 @@ Scroll up a little from the first `Return value 3`:
 4. `Return value 3` – the action failed; after it the installation is rolled back
    (`Rollback: …`, `FileRemove`) and the client is not installed.
 
-The time stamps `[08:21:31:945]` of the MSI lines are local times, but the log has no dates, so
-the **Δ time** column and merging with other logs do not work for it.
+The time stamps `[08:21:31:945]` of the MSI lines are local times; with the date of the
+*Verbose logging started* line the **Δ time** column and merging with ccmsetup.log work for it
+(lines without a time, like *Error 25150.*, get the time of the line before them).
 
 ## Step 8 – Copy the evidence and check the code
 

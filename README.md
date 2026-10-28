@@ -21,6 +21,9 @@ examples: [docs/guides](docs/guides/README.md), e.g.
 [A new ConfigMgr client does not register](docs/guides/client-install.md),
 [The management point / distribution point is not healthy](docs/guides/iis-management-point.md),
 [The ConfigMgr client installation fails](docs/guides/client-msi-1603.md).
+In the program: **Help → Guides** (one entry per guide, *All guides…* = the index; opened on GitHub
+in the browser, the guides are in English), the About window, and a 📖 button next to the log sets
+that have a guide (File → Open log set…).
 
 ## Download
 
@@ -36,7 +39,7 @@ Both create:
 RusTrace\
     rustrace.exe      the program (no installation, no Visual C++ runtime needed)
     lang\*.lang       language files – edit or add translations here
-    logdef\*.def      log definitions (IIS, Exchange, DISM, CBS) – edit or add your own formats here
+    logdef\*.def      log definitions (IIS, Exchange, DISM, CBS, MSI) – edit or add your own formats here
     logsets\*.set     log sets (groups of ConfigMgr / Intune logs opened together)
     LICENSE           the Unlicense (public domain)
 ```
@@ -50,8 +53,8 @@ creating the graphics context can take a moment, especially on the first start a
 follows the theme from the settings (or the Windows theme).
 
 The window title shows the version in use, e.g. `RusTrace 0.6.0 – ccmexec.log`. **Help → About
-RusTrace** shows the version, author, license, links to the project page, new versions and the
-issue tracker, the build (platform) and the settings file; "Copy version information" puts e.g.
+RusTrace** shows the version, author, license, links to the project page, new versions, the
+issue tracker and the guides, the build (platform) and the settings file; "Copy version information" puts e.g.
 `RusTrace 0.6.0 (windows x86_64, release)` on the clipboard for a bug report.
 
 **Updates** (Help → Check for updates…): RusTrace asks GitHub for the published releases and shows
@@ -300,6 +303,8 @@ the version information into the exe; this uses the resource compiler `rc.exe` o
   (`0x80070005`, `-2147024891`, `exit code 1603` …)
 - the lookup window accepts hex, negative decimal or Win32/MSI codes and shows all forms (hex, decimal,
   Win32), the facility and a description
+- codes found in the message: `0x…` HRESULTs, negative decimals, `exit / error / return code N`
+  and the final `error status: N` of a Windows Installer log
 - descriptions: common ConfigMgr, Windows Update, MSI, WMI, WinINet and Win32 codes from the language
   files + on Windows the system message (`FormatMessage`, in the OS language, also from `wininet.dll`)
 - **HTTP status codes** (IIS logs and any log whose definition names its status columns): the details
@@ -350,6 +355,71 @@ the version information into the exe; this uses the resource compiler `rc.exe` o
 - the automatic refresh does not have to be paused: the export takes the rows the preview shows;
   only while the log is read from the beginning (first load, full reload) the Export… button waits
   with "Reading the log…"
+
+**Export table – CSV / Excel** (File → Export table (CSV / Excel)…, Ctrl+Shift+E; row context menu →
+Export selected rows to CSV / Excel…) – the **parsed** log as a real table for Excel / Power BI,
+tickets or colleagues without RusTrace: every column is a spreadsheet column
+- **rows** (with a live count): the whole parsed log (all merged logs / rotated parts), the rows
+  shown in the table (search filter, severity toggles, column filters, time range), the selected
+  rows, the bookmarked rows, or the highlighted rows with context – the plan of *Export highlighted
+  rows* (its criteria, lines before / after, since, last N blocks; ⚙ Settings opens it) with a
+  **Block** column numbering the blocks
+- **columns**: by default the columns of the table in their order (line, file, date/time, Δ,
+  component, thread, message, the columns of the log definition); tick / untick and reorder them
+  with ↑ ↓ – the choice is remembered **per log type**. Additional columns: **Severity** as text
+  (UI language or English), **Source file** (full path), **Highlight rule** (the first matching
+  rule – handy for filtering), **Bookmark note**, **Error code explanation** (`0x80070005 – Access
+  is denied.` like the details pane), **Raw line(s)** (the original text, read from the file),
+  **Block**; Δ is in seconds (since the previous exported row, or as set for the Δ column)
+- **CSV options**: separator comma / semicolon / tab, default the **Windows list separator** (`;`
+  for SK / CS / DE, so Excel opens the file correctly on a double click; numbers with a fraction then
+  use a decimal comma); encoding **UTF-8 with BOM** (default, Excel recognizes it), UTF-8 without BOM,
+  UTF-16 LE; header row on / off; dates as ISO `2026-10-27 19:49:05.123` (default, sorts correctly)
+  or as in the table; RFC 4180 quoting (values with the separator, a quote or a line break in quotes,
+  quotes doubled) – **multi-line messages stay in one cell**
+- **Excel (.xlsx)** – written by RusTrace itself (no Excel needed, no extra library): **real typed
+  cells** – the date/time is an Excel date with the format `yyyy-mm-dd hh:mm:ss.000` (sortable,
+  filterable by date), line numbers, block numbers and Δ (seconds) are numbers, everything else is
+  text (log text is never evaluated as a formula); bold **frozen header row with AutoFilter**,
+  sensible column widths (the message column wide); optional **Export with colors** – the row text
+  and background of the highlight rules and of errors / warnings as in the table (light theme).
+  Excel limits: more than 1 048 576 rows continue on the next sheet (`Log`, `Log (2)`, …, every one
+  with its header); a cell longer than 32 767 characters is cut with `…` and the status bar says how
+  many were cut. The whole 400 MB test log: two sheets, 135 MB, about 8 s
+- Excel extra sheets (each can be turned off): **Summary** – RusTrace version, export time, log
+  type, the files, entries in the log, which rows were exported, search text, severities shown,
+  column filters, time range, rows / errors / warnings in the export, first and last date/time,
+  number of data sheets, cut cells; **Statistics** – errors and warnings per component, the 20 most
+  frequent error codes (in error / warning rows) with their explanation, entries / errors / warnings
+  per hour (a quick start for a pivot table or a chart); for merged logs optionally **one sheet per
+  source file** (otherwise one sheet with the File column)
+- **JSON Lines** (`.jsonl`) – one JSON object per row for scripts, Log Analytics or Splunk: keys
+  `line`, `file`, `datetime` (always ISO), `message`, `component`, `thread`, the extra column names
+  (`sc-status` …), `severity`, `rule`, `note`, `codes`, `raw`, `block`; empty cells are left out;
+  Δ and numbers are JSON numbers
+- **HTML report** – one self-contained page (no scripts, no external files) with the summary
+  lines, a sticky header and the table, optionally in the colors of the table; multi-line
+  messages are collapsible – for e-mails or tickets where Excel is not wanted
+- **Presets**: type a name and **Save** to keep the current rows, format, options and column choice
+  (e.g. "Errors for a ticket", "Full CSV for Power BI"); choose one from the list next time, 🗑
+  deletes the one with the typed name
+- **Open the file after the export** (checkbox); after an export the window shows its path with
+  **Open**, **Show in folder** (Explorer with the file selected) and **Copy path**
+- **Copy as CSV / Copy for Excel** in the row context menu: the selected rows with the chosen
+  columns to the clipboard (comma-separated, or tab-separated to paste into Excel with Ctrl+V),
+  without a file
+- **command line**: `rustrace FILE... --export out.xlsx` (or `.csv`, `.jsonl`, `.html`) writes the
+  export of the rows the other options select – `--errors` / `--warnings`, `--search` with
+  `--filter`, `--from` / `--to` – and exits without a window, e.g.
+  `rustrace AppEnforce.log --errors --from "2026-10-27 08:00" --export errors.xlsx`; the columns and
+  options are the saved ones of Export table (the table columns of the log type when none were
+  saved). Messages go to the console it was started from (no message box – fine for scheduled
+  tasks); exit code 0 = written, 1 = export error, 2 = invalid command line
+- **Safe for Excel** (default on): log text starting with `=`, `+`, `-`, `@` (or a tab / CR) gets a
+  leading `'`, so a spreadsheet never runs it as a formula (CSV / formula injection)
+- runs in a background thread straight from the parsed entries (no copy of the log): the whole 400 MB
+  test log (1.9 million rows) is written in about 3 s; progress and **Cancel** in the window and in
+  the status bar, a cancelled export leaves no file. New rows read meanwhile are added after it.
 
 **Search**
 - text or regex, Aa = match case; the number of matches (or an invalid-regex warning) and the ✖ clear
@@ -475,9 +545,17 @@ message, …). The table then shows exactly these columns; severity coloring, se
 filters, the time filter and the export work as with CMTrace logs.
 
 Built in: `iisweb.log.def` (IIS web logs `u_ex*.log`, W3C format; HTTP 5xx = error, 4xx = warning;
-`sc-status` / `sc-substatus` / `sc-win32-status` explained), `exchconnect.log.def` (Exchange
+`sc-status` / `sc-substatus` / `sc-win32-status` explained and shown first – date/time, status,
+substatus, Win32 status, time taken, client IP, user, request, then every other field of the
+`#Fields:` header), `exchconnect.log.def` (Exchange
 Server Transport Connectivity logs `CONNECTLOG*.LOG`, comma-separated W3C-like format),
-`dism.log.def` (`dism.log`) and `cbs.log.def` (`CBS.log`, `CbsPersist_*.log`).
+`dism.log.def` (`dism.log`), `cbs.log.def` (`CBS.log`, `CbsPersist_*.log`) and `msi.log.def`
+(Windows Installer verbose logs `msiexec /l*v` – `*.msi.log`, `MSI*.log` and any file starting with
+`=== Verbose logging started:` or `MSI (s) (`: the date comes from the *Verbose logging started*
+line, so the rows are placed at their real time in a merged view; columns MSI context `s` / `c`,
+process:thread, message; errors are only the real failures – `Return value 3`, `Error 1722.`,
+`returned actual error code 1603`, `@@ERR:`, *Installation failed*, `error status: 1603` – not the
+harmless `Note: 1: 2205 2:  3: Error` lines or `error status: 0`; `Return value 2` = warning).
 
 **Choosing the format** – View → Log format:
 - **Automatic** (default for every opened file): a definition whose `files` patterns match the file
@@ -541,11 +619,13 @@ title.severity = Level
 | `skip` | regex; matching lines are ignored |
 | `unmatched` | lines not matching the pattern: `append` to the previous entry (multi-line entries, default for `regex`), `entry` = own row (default for `w3c`), `skip` |
 | `role.datetime`, `role.message`, `role.component`, `role.thread` | which column(s) fill the standard columns (several are joined with a space, e.g. `role.message = cs-method cs-uri-stem cs-uri-query`); default: the column with the same name (`datetime` also `date` + `time`); without a message column the whole line is the message |
-| `role.severity` | column whose value gives the severity (default `severity`); it stays visible as a column |
+| `role.severity` | column(s) whose value gives the severity (default `severity`; several are joined with a space, e.g. `role.severity = message text`); it stays visible as a column |
 | `severity.error`, `severity.warning` | regexes (case-insensitive) for that value – e.g. `^5\d\d$` for HTTP 5xx; default: error/err/e/fatal/critical/3 and warning/warn/w/2; without a severity column the error/fail/warn keywords are used |
 | `datetime.format` | [chrono format](https://docs.rs/chrono/latest/chrono/format/strftime/index.html)(s) separated by `\|`; ISO-like dates are recognized without it |
 | `timezone` | `local` (default) or `utc` – converted to local time (IIS logs are in UTC) |
-| `columns` | order of the table columns (role or column names); default: the order in the pattern / header |
+| `header.date` | for logs whose lines have only a time: regex of the line that carries the date (named group `date`, else the first group), e.g. `header.date = ^=== Verbose logging started: (?P<date>\S+)`. The date/time column then holds the time of each line and the date of the last such line is put in front of it (`datetime.format` gets `YYYY-MM-DD <time>`, e.g. `%Y-%m-%d %H:%M:%S:%3f`); rows without a time get the previous date/time; a time more than 12 hours before the previous one is on the next day (midnight) |
+| `header.date.format` | chrono format(s) of that date separated by `\|`; default `%Y-%m-%d \| %d.%m.%Y \| %m/%d/%Y \| %d/%m/%Y \| %Y/%m/%d` (the first that fits wins – a slash date that fits both orders is read month/day) |
+| `columns` | order of the table columns (role or column names); `*` = all the other columns in the order of the pattern / header (e.g. `columns = datetime sc-status message *`); without `*` the columns not listed are hidden; default: the order in the pattern / header |
 | `title.<column>` | column header, e.g. `title.sc-status = Status`, `title.message = Request` |
 | `http_status`, `http_substatus`, `win32_status` | optional: the columns holding an HTTP status, an IIS substatus and a Win32 status code (decimal) – explained in the details pane and in the cell tooltip, e.g. `http_status = sc-status`; a named column missing in the log is ignored; only extra columns (not used by a role) are explained |
 
@@ -564,7 +644,8 @@ the ones you do not need and press **Open** – the logs are opened as **one vie
 (the same as opening several files, see [Several logs in one view](#features)). **Check again**
 repeats the check (e.g. after starting the scenario on the client).
 
-Built-in sets (`%CCMLOGS%` = the log folder of the ConfigMgr client, see below):
+Built-in sets (`%CCMLOGS%` = the log folder of the ConfigMgr client, see below); *Application
+deployment*, *Software updates* and *Client installation* have a 📖 button that opens their guide:
 
 | Set | Logs |
 |---|---|
@@ -637,6 +718,7 @@ file = C:\MyApp\Logs\install.log
 | `name`, `name.<language>` | name in the list (default: the file name without `.set`) |
 | `description`, `description.<language>` | one or two sentences under the name |
 | `file` | one log of the set (one line per log, in the order shown) |
+| `guide` | optional, repeatable: a guide for the scenario, shown as a 📖 button next to the set – a file name of [docs/guides](docs/guides/README.md) (e.g. `guide = failed-app-install.md`, opened on GitHub with its translated title), or a URL / path of your own guide (`guide = https://intranet/wiki/AppDeploy`, `guide = \\server\docs\deploy.pdf`) |
 
 ## Languages
 
@@ -695,6 +777,7 @@ rustrace [OPTIONS] [FILE]...
 | `--from <TIME>` / `--to <TIME>` | Time range (`--to` inclusive, a date alone = the whole day). The same formats as the time range in the toolbar: ISO (`2026-10-27 13:05:30`, `2026-10-27T13:05`, `2026-10-27`) always, or the date order of the UI language (e.g. `27.10.2026 13:05` in Slovak). |
 | `--tail` / `--no-follow` | Follow / do not follow the end of the log (default: the "Follow end" setting; the options set it like the toolbar checkbox). |
 | `--merge` | Open several FILEs as one view merged by time. Several FILEs are merged also without it (the same as opening or dropping several files), the option just makes it explicit. |
+| `--export <FILE>` | Write the table export (CSV / Excel / JSON Lines / HTML by the extension of FILE) of the rows the other options select and exit without a window – see [Export table](#features). Messages go to the console; exit code 0 = written, 1 = export error, 2 = invalid command line. |
 | `--lang <CODE>` | UI language for this run only (`en`, `sk`, `cs`, `de` or an external language file); not saved in the settings. |
 | `--help`, `-h`, `/?` | Show the options (in a window; also printed when started from a console). |
 | `--version`, `-V` | Show the version. |
@@ -716,6 +799,7 @@ rustrace AppEnforce.log --line 1500
 rustrace AppEnforce.log --errors --from "2026-10-27 08:00" --to "2026-10-27 09:30"
 rustrace --merge AppDiscovery.log AppEnforce.log --search "fail.*0x8" --regex
 rustrace --lang de AppEnforce.log
+rustrace AppEnforce.log AppDiscovery.log --errors --from "2026-10-27 08:00" --export errors.xlsx
 ```
 
 ## Keyboard shortcuts
@@ -731,6 +815,7 @@ rustrace --lang de AppEnforce.log
 | Ctrl+H | Highlight rules |
 | Ctrl+E | Error code lookup |
 | Ctrl+Shift+S | Export highlighted rows with context |
+| Ctrl+Shift+E | Export table (CSV / Excel) |
 | Ctrl+F2 | Add / remove a bookmark on the selected row |
 | F2 / Shift+F2 | Next / previous bookmark |
 | ↑ ↓ PgUp PgDn Home End | Move in the table (End / the last row resumes a paused "Follow end") |
@@ -759,7 +844,10 @@ rustrace --lang de AppEnforce.log
 - `src/logset.rs` – log sets: `.set` file format, loading, variables, file checks (+ tests)
 - `src/errcodes.rs` – error code detection and lookup (+ tests)
 - `src/httpstatus.rs` – HTTP status / IIS substatus descriptions, lookup input parsing (+ tests)
+- `src/guides.rs` – the guides of Help → Guides: table of guide files and titles, GitHub URLs (+ tests)
 - `src/fileassoc.rs` – Windows file association for `.log` / `.lo_` (registry, status, + tests)
+- `src/tabexport/` – table export: rows of a scope, column model, cell values, CSV writer,
+  minimal XLSX writer and the streaming ZIP writer it uses (+ tests)
 - `src/export.rs` – export around highlighted rows: range merging, date/time filter and input
   parsing, last-N blocks, output formats (+ tests)
 - `src/i18n.rs` – localization: language files, fallback, `t!()` macro (+ tests)
@@ -794,7 +882,7 @@ rustrace --lang de AppEnforce.log
 - `src/icon.rs` – the program icon drawn in code (window, start-up window, `.ico` for `build.rs`)
 - `build.rs` – embeds the icon and the version information into `rustrace.exe` (Windows)
 - `lang/*.lang` – built-in translations
-- `logdef/*.def` – built-in log definitions (IIS, Exchange, DISM, CBS)
+- `logdef/*.def` – built-in log definitions (IIS, Exchange, DISM, CBS, Windows Installer)
 - `logsets/*.set` – built-in log sets (ConfigMgr / Intune scenarios)
 - `scripts/package.ps1` – packs the release build into the self-extracting archive and the ZIP
 - `scripts/release.ps1` – the whole GitHub release (checks, version, tests, commit, tag, build, publish)

@@ -25,7 +25,8 @@ are in `README.md`.
 
 Feature index (file → section of `docs/architecture.md`):
 - Formats, encodings, chunked background reading – `src/parser.rs` → Formats, Reading
-- Log definitions (`.def`, W3C, groups, update notice) – `src/logdef.rs`, `app/logdefs.rs` → Log definitions
+- Log definitions (`.def`, W3C, groups, update notice, `header.date` for MSI logs #40, `columns` `*` #41) –
+  `src/logdef.rs`, `app/logdefs.rs` → Log definitions
 - Several logs merged by time – `src/merge.rs` → Merged logs
 - Log sets (File → Open log set, `.set` files, variables, remote computer) – `src/logset.rs`, `dialogs/logsets.rs` → Log sets
 - Rotated parts, rotation while watching – `src/parser.rs` → Rotated logs
@@ -42,9 +43,11 @@ Feature index (file → section of `docs/architecture.md`):
 - Error codes, HTTP / IIS status codes (#28) – `src/errcodes.rs`, `src/httpstatus.rs`, `app/details.rs`,
   `dialogs/lookup.rs` → Table (error code lookup, HTTP / IIS status codes), Log definitions
 - Export with context – `src/export.rs`, `dialogs/export.rs` → Export
+- Table export CSV / Excel (#32) – `src/tabexport/`, `app/tabexport.rs`, `dialogs/tabexport.rs` → Table export
 - Updates – `src/update.rs`, `src/http.rs`, `dialogs/update.rs` → Updates
+- Guides in Help → Guides, About, log sets (#39) – `src/guides.rs`, `app/menu.rs` → Guides
 - Languages, settings – `src/i18n.rs`, `src/config.rs` → Localization and settings
-- Command-line arguments – `src/cli.rs`, `app/cli.rs`, `src/main.rs` → Command line
+- Command-line arguments – `src/cli.rs`, `app/cli.rs`, `src/main.rs` → Command line; `--export` – `src/batch.rs` → Table export
 
 ## Code layout
 - `src/main.rs` – window start-up, command line (parsed by `src/cli.rs`), renderer choice,
@@ -85,7 +88,7 @@ Feature index (file → section of `docs/architecture.md`):
   `egui::MenuBar::new().ui(..)`, `ui.close()`, `egui::Id::unique(..)` (not `Id::new`).
 
 ## Commands
-- `cargo build --release` → `target\release\rustrace.exe`; `cargo test` (107 tests; what they
+- `cargo build --release` → `target\release\rustrace.exe`; `cargo test` (130 tests; what they
   cover: `docs/architecture.md` → Tests and benchmarks).
 - `cargo fmt` + `cargo clippy --all-targets --locked -- -D warnings` – the code is rustfmt-clean and
   clippy-clean; CI (`.github/workflows/ci.yml`) fails otherwise. Formatting-only commits go into

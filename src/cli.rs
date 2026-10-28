@@ -69,6 +69,8 @@ pub struct Options {
     pub version: bool,
     /// State file of the previous version after an update (`--restore <file>`).
     pub restore: Option<PathBuf>,
+    /// Write the table export to this file and exit without a window (#32).
+    pub export: Option<PathBuf>,
 }
 
 /// An invalid command line.
@@ -135,7 +137,7 @@ pub fn parse<I: IntoIterator<Item = OsString>>(args: I) -> Result<Options, CliEr
         };
         let takes_value = matches!(
             name.as_str(),
-            "--line" | "--search" | "--from" | "--to" | "--lang"
+            "--line" | "--search" | "--from" | "--to" | "--lang" | "--export"
         ) || name == RESTORE_ARG;
         let value = if takes_value {
             match inline {
@@ -175,6 +177,7 @@ pub fn parse<I: IntoIterator<Item = OsString>>(args: I) -> Result<Options, CliEr
             "--no-follow" => o.view.follow = Some(false),
             "--merge" => o.merge = true,
             "--lang" => o.lang = Some(value),
+            "--export" => o.export = Some(PathBuf::from(value)),
             "--help" | "-h" | "-?" | "/?" => o.help = true,
             "--version" | "-V" => o.version = true,
             n if n == RESTORE_ARG => o.restore = Some(PathBuf::from(value)),
@@ -194,6 +197,9 @@ pub fn parse<I: IntoIterator<Item = OsString>>(args: I) -> Result<Options, CliEr
     }
     if o.view.line.is_some() && o.files.is_empty() && o.restore.is_none() {
         return Err(CliError::NeedsFile("--line".into()));
+    }
+    if o.export.is_some() && o.files.is_empty() && o.restore.is_none() {
+        return Err(CliError::NeedsFile("--export".into()));
     }
     Ok(o)
 }
@@ -239,7 +245,7 @@ pub fn validate(view: &ViewOptions, date_pattern: &str) -> Result<(), CliError> 
 /// its description are separated by a tab (message box) instead of padding (console).
 pub fn help_text(languages: &str, tabs: bool) -> String {
     let meta = |key: &str| format!("<{}>", t!(key));
-    let opts: [(String, String); 16] = [
+    let opts: [(String, String); 17] = [
         ("--line <N>".into(), t!("cli.opt.line")),
         (
             format!("--search {}", meta("cli.meta.text")),
@@ -258,6 +264,10 @@ pub fn help_text(languages: &str, tabs: bool) -> String {
         ("--tail".into(), t!("cli.opt.tail")),
         ("--no-follow".into(), t!("cli.opt.no_follow")),
         ("--merge".into(), t!("cli.opt.merge")),
+        (
+            format!("--export {}", meta("cli.meta.file")),
+            t!("cli.opt.export"),
+        ),
         (
             format!("--lang {}", meta("cli.meta.code")),
             t!("cli.opt.lang", languages = languages),
@@ -284,6 +294,9 @@ pub fn help_text(languages: &str, tabs: bool) -> String {
     s.push_str("\n\n");
     s.push_str(&t!("cli.example"));
     s.push_str("\nrustrace C:\\Windows\\CCM\\Logs\\AppEnforce.log --search 0x87D00324 --filter");
+    s.push_str(
+        "\nrustrace AppEnforce.log AppDiscovery.log --errors --from \"2026-10-27 08:00\" --export errors.xlsx",
+    );
     s
 }
 
@@ -453,6 +466,21 @@ mod tests {
         assert_eq!(
             p(&["--filter=yes", "a.log"]),
             Err(CliError::UnexpectedValue("--filter".into()))
+        );
+        // --export (#32) needs a FILE and takes the target as its value.
+        assert_eq!(
+            p(&["a.log", "--errors", "--export=out.xlsx"])
+                .unwrap()
+                .export,
+            Some(PathBuf::from("out.xlsx"))
+        );
+        assert_eq!(
+            p(&["--export", "out.csv"]),
+            Err(CliError::NeedsFile("--export".into()))
+        );
+        assert_eq!(
+            p(&["a.log", "--export"]),
+            Err(CliError::MissingValue("--export".into()))
         );
         for bad in ["0", "-3", "abc", ""] {
             assert_eq!(

@@ -516,6 +516,29 @@ impl App {
                             action = Some(RowAction::ExportSelected);
                             ui.close();
                         }
+                        if ui
+                            .button(format!("📊 {}", t!("context.export_selected_table")))
+                            .clicked()
+                        {
+                            action = Some(RowAction::ExportSelectedTable);
+                            ui.close();
+                        }
+                        if ui
+                            .button(t!("context.copy_csv"))
+                            .on_hover_text(t!("context.copy_csv.tip"))
+                            .clicked()
+                        {
+                            action = Some(RowAction::CopyCsv);
+                            ui.close();
+                        }
+                        if ui
+                            .button(t!("context.copy_excel"))
+                            .on_hover_text(t!("context.copy_excel.tip"))
+                            .clicked()
+                        {
+                            action = Some(RowAction::CopyForExcel);
+                            ui.close();
+                        }
                         let codes = errcodes::find_codes(e.message);
                         if !codes.is_empty() {
                             ui.separator();
@@ -654,6 +677,11 @@ impl App {
                     self.export_selected = true;
                     self.show_export = true;
                 }
+                RowAction::ExportSelectedTable => {
+                    self.open_table_export(Some(crate::tabexport::Scope::Selected))
+                }
+                RowAction::CopyCsv => self.copy_selection_as_table(false),
+                RowAction::CopyForExcel => self.copy_selection_as_table(true),
                 RowAction::SearchComponent(i) => {
                     self.search_text = self.entries.at(i).component.to_owned();
                     self.search_confirmed = true;

@@ -92,7 +92,7 @@ pub fn find_codes(text: &str) -> Vec<u32> {
     let neg = NEG.get_or_init(|| Regex::new(r"(?:^|[^\w-])(-\d{10})\b").unwrap());
     let named = NAMED.get_or_init(|| {
         Regex::new(
-            r"(?i)\b(?:exit|error|return|result|install(?:ation)?\s+(?:result|exit))\s*code\s*(?:is|was|of|=|:)?\s*\(?\s*(-?\d{1,10})\b",
+            r"(?i)\b(?:(?:exit|error|return|result|install(?:ation)?\s+(?:result|exit))\s*code|error\s+status)\s*(?:is|was|of|=|:)?\s*\(?\s*(-?\d{1,10})\b",
         )
         .unwrap()
     });
@@ -316,5 +316,11 @@ mod tests {
             find_codes("Process terminated with exit code 0"),
             Vec::<u32>::new()
         );
+        // The final status of a Windows Installer log (#40).
+        assert_eq!(
+            find_codes("Installation success or error status: 1603."),
+            vec![1603]
+        );
+        assert!(find_codes("Installation success or error status: 0.").is_empty());
     }
 }

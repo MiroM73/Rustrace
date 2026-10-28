@@ -159,6 +159,11 @@ impl App {
             if self.loading.is_some() && !self.entries.is_empty() {
                 self.progress_ui(ui, false);
             }
+            if self.table_export_running() {
+                ui.separator();
+                ui.label(t!("tabexport.status"));
+                self.table_export_progress(ui, 200.0);
+            }
             if let Some(e) = &self.status_error {
                 ui.separator();
                 ui.colored_label(RED, e);

@@ -39,17 +39,22 @@ rustrace.exe \\CM01\c$\inetpub\logs\LogFiles\W3SVC1\u_ex261028.log
 
 ![The built-in IIS definition](images/iis-management-point/01-builtin-definition.png)
 
-1. and 2. The built-in definition shows the columns in the order of the `#Fields:` header – Server
-   IP, Port and User agent take the space …
-3. … and the most important columns (**Status**, **Substatus**, **Win32 status**,
-   **Time (ms)**) are off to the right; scroll horizontally with the bar below the table or
-   Shift + mouse wheel.
+The built-in definition shows the columns that matter first: date / time, **Status**,
+**Substatus**, **Win32 status**, **Time (ms)**, Client IP, User and the request; the rest of the
+`#Fields:` header (Server IP, Port, User agent, Referer, host, bytes …) follows on the right
+(#41). The screenshot was taken with an older version, which showed the columns in the order of
+the `#Fields:` header:
+
+1. and 2. Server IP, Port and User agent took the space …
+3. … and the status columns were off to the right (scroll horizontally with the bar below the
+   table or Shift + mouse wheel).
 4. The status bar shows the definition in use: *IIS web log (W3C) – iisweb.log.def*.
 
-## Step 2 – Your own column order (a log definition, no programming)
+## Step 2 (optional) – Your own column order (a log definition, no programming)
 
-A log definition is a small text file. Make a copy for the management point with the columns
-you need first: **View → Log format → Open log definitions folder** (your folder is
+The built-in definition already shows the status columns first, so this step is only needed when
+you want another order, shorter headers or fewer columns. A log definition is a small text file.
+Make a copy for the management point with exactly the columns you need: **View → Log format → Open log definitions folder** (your folder is
 `%APPDATA%\RusTrace\logdef`) and save this as `iis-mp.log.def`:
 
 ```
@@ -90,7 +95,8 @@ Then **View → Log format → Reload log definitions** and **Ctrl+F5** (read th
 ![The own definition: status columns first](images/iis-management-point/02-own-definition.png)
 
 1. **Status, Sub, Win32, Time (ms), Client IP, User**, then the request. The columns not listed
-   in `columns` (server IP, port, user agent) are not shown. Column widths can be changed by
+   in `columns` (server IP, port, user agent) are not shown – add `*` at the end of `columns` to
+   keep them after the listed ones (the built-in definition does that). Column widths can be changed by
    dragging the header borders.
 2. The status bar: *IIS web log – management point – iis-mp.log.def*.
 
@@ -218,7 +224,7 @@ rustrace.exe \\CM01\c$\inetpub\logs\LogFiles\W3SVC1\u_ex261028.log --search "^[1
 | Step | What | Shortcut |
 |---|---|---|
 | 1 | Open `u_exYYMMDD.log` – built-in IIS definition | Ctrl+O |
-| 2 | Own definition with the status columns first, reload | View → Log format |
+| 2 | Optional: own definition with your own columns, reload | View → Log format |
 | 3 | Errors only – 500 after 30 s, then 503.2 | – |
 | 4 | Warnings, column filter Sub = `!=2` | Column filters |
 | 5 | 404.3 – MIME type | – |

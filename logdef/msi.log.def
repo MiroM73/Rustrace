@@ -1,0 +1,42 @@
+# RusTrace log definition – Windows Installer verbose log (msiexec /l*v)
+# (e.g. C:\Windows\ccmsetup\Logs\client.msi.log, %TEMP%\MSI*.LOG, the /l*v log of an application)
+#
+# Example lines:
+#   === Verbose logging started: 28.10.2026  08:02:58  Build type: SHIP UNICODE 5.00.10011.00  Calling process: C:\WINDOWS\ccmsetup\ccmsetup.exe ===
+#   MSI (s) (2C:A4) [08:03:01:538]: Note: 1: 2205 2:  3: Error
+#   Action start 8:02:59: LaunchConditions.
+#   Action ended 8:21:31: CcmRegisterHostingConfiguration. Return value 3.
+#   CustomAction CcmRegisterHostingConfiguration returned actual error code 1603
+#
+# The lines carry only a time; the date comes from the "Verbose logging started" line
+# (header.date, in the date format of the OS locale). Lines without a time get the time of the
+# previous line, a time before the previous one by more than 12 hours is on the next day.
+# Every line is its own row (lines of MSI messages that continue on the next line too, e.g.
+# "Error 25150. …" after the "MSI (s)" line), so their severity is their own.
+
+name = Windows Installer log (MSI)
+files = *.msi.log; msi*.log
+detect = ^(=== Verbose logging started: |MSI \([sc]\) \([0-9A-Fa-f]+[:!][0-9A-Fa-f]+\) \[)
+
+pattern = ^(?:MSI \((?P<context>[sc])\) \((?P<thread>[0-9A-Fa-f]+[:!][0-9A-Fa-f]+)\) \[(?P<time>\d{1,2}:\d{2}:\d{2}:\d{3})\]: (?P<message>.*)|(?P<action>Action (?:start|ended) (?P<atime>\d{1,2}:\d{2}:\d{2}): .*)|(?P<header>=== (?:Verbose )?[Ll]ogging (?:started|stopped): \S+\s+(?P<htime>\d{1,2}:\d{2}:\d{2}).*)|(?P<text>.*))$
+unmatched = entry
+
+role.message = message action header text
+role.datetime = time atime htime
+role.thread = thread
+role.severity = message action header text
+
+header.date = ^=== (?:Verbose )?[Ll]ogging started: (?P<date>\S+)
+datetime.format = %Y-%m-%d %H:%M:%S:%3f | %Y-%m-%d %H:%M:%S
+
+# Real failures only: "Return value 3" of an action, "Error 1722." (also after "Product: … --"),
+# a custom action's error code ("returned actual error code 1603", "@@ERR:25150", "is returning
+# 1603"), a failed installation / removal and a non-zero final status.
+# Not errors: the harmless "Note: 1: 2205 2:  3: Error" / 2228 / 2262 lines and "error status: 0".
+severity.error = Return value 3\b|^Error \d+\.|-- Error \d+\.|returned actual error code [1-9]|@@ERR:|is returning [1-9]|(Installation|Removal|Configuration|Update) (operation )?failed|error status: [1-9]
+# "Return value 2" = cancelled by the user.
+severity.warning = Return value 2\b|^Warning \d+\.|-- Warning \d+\.
+
+columns = datetime context thread message
+title.context = MSI
+title.thread = Process:thread

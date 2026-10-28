@@ -198,6 +198,66 @@ Notes for Claude, linked from `CLAUDE.md`.
     Shift+F3 / Shift+F2, #48 rules window width, guides 1–5). `release.ps1` must run under
     PowerShell 7 (`pwsh`): Windows PowerShell 5.1 strips the quotes of the `gh run list --jq`
     filter, so the "waiting for the workflow" step failed after the tag was pushed.
+66. #41 Built-in IIS definition shows the status columns first: new `*` item in the `columns` key
+    of log definitions (= all the other columns in field order, so no `#Fields:` field
+    disappears); `iisweb.log.def` gets `columns = datetime sc-status sc-substatus sc-win32-status
+    time-taken c-ip cs-username message *`. Users with an own copy get the "changed predefined
+    definitions" notice. Tests for the default and a large `#Fields:` set, and for `columns`
+    without `*` (unlisted columns hidden); the IIS guide's step 2 is now optional.
+67. #39 Guides in the program: Help → Guides (📖 submenu, one entry per guide with a translated
+    title, *All guides…* = the index, tooltip "opens the guide (in English) on GitHub"), About
+    window row *Guides*, optional `guide = …` key of log sets (file name of `docs/guides` or a URL
+    / path) shown as 📖 buttons next to the set – the built-in *Application deployment*,
+    *Software updates* and *Client installation* (two guides) sets use it. One table
+    (`src/guides.rs`); a failed open shows the link in the status bar. Tests for URLs / targets,
+    the table against the files and the index, the guides of the built-in sets.
+68. #40 Built-in definition for Windows Installer verbose logs (`msi.log.def`): new `header.date`
+    / `header.date.format` keys (date from a header line, time of every line, rows without a time
+    keep the previous one, midnight roll-over), `role.severity` with several columns; MSI rows of
+    the *Client installation* set now stand between 08:02:58 and 08:07:20 instead of at the top;
+    errors only for real failures (`Return value 3`, `Error NNNN.`, `returned actual error code`,
+    `@@ERR:`, `is returning`, failed installation, `error status: [1-9]`), `Return value 2` =
+    warning, the `Note: 1: 2205 / 2228 / 2262` lines and `error status: 0` stay Info. The error
+    code lookup reads `error status: 1603`; `Error NNNN.` numbers are not looked up (MSI message
+    ids ≠ Win32 codes). Guides client-install (steps 2, 3) and client-msi-1603 (step 4, 7)
+    updated; their screenshots still show the old behaviour (noted in the text). Verified with
+    the guide logs in the release build: merged view places the MSI rows at 08:02:58 …, Info off
+    shows no MSI rows. Tests: MSI lines / dates / roll-over / severities, header date orders,
+    own date format, session reset.
+69. #32 part 1 – table export as CSV: File → Export table (CSV / Excel)… (Ctrl+Shift+E), row context
+    menu → Export selected rows to CSV / Excel…; rows: whole log / shown / selected / bookmarked /
+    highlighted with context (blocks); column checklist with order, remembered per log type,
+    additional columns severity text, source path, highlight rule, bookmark note, error code
+    explanation, raw lines, block; CSV separator (Windows list separator by default), UTF-8 BOM /
+    UTF-8 / UTF-16 LE, header, ISO or UI dates, RFC 4180 quoting, formula-injection guard;
+    background thread on the shared `Arc<LogStore>` with progress and cancel. Verified: unit tests
+    (scopes, cells of every column, column choice, cancel, quoting / guard, separators, encodings);
+    release build on the 400 MB test log: 1 896 613 rows → 258 MB CSV in ~3 s, UI responsive.
+70. #32 part 2 – Excel (.xlsx): own minimal writer (streaming ZIP + inline-string worksheets, no
+    `rust_xlsxwriter`, so no new dependency and no binary growth); typed cells (Excel dates with
+    `yyyy-mm-dd hh:mm:ss.000`, numbers, Δ seconds `0.000`, text never a formula), bold frozen header
+    with AutoFilter, column widths, split at 1 048 576 rows (`Log (2)` …), cells cut at 32 767
+    characters with a notice, optional row colors of rules / severities (light theme). Verified:
+    unit tests (ZIP read back by the updater's unzip, workbook parts, styles, split, truncation,
+    escaping, column names, date serials); Excel 2016 via COM opens the sample and the 1.9 M-row
+    export (two sheets, all rows, Double dates, AutoFilter, frozen header, colors); 135 MB in ~8 s.
+71. #32 part 3 – Excel Summary sheet (version, export time, log type, files, entries, exported rows,
+    search, severities, column filters, time range, counts, first / last time, data sheets, cut
+    cells), Statistics sheet (errors / warnings per component, top 20 error codes with
+    explanation, entries per hour) and optionally one data sheet per source file. Verified: unit
+    tests (counts, sheet order Summary → Statistics → files, rows split by file); Excel 2016 via COM
+    on the merged client-install guide logs: Summary 17 rows, Statistics with 0x80072EE7 × 16 and 4
+    hours, five file sheets (incl. the rotated LocationServices.lo_) with AutoFilter.
+72. #32 part 4 – JSON Lines and HTML report formats, saved presets of the export settings, open
+    the file after the export / Open / Show in folder / Copy path of the last export, Copy as CSV
+    / Copy for Excel of the selected rows (context menu), `--export <file>` on the command line
+    (format by extension, the rows of `--errors` / `--warnings` / `--search --filter` / `--from` /
+    `--to`, no window, console output, exit codes 0 / 1 / 2). Verified: unit tests (JSONL objects,
+    HTML report, presets + old settings, format by extension, `run` for every format + cleanup on
+    cancel, `--export` parsing, batch export of a CMTrace log with `--errors --to`); release build:
+    HTML export with colors and a saved preset in the window, Copy for Excel of 35 selected rows
+    (clipboard checked), `--export` of two merged logs to XLSX (opened by Excel) and of the 400 MB
+    log with `--errors` (95 133 rows, ~5 s), unknown extension → exit code 1. Closes #32.
 
 ## Ideas not done yet (offered by the owner)
 - `--set "<name>"` command-line option for log sets (#27): would need the set loading, the file

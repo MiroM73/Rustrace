@@ -40,16 +40,26 @@ A return code 0 only says that the *installation* worked – registration comes 
    start of the installation is missing.
 4. **Open (4)**.
 
-## Step 2 – Rows without a date
+## Step 2 – The MSI log in the merged view
 
-![Merged view – the MSI log rows come first](images/client-install/02-merged-undated-first.png)
+The lines of the verbose MSI log have only a time (`[08:02:58:887]`, `Action start 8:02:59:`); the
+date is in its first line `=== Verbose logging started: 28.10.2026  08:02:58 …`. The built-in log
+definition *Windows Installer log (MSI)* (`msi.log.def`, #40) takes the date from that line, so
+the rows of `client.msi.log` stand **at their real time** – between 08:02:58 and 08:07:20, after
+ccmsetup downloaded `client.msi` – and the status bar shows *Several formats* (CMTrace + MSI).
+The table gets the columns **MSI** (`s` server / `c` client process) and the process:thread in
+**Thread**.
 
-1. The **File** column: rows of `client.msi.log` stand **at the top** of the merged view …
-2. … because the verbose MSI log has only times (`[08:02:58:887]`) and no date, so RusTrace cannot
-   place them in time; rows without a date/time stay in the order of their own log, before the
-   dated rows.
-3. The status bar: **4 logs merged**, *CMTrace / plain text* – the ConfigMgr logs are CMTrace
-   logs, the MSI log is read as plain text.
+![Merged view – an older version put the MSI log rows first](images/client-install/02-merged-undated-first.png)
+
+The screenshot is from an older version, which read the MSI log as plain text:
+
+1. The **File** column: rows of `client.msi.log` stood **at the top** of the merged view …
+2. … because without a date RusTrace could not place them in time (rows without a date/time stay
+   in the order of their own log, before the dated rows). Other plain-text logs with times only
+   still behave like this – a log definition with `header.date` fixes it (README → Log
+   definitions).
+3. The status bar: **4 logs merged**.
 
 You do not need to untick **Follow end**: as soon as you select a row, following the end is
 paused (orange checkbox, *⏸ Follow end paused* in the status bar) and the view stays where you are.
@@ -61,11 +71,13 @@ Turn **Info** off. Click an error row:
 
 ![Registration errors](images/client-install/03-registration-errors.png)
 
-1. Three "errors" of `client.msi.log`: the two `Note: 1: 2205 … 3: Error` lines are **harmless**
-   (Windows Installer looks up an optional table – they appear in almost every MSI log) and
-   are only marked because the word *error* is in them. The third is the line
-   `Windows Installer installed the product … Installation success or error status: 0` –
-   **success**. So the MSI part is fine.
+1. No errors of `client.msi.log`: the MSI definition marks only real failures (`Return value 3`,
+   `Error 1722.`, `returned actual error code`, `error status: 1603` …). The two
+   `Note: 1: 2205 … 3: Error` lines are **harmless** (Windows Installer looks up an optional
+   table – they appear in almost every MSI log) and the line `Windows Installer installed the
+   product … Installation success or error status: 0` is **success**. The screenshot is from an
+   older version that marked these three lines because the word *error* is in them. So the MSI
+   part is fine.
 2. The real problem: `[RegTask] - Failed to send registration request message. Error:
    0x80072ee7`, together with `LocationServices` *Failed to resolve the name of the management
    point mp01.corp.contoso.local*, repeated.
@@ -182,7 +194,7 @@ know the paths: **File → Open log set… → Client installation**.
 | Step | What | Shortcut |
 |---|---|---|
 | 1 | File → Open log set… → *Client installation* | – |
-| 3 | Info off – registration errors, harmless MSI notes | – |
+| 3 | Info off – registration errors (MSI notes are not errors) | – |
 | 4 | Regex search of the milestones + Filter | Ctrl+F, Ctrl+L |
 | 5 | Set as time reference, Δ time column | right-click |
 | 6 | Bookmarks with notes, bookmarks list | Ctrl+F2, F2 |
