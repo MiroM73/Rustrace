@@ -193,6 +193,8 @@ pub struct App {
     /// The log of every file (index = file id) and the log definition of every log.
     file_sources: Vec<usize>,
     source_defs: Vec<Option<Arc<LogDef>>>,
+    /// Some entry has a Component / Date/time / Thread value (#49: empty ones are not shown).
+    std_filled: [bool; 3],
     /// The logs of a merged view are read with different formats.
     mixed_formats: bool,
     encoding_name: &'static str,
@@ -269,6 +271,10 @@ pub struct App {
     show_rules: bool,
     /// The rules window was shown in the previous frame (#48: start scrolled to the left).
     rules_was_open: bool,
+    /// Rules ticked for the export in the rules window (#51); `Some` while the choice is shown.
+    rules_export_pick: Option<Vec<bool>>,
+    /// Result of the last import / export, shown at the bottom of the rules window (#51).
+    rules_msg: Option<String>,
     show_colors: bool,
     show_help: bool,
     show_about: bool,
@@ -428,6 +434,7 @@ impl App {
             paths: Vec::new(),
             file_sources: Vec::new(),
             source_defs: Vec::new(),
+            std_filled: [false; 3],
             mixed_formats: false,
             encoding_name: "",
             file_size: 0,
@@ -473,6 +480,8 @@ impl App {
             follow: Follow::default(),
             show_rules: false,
             rules_was_open: false,
+            rules_export_pick: None,
+            rules_msg: None,
             show_colors: false,
             show_help: false,
             show_about: false,

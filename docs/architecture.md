@@ -2,7 +2,9 @@
 
 Notes for Claude: how every feature works inside (names of types, functions, settings,
 measurements). Linked from `CLAUDE.md`; read the section of a feature before changing it.
-User-facing descriptions are in `README.md`.
+User-facing descriptions are in `README.md` (overview, download, building) and the documents it
+links in `docs/` (`features.md`, `export.md`, `log-definitions.md`, `log-sets.md`, `languages.md`,
+`command-line.md`, `keyboard-shortcuts.md`, `source-layout.md`, `development.md`, `releasing.md`).
 
 ## Formats
 - Formats: CMTrace `<![LOG[..]LOG]!><time="" date="" component="" type="" thread="">` incl. multi-line,
@@ -218,6 +220,13 @@ User-facing descriptions are in `README.md`.
   the table in all four languages) limited by the main window; `ScrollStyle::solid()` so the
   horizontal bar is visible when needed (floating bars only appear on hover); the horizontal offset
   is reset to 0 when the window opens (`rules_was_open`).
+  Import / export (#51): `config::import_rules` (pure, tested with
+  `docs/guides/rules/msi-verbose-log.json`) matches by name + pattern; an equal rule (after
+  `fill_missing_dark`, ignoring `enabled`) is skipped, a different one replaced in place keeping
+  `enabled`, others appended → `RuleImport { added, updated, skipped }` shown in `App::rules_msg`
+  (cleared when the window closes). Export… toggles `App::rules_export_pick: Option<Vec<bool>>`
+  (one flag per rule, resized to the rule count, moved with ⬆ ⬇ 🗑 via `move_rule`, reset by
+  Restore defaults); `picked_rules` writes only the ticked ones.
 - Themes: system / light / dark (View menu + quick toggle button in the toolbar).
 - Zoom: Ctrl + mouse wheel over the log text (table, details message) → `cfg.font_size` (6–48);
   elsewhere → whole-UI `zoom_factor` (0.5–3.0, saved as `cfg.ui_zoom`, also Ctrl+plus/minus/0).
@@ -274,6 +283,15 @@ User-facing descriptions are in `README.md`.
   value inside each column label (`rfind`) gets the spans, `build_job` with the body font.
 
 ## Table
+- Empty standard columns (#49): `App::table_columns` = `columns()` minus Component / Date/time /
+  Thread when `std_filled` says no entry has a value there (`visible_columns`), only when every
+  log of the view uses the built-in parser (`source_defs` all `None`) – log definitions keep all
+  their columns. `std_filled` is computed by `filled_columns` (stops when all three are found,
+  i.e. at the first CMTrace entry): from 0 after a full read (`Reset`), from `changed` after an
+  append, so a column appears with the first value (a full read arrives at once – no flicker).
+  Used by the table and Copy as table; `columns()` (column filters, table export choice per log
+  type, details pane – which skips empty values anyway) stays complete. The table id salt has
+  the column count, so the widths start fresh when a column appears.
 - Horizontal scrolling of the table (`App::table`): egui_extras tables only scroll vertically, so
   the table is laid out in a child Ui shifted left by `table_scroll_x` and clipped to the visible
   rect – its right edge with the vertical scroll bar stays in view; a separate horizontal
@@ -516,7 +534,7 @@ User-facing descriptions are in `README.md`.
   program), names via `AssocQueryStringW`. Test `register_and_unregister` uses its own HKCU key.
 
 ## Tests and benchmarks
-- `cargo test` (133 tests: Enter after search as you type (#47), IIS Win32 status texts (#43), numeric column filters (#42), table export scopes / cells / columns / cancel / CSV / XLSX / ZIP writer / statistics / sheet per file / JSONL / HTML / presets / `--export` (#32), MSI verbose log / header dates (#40), guides table / URLs / log set guides (#39), IIS column order with `*` (#41), follow end pause / resume (#37), rules window default width (#48), keyboard shortcut order (Shift+F3 / Shift+F2 not taken by F3 / F2, #46), log sets (set file parsing / translations / built-in sets, variables, loading priorities, file checks, remote computer names / variables / drive letters / share roots, network error codes, recent computers), HTTP status lookup / class fallback / lookup input parsing and ambiguity / cell values, status column keys of log definitions, command-line parsing (file association, all options, errors, `--restore`, language / time / regex checks, help text), overview buckets incremental = full / pixel runs, readable export with Δ, durations, match bits set / iterate, bookmark file id remap, update releases list / missed versions / check setting migration, merged logs (order by time, appended older rows, formats + rotated parts + re-read, single log unchanged, interleave), store copy_entry / split_off, raw lines of entries (all formats / encodings), filter (parallel = sequential, match bits), date column filter = text filter, updates (versions, release JSON, notes, sha256 file, ZIP, install, restore state), icon / .ico layout, search as you type threshold, status-bar position percentage, file association (registry in an own HKCU test key), search history, store drop_front / move to temp file, rotated parts (naming, merge on open, rotation while watching, replaced
+- `cargo test` (138 tests: empty standard columns of plain text hidden (#49), highlight rules import without duplicates / export of ticked rules (#51), Enter after search as you type (#47), IIS Win32 status texts (#43), numeric column filters (#42), table export scopes / cells / columns / cancel / CSV / XLSX / ZIP writer / statistics / sheet per file / JSONL / HTML / presets / `--export` (#32), MSI verbose log / header dates (#40), guides table / URLs / log set guides (#39), IIS column order with `*` (#41), follow end pause / resume (#37), rules window default width (#48), keyboard shortcut order (Shift+F3 / Shift+F2 not taken by F3 / F2, #46), log sets (set file parsing / translations / built-in sets, variables, loading priorities, file checks, remote computer names / variables / drive letters / share roots, network error codes, recent computers), HTTP status lookup / class fallback / lookup input parsing and ambiguity / cell values, status column keys of log definitions, command-line parsing (file association, all options, errors, `--restore`, language / time / regex checks, help text), overview buckets incremental = full / pixel runs, readable export with Δ, durations, match bits set / iterate, bookmark file id remap, update releases list / missed versions / check setting migration, merged logs (order by time, appended older rows, formats + rotated parts + re-read, single log unchanged, interleave), store copy_entry / split_off, raw lines of entries (all formats / encodings), filter (parallel = sequential, match bits), date column filter = text filter, updates (versions, release JSON, notes, sha256 file, ZIP, install, restore state), icon / .ico layout, search as you type threshold, status-bar position percentage, file association (registry in an own HKCU test key), search history, store drop_front / move to temp file, rotated parts (naming, merge on open, rotation while watching, replaced
   file), export segments by file, time range bounds, column filter syntax, parsers, chunked/ANSI/UTF-16 reading, log definitions (CBS, DISM, IIS,
   Exchange connectivity / CSV separator, choice by name/content, appending across refreshes), store (32-byte record, ISO ↔ ms, push /
   truncate / append, mapped temp file growing past 64 MB, interner), export incl. end-to-end and

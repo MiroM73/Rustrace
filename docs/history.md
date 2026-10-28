@@ -294,6 +294,38 @@ Notes for Claude, linked from `CLAUDE.md`.
     #43 IIS Win32 status texts, #44 search highlight in all cells, #47 Enter after search as you
     type). `release.ps1 1.1.6 -Publish -Yes` under pwsh: tests, tag, GitHub build (~10 min),
     published with the .exe / .zip and their .sha256.
+78. #57 README split: `README.md` (920 → ~110 lines) keeps the AI notice, description, guides,
+    an "at a glance" list, download, building, a documentation table and the license; the rest moved
+    unchanged to `docs/features.md` (bold feature titles became `##` headings, contents line; also
+    start-up window / About, updates, default app, settings path), `docs/export.md`,
+    `log-definitions.md`, `log-sets.md`, `languages.md`, `command-line.md`,
+    `keyboard-shortcuts.md`, `source-layout.md`, `development.md` (tests, CI, test logs,
+    benchmarks, build details), `releasing.md`; each starts with a summary and "← Back to README".
+    Links fixed in the new docs, guides `failed-app-install.md` / `client-install.md`,
+    `architecture.md`, `CLAUDE.md`; the program itself had no README section references.
+    Verified: a script checked that every non-empty line of the old README is in the new files
+    (except the reworded headings / links) and that every relative link and `#anchor` in README,
+    `docs/*.md` and the guides resolves.
+79. #51 Highlight rules import / export: Import… no longer appends duplicates – a rule with the
+    same name and pattern is skipped (same settings) or updated in place (other colors, scope …,
+    the On state of the existing rule kept); the window reports "N added, N updated, N already
+    present (skipped)". Export… shows a checkbox per rule (all ticked, All / None) and writes only
+    the ticked rules. Import from a URL (optional in the issue) not done. Verified: unit tests
+    `importing_rules_twice_creates_no_duplicates` (the guide's msi-verbose-log.json twice →
+    3 rules, newer colors → updated, dark colors filled), `exporting_ticked_rules_only`,
+    `export_choice_moves_with_the_rule`; release build driven by clicks: importing the file twice
+    → 3 added, then 0 added / 3 skipped, 6 rules; None + the three MSI rules ticked → the written
+    JSON holds exactly those three (config.json backed up and restored).
+80. #49 Plain text logs: the empty Component, Date / time and Thread columns are hidden – a log
+    read by the built-in parser without values there shows only Line and Message (full width).
+    Per view: in a merged view a column stays when any log fills it; recomputed for appended rows
+    only (a value makes the column appear); log definitions (incl. MSI) and CMTrace unchanged.
+    View → Columns menu (optional) not done. Verified: unit tests
+    `empty_standard_columns_are_hidden`, `filled_columns_of_plain_text_and_cmtrace` (a real
+    plain text file, plain text merged with a CMTrace log, appended rows); release build
+    screenshots: a 5-line free-text `test.log` → Line + Message only; `test.log` + AppEnforce.log
+    → File, Message, Component, Date / time, Thread; client.msi.log → Date / time, MSI,
+    Process:thread, Message as before.
 
 ## Ideas not done yet (offered by the owner)
 - `--set "<name>"` command-line option for log sets (#27): would need the set loading, the file

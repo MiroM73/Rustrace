@@ -181,7 +181,7 @@ impl App {
         let ui = &mut child;
 
         // The columns come from the log format; every layout keeps its own column widths.
-        let columns = self.columns();
+        let columns = self.table_columns();
         let mut tb = TableBuilder::new(ui)
             .id_salt(("log_table", &self.schema.name, columns.len()))
             .striped(true)

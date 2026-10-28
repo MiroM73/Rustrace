@@ -794,6 +794,11 @@ impl LogStore {
         (ts >= TS_RAW_END).then_some(ts)
     }
 
+    /// The entry has a date/time (ISO or the original text).
+    pub fn has_datetime(&self, i: usize) -> bool {
+        self.recs[i].ts != TS_NONE
+    }
+
     pub fn datetime(&self, i: usize) -> String {
         match self.recs[i].ts {
             TS_NONE => String::new(),

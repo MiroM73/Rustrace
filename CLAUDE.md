@@ -3,8 +3,11 @@
 ## Working with the owner
 - The owner (Miroslav, GitHub `MiroM73`) talks to Claude in **Slovak, informal "ty" form**. Answer in Slovak.
 - Everything inside the repository is in **English**: code, comments, README, commit messages.
-- After every finished change: run the tests, verify the behaviour, update `README.md`, and make a
-  commit with a **detailed English commit message** (what changed, why, how it was verified).
+- After every finished change: run the tests, verify the behaviour, update the user documentation
+  (`README.md` is only a short overview – feature details go into the documents it links in `docs/`:
+  `features.md`, `export.md`, `log-definitions.md`, `log-sets.md`, `languages.md`,
+  `command-line.md`, `keyboard-shortcuts.md`, `source-layout.md`, `development.md`,
+  `releasing.md`), and make a commit with a **detailed English commit message** (what changed, why, how it was verified).
 - The **first block of the README** states that everything (code, logic, architecture, UI design,
   translations, tests, scripts, docs) was created by Claude (Claude Opus 5.5, `claude-opus-5-5`,
   Anthropic) and the owner only specified requirements. Keep it at the top when editing the README.
@@ -16,7 +19,7 @@
 ## What the application is
 A native desktop log viewer in Rust (eframe/egui 0.37) modelled on **CMTrace** from Microsoft
 SCCM / ConfigMgr. Single self-contained executable; main target is Windows. User-facing details
-are in `README.md`.
+are in `docs/features.md` and the other documents linked from `README.md`.
 
 - **`docs/architecture.md`** – how every feature works inside. Read the section of a feature
   before changing it, and update it with the change.
@@ -34,7 +37,7 @@ Feature index (file → section of `docs/architecture.md`):
 - Details pane message / raw line – `app/details.rs` → Raw line
 - Renderer (glow, wgpu fallback), repaint rules – `src/main.rs` → Renderer and refresh frames
 - Search, filters, background re-filter, date column filter – `src/filter.rs`, `src/colfilter.rs`, `app/filter.rs` → Filtering
-- Table, horizontal scrolling, column filters – `app/table.rs` → Table
+- Table, horizontal scrolling, column filters, empty plain-text columns hidden (#49) – `app/table.rs`, `app/loading.rs` → Table
 - Overview strip – `src/overview.rs`, `app/strip.rs` → Overview strip
 - Δ time column – `app/delta.rs` → Delta column
 - Several selected rows, copying – `app/selection.rs` → Selection
@@ -88,7 +91,7 @@ Feature index (file → section of `docs/architecture.md`):
   `egui::MenuBar::new().ui(..)`, `ui.close()`, `egui::Id::unique(..)` (not `Id::new`).
 
 ## Commands
-- `cargo build --release` → `target\release\rustrace.exe`; `cargo test` (133 tests; what they
+- `cargo build --release` → `target\release\rustrace.exe`; `cargo test` (138 tests; what they
   cover: `docs/architecture.md` → Tests and benchmarks).
 - `cargo fmt` + `cargo clippy --all-targets --locked -- -D warnings` – the code is rustfmt-clean and
   clippy-clean; CI (`.github/workflows/ci.yml`) fails otherwise. Formatting-only commits go into

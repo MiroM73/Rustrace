@@ -57,8 +57,8 @@ The screenshot is from an older version, which read the MSI log as plain text:
 1. The **File** column: rows of `client.msi.log` stood **at the top** of the merged view …
 2. … because without a date RusTrace could not place them in time (rows without a date/time stay
    in the order of their own log, before the dated rows). Other plain-text logs with times only
-   still behave like this – a log definition with `header.date` fixes it (README → Log
-   definitions).
+   still behave like this – a log definition with `header.date` fixes it ([Log
+   definitions](../log-definitions.md)).
 3. The status bar: **4 logs merged**.
 
 You do not need to untick **Follow end**: as soon as you select a row, following the end is
