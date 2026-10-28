@@ -1,6 +1,6 @@
 [package]
 name = "rustrace"
-version = "1.0.0"
+version = "1.0.8"
 edition = "2024"
 license = "Unlicense"
 description = "A CMTrace-style log viewer"

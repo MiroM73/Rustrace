@@ -3112,7 +3112,7 @@ dependencies = [
 
 [[package]]
 name = "rustrace"
-version = "1.0.0"
+version = "1.0.8"
 dependencies = [
  "chrono",
  "crc32fast",
