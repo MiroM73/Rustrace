@@ -1,6 +1,22 @@
 //! Keyboard shortcuts and drag & drop.
+//!
+//! Note on shortcut order (#46): egui's `consume_key` matches modifiers with
+//! `Modifiers::matches_logically`, which ignores *extra* Shift and Alt. A pattern without Shift
+//! therefore also consumes the Shift variant of the same key, so the more specific shortcut
+//! (`SHIFT`, `COMMAND | SHIFT`) must always be consumed first. Ctrl / Cmd is matched exactly,
+//! so `COMMAND` vs `NONE` pairs (F5 / Ctrl+F5, F2 / Ctrl+F2) do not depend on the order.
 
 use crate::app::*;
+
+/// Consumes `key` and `Shift+key` and returns `(plain, shifted)`.
+///
+/// `Shift+key` is checked first: `consume_key(Modifiers::NONE, key)` would otherwise swallow it
+/// too (see the module note, #46).
+fn consume_key_and_shifted(i: &mut egui::InputState, key: Key) -> (bool, bool) {
+    let shifted = i.consume_key(Modifiers::SHIFT, key);
+    let plain = i.consume_key(Modifiers::NONE, key);
+    (plain, shifted)
+}
 
 impl App {
     pub(in crate::app) fn handle_input(&mut self, ctx: &egui::Context) {
@@ -23,15 +39,14 @@ impl App {
         if export_key && self.cur_path.is_some() {
             self.show_export = true;
         }
-        let (open, f5, ctrl_f5, ctrl_f, f3, sh_f3, pause, ctrl_h, ctrl_l, ctrl_e) =
-            ctx.input_mut(|i| {
+        let (open, f5, ctrl_f5, ctrl_f, (f3, sh_f3), pause, ctrl_h, ctrl_l, ctrl_e) = ctx
+            .input_mut(|i| {
                 (
                     i.consume_key(Modifiers::COMMAND, Key::O),
                     i.consume_key(Modifiers::NONE, Key::F5),
                     i.consume_key(Modifiers::COMMAND, Key::F5),
                     i.consume_key(Modifiers::COMMAND, Key::F),
-                    i.consume_key(Modifiers::NONE, Key::F3),
-                    i.consume_key(Modifiers::SHIFT, Key::F3),
+                    consume_key_and_shifted(i, Key::F3),
                     i.consume_key(Modifiers::COMMAND, Key::P),
                     i.consume_key(Modifiers::COMMAND, Key::H),
                     i.consume_key(Modifiers::COMMAND, Key::L),
@@ -70,11 +85,10 @@ impl App {
             self.recompile_search();
         }
         // Bookmarks (#22): Ctrl+F2 toggles the selected row, F2 / Shift+F2 = next / previous.
-        let (ctrl_f2, f2, sh_f2) = ctx.input_mut(|i| {
+        let (ctrl_f2, (f2, sh_f2)) = ctx.input_mut(|i| {
             (
                 i.consume_key(Modifiers::COMMAND, Key::F2),
-                i.consume_key(Modifiers::NONE, Key::F2),
-                i.consume_key(Modifiers::SHIFT, Key::F2),
+                consume_key_and_shifted(i, Key::F2),
             )
         });
         if ctrl_f2 && let Some(i) = self.selected {
@@ -145,6 +159,49 @@ impl App {
             if copy_table {
                 self.copy_table(ctx);
             }
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn input_with_key(key: Key, modifiers: Modifiers) -> egui::InputState {
+        let mut i = egui::InputState::default();
+        i.modifiers = modifiers;
+        i.events.push(egui::Event::Key {
+            key,
+            physical_key: None,
+            pressed: true,
+            repeat: false,
+            modifiers,
+        });
+        i
+    }
+
+    #[test]
+    fn shift_f3_and_shift_f2_are_not_taken_by_the_plain_shortcut() {
+        for key in [Key::F3, Key::F2] {
+            let mut i = input_with_key(key, Modifiers::SHIFT);
+            assert_eq!(
+                consume_key_and_shifted(&mut i, key),
+                (false, true),
+                "Shift+{key:?}"
+            );
+            let mut i = input_with_key(key, Modifiers::NONE);
+            assert_eq!(
+                consume_key_and_shifted(&mut i, key),
+                (true, false),
+                "{key:?}"
+            );
+            // Ctrl+key is a different shortcut (Ctrl+F2 = toggle bookmark) and stays untouched.
+            let mut i = input_with_key(key, Modifiers::COMMAND);
+            assert_eq!(
+                consume_key_and_shifted(&mut i, key),
+                (false, false),
+                "Ctrl+{key:?}"
+            );
         }
     }
 }
