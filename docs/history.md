@@ -149,6 +149,15 @@ Notes for Claude, linked from `CLAUDE.md`.
     #44 search highlight in all cells. Note: the screenshot build splits file names on `\` too
     (Windows-like names on Linux); log definitions match by `Path::file_name`, so on Linux the
     own IIS definition needed `detect` to be chosen – not an issue on Windows.
+60. Guide 5 *The ConfigMgr client installation fails* (ccmsetup.log: 1618 then 1603 with the failed
+    action and the error messages in the details pane, resizing the details pane; client.msi.log:
+    misleading keyword errors, MSI highlight rules shipped as `docs/guides/rules/msi-verbose-log.json`,
+    the first `Return value 3`, selection → Copy original lines / Explain code, WMI fix);
+    generator `scripts/guide_logs/client_msi_1603.py`. Issues found: #46 Shift+F3 / Shift+F2 go
+    forward (egui `consume_key` ignores extra Shift – NONE pattern checked first), #47 Enter after
+    search-as-you-type skips the first match, #48 rules window columns cut off, #49 empty columns
+    of plain text logs, #50 severity from highlight rules, #51 rules import duplicates / partial
+    export.
 
 ## Ideas not done yet (offered by the owner)
 - `--set "<name>"` command-line option for log sets (#27): would need the set loading, the file
