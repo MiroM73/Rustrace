@@ -136,6 +136,19 @@ Notes for Claude, linked from `CLAUDE.md`.
     highlight rule for the update ID / KB / CBS package, raw line, export of the visible rows,
     codes table for scan / install errors). `scripts/gen_guide_logs.py` now runs one generator per
     guide from `scripts/guide_logs/` (the first guide's logs are unchanged, checked by checksum).
+59. (2026-10-28) Guides 3 and 4: *A new ConfigMgr client does not register* (client installation log
+    set with a rotated part, rows without a date, harmless MSI notes, regex milestones, time
+    reference, bookmarks list, error code lookup) and *The management point / distribution point is
+    not healthy* (IIS log: own log definition with the status columns first, 500 after 30 s,
+    503.2 tooltip, column filter `!=2`, 401.1 + 1326, 404.3, regex search of slow requests);
+    generators `scripts/guide_logs/client_install.py`, `iis_management_point.py`. Issues found
+    while writing them: #40 MSI verbose log definition (rows at the top of a merged view, false
+    errors), #41 IIS column order, #42 numeric column filters, #43 IIS Win32 status texts (the
+    1326 / 50 texts in the IIS screenshots come from a temporary external `en.lang` override –
+    without it the Linux build shows "Unknown code"; on Windows the system message is shown),
+    #44 search highlight in all cells. Note: the screenshot build splits file names on `\` too
+    (Windows-like names on Linux); log definitions match by `Path::file_name`, so on Linux the
+    own IIS definition needed `detect` to be chosen – not an issue on Windows.
 
 ## Ideas not done yet (offered by the owner)
 - `--set "<name>"` command-line option for log sets (#27): would need the set loading, the file
