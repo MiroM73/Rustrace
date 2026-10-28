@@ -246,6 +246,11 @@ impl LogSet {
         self.sources.iter().map(|s| s.file_size).sum()
     }
 
+    /// At least one log has been read (the next read is a refresh, not the first load).
+    pub fn has_read(&self) -> bool {
+        self.loaded.iter().any(|&l| l)
+    }
+
     /// Logs that could not be read in the last round of a merged view.
     pub fn errors(&self) -> &[String] {
         &self.errors
@@ -338,6 +343,9 @@ impl LogSet {
     /// One log: its results with the provisional entries as a store.
     fn poll_single(&mut self, progress: &Progress) -> std::io::Result<ReadResult> {
         let res = self.sources[0].poll(progress)?;
+        if !matches!(res, PollResult::Unchanged) {
+            self.loaded[0] = true;
+        }
         let src = &self.sources[0];
         self.files = src.files().to_vec();
         self.file_sources = vec![0; self.files.len()];
@@ -809,6 +817,7 @@ mod tests {
         let p = dir.join("x.log");
         std::fs::write(&p, "b 2\na 1\npartial").unwrap();
         let mut set = LogSet::new(std::slice::from_ref(&p), false);
+        assert!(!set.has_read());
         let ReadResult::Reset {
             committed,
             provisional,
@@ -820,6 +829,13 @@ mod tests {
         assert_eq!((committed.message(0), committed.message(1)), ("b 2", "a 1"));
         assert_eq!(provisional.message(0), "partial");
         assert_eq!(set.files().len(), 1);
+        // The next read is a refresh (the export is not blocked by it, #38).
+        assert!(set.has_read());
+        assert!(matches!(
+            set.poll(&Progress::default()).unwrap(),
+            ReadResult::Unchanged
+        ));
+        assert!(set.has_read());
         std::fs::remove_dir_all(&dir).ok();
     }
 }

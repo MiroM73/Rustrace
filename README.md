@@ -347,6 +347,9 @@ the version information into the exe; this uses the resource compiler `rc.exe` o
 - order of processing: highlighted rows → time filter → context ranges merged → older context
   clipped → last N blocks
 - writing runs in a background thread; settings are remembered
+- the automatic refresh does not have to be paused: the export takes the rows the preview shows;
+  only while the log is read from the beginning (first load, full reload) the Export… button waits
+  with "Reading the log…"
 
 **Search**
 - text or regex, Aa = match case; the number of matches (or an invalid-regex warning) and the ✖ clear

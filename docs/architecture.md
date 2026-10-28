@@ -320,6 +320,13 @@ User-facing descriptions are in `README.md`.
   context always from the whole file – the owner's expectation, an earlier variant that also took
   context only from visible rows was rejected). Order: hits → time filter → merge → clip older
   context → last N.
+- Export… is disabled only by a running export or a **full read** (`Loading::full`, set in
+  `start_poll` from `!LogSet::has_read()` – first load, Ctrl+F5, a new source after a cancel),
+  shown with a spinner and "Reading the log…" (`export.reading`). Refresh reads do not block it
+  (#38): with auto refresh on `loading` is `Some` almost all the time (an `Unchanged` read requests
+  no repaint, its result is taken over on the next scheduled frame, which starts the next read),
+  and `start_export` copies everything it needs (blocks, lines, file paths) before the thread
+  starts. `LogSet::loaded` is set for a single log too (`poll_single`).
 
 ## Updates
 - **Updates** (#15, #31, `src/update.rs`, `src/http.rs`): Help → Check for updates; GitHub API

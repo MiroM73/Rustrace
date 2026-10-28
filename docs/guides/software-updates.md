@@ -148,8 +148,7 @@ log file – useful when you want to quote it, or when the parsed columns hide s
 
 ## Step 8 – Export the deployment for a ticket
 
-Press **Ctrl+P** to pause the automatic refresh, then **File → Export highlighted rows with
-context…** (Ctrl+Shift+S):
+Open **File → Export highlighted rows with context…** (Ctrl+Shift+S):
 
 ![Export of the rows shown in the table](images/software-updates/08-export-visible-rows.png)
 
@@ -161,7 +160,7 @@ context…** (Ctrl+Shift+S):
 4. The preview: **45 rows in 8 blocks** of consecutive rows (the hidden CSI rows split them). In
    the file every part of a block that comes from one log starts with a separator line with the
    file name and its line numbers, e.g. `-------- UpdatesDeployment.log: 16 – 24 --------`.
-5. **Export…** and choose the file; **Ctrl+P** resumes the refresh.
+5. **Export…** and choose the file (the automatic refresh may keep running).
 
 ## Command line
 
@@ -216,4 +215,4 @@ Get-CimInstance Win32_LogicalDisk -ComputerName PC0815 -Filter "DeviceID='C:'" |
 | 5 | Highlight rule for the update ID, KB and package | Ctrl+H |
 | 6 | The CBS error and the *Info* row just above it | – |
 | 7 | Raw line in the details pane | – |
-| 8 | Pause, export the rows shown | Ctrl+P, Ctrl+Shift+S |
+| 8 | Export the rows shown | Ctrl+Shift+S |

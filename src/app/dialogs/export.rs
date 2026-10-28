@@ -329,7 +329,10 @@ impl App {
                 ));
                 ui.add_space(4.0);
                 ui.horizontal(|ui| {
-                    let busy = self.export_job.is_some() || self.loading.is_some();
+                    // A refresh read (almost always pending with auto refresh on) does not
+                    // block the export: it works on the entries already in memory (#38).
+                    let reading = self.loading.as_ref().is_some_and(|l| l.full);
+                    let busy = self.export_job.is_some() || reading;
                     if ui
                         .add_enabled(
                             rows > 0 && !busy,
@@ -342,6 +345,9 @@ impl App {
                     if self.export_job.is_some() {
                         ui.spinner();
                         ui.label(t!("export.running"));
+                    } else if reading {
+                        ui.spinner();
+                        ui.label(t!("export.reading"));
                     } else if since_invalid {
                         ui.colored_label(RED, t!("export.since.fix"));
                     } else if rows == 0 {
