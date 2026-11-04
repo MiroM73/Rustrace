@@ -46,6 +46,7 @@ mod menu;
 mod selection;
 mod statusbar;
 mod strip;
+mod sync;
 mod tabexport;
 mod table;
 mod toolbar;
@@ -182,6 +183,12 @@ pub struct App {
     cfg: Config,
     cfg_dirty: bool,
     last_save: Instant,
+    /// The settings file as last read or written; other instances' changes are compared with it.
+    cfg_base: serde_json::Value,
+    /// Set by the watcher thread when the settings file changes.
+    cfg_changed: Arc<AtomicBool>,
+    /// The UI zoom of the previous frame (egui applies a new zoom only in the next frame).
+    ui_zoom_seen: f32,
 
     ctx: egui::Context,
     /// While loading, the source is moved into the reader thread (then it is `None`).
@@ -424,6 +431,9 @@ impl App {
             cfg.rules = Config::default_rules();
         }
         let mut app = Self {
+            cfg_base: cfg.to_value(),
+            cfg_changed: sync::watch_settings_file(cc.egui_ctx.clone()),
+            ui_zoom_seen: 1.0,
             cfg,
             cfg_dirty: false,
             last_save: Instant::now(),
@@ -551,6 +561,7 @@ impl App {
             .ui_zoom
             .clamp(*UI_ZOOM_RANGE.start(), *UI_ZOOM_RANGE.end());
         cc.egui_ctx.set_zoom_factor(zoom);
+        app.ui_zoom_seen = zoom;
         app.recompile_rules();
         let has_files = !paths.is_empty();
         if has_files {
@@ -593,9 +604,12 @@ impl App {
             }
             self.cfg_dirty = true;
         }
-        if (ctx.zoom_factor() - self.cfg.ui_zoom).abs() > 0.001 {
-            self.cfg.ui_zoom = ctx.zoom_factor();
-            self.cfg_dirty = true;
+        if (ctx.zoom_factor() - self.ui_zoom_seen).abs() > 0.001 {
+            self.ui_zoom_seen = ctx.zoom_factor();
+            if (self.ui_zoom_seen - self.cfg.ui_zoom).abs() > 0.001 {
+                self.cfg.ui_zoom = self.ui_zoom_seen;
+                self.cfg_dirty = true;
+            }
         }
     }
 
@@ -684,6 +698,7 @@ impl eframe::App for App {
         }
         self.check_filter_job();
         self.check_loading();
+        self.check_shared_settings(&ctx);
         self.handle_input(&ctx);
         self.tick_auto_refresh(&ctx);
         self.update_title(&ctx);
@@ -733,7 +748,7 @@ impl eframe::App for App {
         // Save settings (debounced, so we do not write on every mouse move).
         let closing = ctx.input(|i| i.viewport().close_requested());
         if self.cfg_dirty && (closing || self.last_save.elapsed() > Duration::from_millis(800)) {
-            if let Err(e) = self.cfg.save() {
+            if let Err(e) = self.save_settings(&ctx) {
                 self.status_error = Some(t!("error.save_settings", error = e));
             }
             self.cfg_dirty = false;

@@ -71,7 +71,7 @@ impl App {
                         eprintln!("update: {w}");
                     }
                     // The settings first, the new program reads them.
-                    let _ = self.cfg.save();
+                    let _ = self.save_settings(ctx);
                     self.cfg_dirty = false;
                     update::restart(&exe, &self.session_state(ctx))
                         .map_err(|e| t!("update.restart_failed", error = e))

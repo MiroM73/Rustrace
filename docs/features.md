@@ -400,3 +400,10 @@ set it as the default app again (the window warns when another copy is registere
 
 Settings and rules are saved automatically to `%APPDATA%\RusTrace\config.json`
 (Linux: `~/.config/RusTrace/config.json`).
+
+**Several running instances share their settings**: a change made in one window (theme,
+language, zoom, font size, highlight rules, colors, refresh interval, View menu options, search
+history, recent files, export settings, …) appears in the other running RusTrace windows within
+about a second. Settings changed in two windows at the same time are merged per setting – a
+window never overwrites a setting it did not change itself. What belongs to the open log (the
+log itself, search text, filters, selection, bookmarks) stays per window.

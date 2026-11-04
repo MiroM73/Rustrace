@@ -333,6 +333,19 @@ Notes for Claude, linked from `CLAUDE.md`.
     ticked rules, #49 empty plain-text columns hidden). `release.ps1 1.1.9 -Publish -Yes` under
     pwsh: tests, tag, GitHub build, published with the .exe / .zip and their .sha256; release notes
     (What's new / changed / fixed / removed) set with `gh release edit`.
+83. Settings shared by running instances: a settings change in one window shows up in the other
+    running RusTrace windows within ~1 s (`app/sync.rs`). The settings file is written atomically
+    (temporary file + rename), a watcher thread checks its time / size every second, changes are
+    merged per top-level setting against the file as last read / written (`config::merge_settings`,
+    so a window never overwrites settings it did not change) and applied with their side effects
+    (theme, UI zoom – egui applies it one frame later, so `handle_zoom` compares with the zoom of
+    the previous frame –, language, rules, overview, follow end, memory limit, log definitions,
+    re-read for keyword severity / rotated parts / definition sources). Unit test
+    `settings_of_two_instances_are_merged`. Verified with two release instances driven by a
+    script (config.json backed up / restored): an external atomic write of `theme = dark` turned
+    both dark; Ctrl+P + Ctrl+= in A saved `auto_refresh = false`, `ui_zoom = 1.1` and kept the
+    dark theme, B did not revert them; Ctrl+P in B then wrote `auto_refresh = true` (B had taken
+    over A's pause); no temporary files left. Built with rustc 1.99.1 (egui 0.37 needs ≥ 1.95).
 
 ## Ideas not done yet (offered by the owner)
 - `--set "<name>"` command-line option for log sets (#27): would need the set loading, the file
