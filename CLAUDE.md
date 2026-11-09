@@ -36,7 +36,8 @@ Feature index (file → section of `docs/architecture.md`):
 - Compact store, temp file, memory limit – `src/store.rs`, `app/loading.rs` → Compact storage, Memory limits
 - Details pane message / raw line – `app/details.rs` → Raw line
 - Renderer (glow, wgpu fallback), repaint rules – `src/main.rs` → Renderer and refresh frames
-- Search, filters, background re-filter, date column filter, column filter AND / NOT (#61) – `src/filter.rs`, `src/colfilter.rs`, `app/filter.rs` → Filtering
+- Search, filters, background re-filter, date column filter, column filter AND / NOT (#61),
+  interned-value tables / narrowing / search cache / `u32` rows (#33) – `src/filter.rs`, `src/colfilter.rs`, `app/filter.rs` → Filtering
 - Table, horizontal scrolling, column filters, empty plain-text columns hidden (#49) – `app/table.rs`, `app/loading.rs` → Table
 - Overview strip – `src/overview.rs`, `app/strip.rs` → Overview strip
 - Δ time column – `app/delta.rs` → Delta column
@@ -91,7 +92,7 @@ Feature index (file → section of `docs/architecture.md`):
   `egui::MenuBar::new().ui(..)`, `ui.close()`, `egui::Id::unique(..)` (not `Id::new`).
 
 ## Commands
-- `cargo build --release` → `target\release\rustrace.exe`; `cargo test` (150 tests; what they
+- `cargo build --release` → `target\release\rustrace.exe`; `cargo test` (154 tests; what they
   cover: `docs/architecture.md` → Tests and benchmarks).
 - `cargo fmt` + `cargo clippy --all-targets --locked -- -D warnings` – the code is rustfmt-clean and
   clippy-clean; CI (`.github/workflows/ci.yml`) fails otherwise. Formatting-only commits go into

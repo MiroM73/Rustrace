@@ -312,7 +312,7 @@ impl App {
                 body.rows(row_h, self.filtered.len(), |mut row| {
                     let r = row.index();
                     drawn = Some(drawn.map_or((r, r), |(a, b)| (a.min(r), b.max(r))));
-                    let idx = self.filtered[r];
+                    let idx = self.row_entry(r);
                     let e = self.entries.at(idx);
                     let is_sel = self.sel.get(idx);
                     row.set_selected(is_sel);

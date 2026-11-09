@@ -381,6 +381,19 @@ Notes for Claude, linked from `CLAUDE.md`.
     text filter for AND / NOT inputs, session state of an older version migrated (`!x|y` →
     `!x&!y`); release build on the copy of ReportingEvents.log: Status column filter
     `!Success&!Unknown` → exactly the 9 Failure rows.
+88. #33 Search and load optimizations, same results (baseline and after: `docs/architecture.md`
+    → Tests and benchmarks): (1) search / column filters of component, thread and extra columns
+    evaluated once per interned value in full runs (IIS search 145 → 48 ms sequential); (2) a
+    typed plain-text search that extends the previous one searches only the previous matches;
+    (3) the match bits of the last 5 searches are reused while the data is unchanged (no filter
+    mode); (4) `filtered` as `Vec<u32>`; (5) CMTrace parsing: attributes in one pass, date / thread
+    without temporary strings, UTF-8 chunks validated once and not copied – 400 MB load 4.4 →
+    1.8 s, ~16 MB less private memory. `bench_filter` now loads with the log definitions and
+    measures a search hitting extra columns; new `bench_load_phases`. Verified: equivalence
+    tests for 1, 2, 3 and 5; 154 tests, fmt, clippy; release build on the 400 MB log: `0x800`
+    54 379 matches, `0x8007` 32 663 (narrowed), Backspace 54 379 (cache), filter mode "Shown
+    32663 of 1899482" – the counts equal an independent count of the file.
+    `docs/history.md` "Possible further memory work": the `Vec<u32>` item is done.
 
 ## Ideas not done yet (offered by the owner)
 - `--set "<name>"` command-line option for log sets (#27): would need the set loading, the file
@@ -390,4 +403,3 @@ Notes for Claude, linked from `CLAUDE.md`.
 ## Possible further memory work (not done)
 - The "original lines" export reads the whole log file into memory (`read_line_ranges`), a
   temporary peak of ~2× the file size while exporting; could stream the file instead.
-- `filtered: Vec<usize>` could be `Vec<u32>` (8 → 4 bytes per visible row).

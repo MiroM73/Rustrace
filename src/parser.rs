@@ -576,15 +576,24 @@ impl LogSource {
                 continue;
             }
             let base = self.leftover_range().0;
-            let complete: Vec<u8> = self.leftover.drain(..cut).collect();
-            if self.encoding == Encoding::Utf8 && std::str::from_utf8(&complete).is_err() {
-                // Not valid UTF-8 → read as ANSI (Windows-1250) from now on.
-                self.encoding = Encoding::Ansi;
-            }
-            let text = decode(&complete, self.encoding);
-            // Bytes of every line (the decoded text has other lengths for ANSI / UTF-16).
+            let tail = self.leftover.split_off(cut);
+            let complete = std::mem::replace(&mut self.leftover, tail);
+            // Bytes of every line (the decoded text has other lengths for ANSI / UTF-16; UTF-8
+            // and ANSI split at the same bytes).
             let ends = line_ends(&complete, self.encoding);
-            drop(complete);
+            let text = if self.encoding == Encoding::Utf8 {
+                // Valid UTF-8 becomes the text without a copy (#33).
+                match String::from_utf8(complete) {
+                    Ok(text) => text,
+                    Err(e) => {
+                        // Not valid UTF-8 → read as ANSI (Windows-1250) from now on.
+                        self.encoding = Encoding::Ansi;
+                        decode(e.as_bytes(), Encoding::Ansi)
+                    }
+                }
+            } else {
+                decode(&complete, self.encoding)
+            };
             self.decide_format(Some(&text));
             let mut start = 0;
             for (line, end) in split_complete_lines(&text).zip(ends) {
@@ -878,6 +887,36 @@ fn flush_pending(st: &mut ParserState, kw: bool) -> Option<LogEntry> {
     })
 }
 
+/// The CMTrace attributes read from the part after `]LOG]!>`, in this order.
+const CM_ATTRS: [&str; 5] = ["time", "date", "component", "thread", "type"];
+
+/// The values of `CM_ATTRS` in one pass over `s` (#33) – the same as `attr` for each key: the
+/// first `key="` preceded by the start, a space, `<` or a tab; its value ends at the next `"`
+/// (`None` when there is none, or no such `key="`).
+fn cm_attrs(s: &str) -> [Option<&str>; 5] {
+    let mut out = [None; 5];
+    let mut decided = [false; 5];
+    let b = s.as_bytes();
+    for q in memchr::memmem::find_iter(b, b"=\"") {
+        for (k, key) in CM_ATTRS.iter().enumerate() {
+            if decided[k] || q < key.len() || &b[q - key.len()..q] != key.as_bytes() {
+                continue;
+            }
+            let i = q - key.len();
+            if i == 0 || matches!(b[i - 1], b' ' | b'<' | b'\t') {
+                decided[k] = true;
+                let vstart = q + 2;
+                out[k] = memchr::memchr(b'"', &b[vstart..]).map(|e| &s[vstart..vstart + e]);
+            }
+        }
+        if decided.iter().all(|&d| d) {
+            break;
+        }
+    }
+    out
+}
+
+#[cfg(test)]
 fn attr<'a>(s: &'a str, key: &str) -> Option<&'a str> {
     // Look for ` key="` (preceded by a space or '<'), so "time" is not found inside another name.
     let pat = format!("{key}=\"");
@@ -905,11 +944,11 @@ fn parse_cmtrace(line_no: usize, s: &str, kw: bool) -> LogEntry {
         ""
     };
 
-    let time = attr(rest, "time").unwrap_or("");
-    let date = attr(rest, "date").unwrap_or("");
-    let component = attr(rest, "component").unwrap_or("").to_owned();
-    let thread = attr(rest, "thread").map(format_thread).unwrap_or_default();
-    let severity = match attr(rest, "type") {
+    let [time, date, component, thread, kind] = cm_attrs(rest);
+    let (time, date) = (time.unwrap_or(""), date.unwrap_or(""));
+    let component = component.unwrap_or("").to_owned();
+    let thread = thread.map(format_thread).unwrap_or_default();
+    let severity = match kind {
         Some("3") => Severity::Error,
         Some("2") => Severity::Warning,
         Some("1") => Severity::Info,
@@ -977,11 +1016,34 @@ pub(crate) fn keyword_sev(s: &str, enabled: bool) -> Severity {
 }
 
 /// "1234" → "1234 (0x04D2)"
+/// A numeric thread id with its hex form: `1234` → `1234 (0x04D2)`; other texts unchanged.
 fn format_thread(t: &str) -> String {
-    match t.trim().parse::<u64>() {
-        Ok(n) => format!("{n} (0x{n:04X})"),
-        Err(_) => t.to_owned(),
+    let Ok(n) = t.trim().parse::<u64>() else {
+        return t.to_owned();
+    };
+    // Built by hand (#33): `format!` costs more than the rest of the line's parsing.
+    let mut dec = [0u8; 20];
+    let mut i = dec.len();
+    let mut v = n;
+    loop {
+        i -= 1;
+        dec[i] = b'0' + (v % 10) as u8;
+        v /= 10;
+        if v == 0 {
+            break;
+        }
     }
+    let digits = (64 - n.leading_zeros()).div_ceil(4).max(4) as usize;
+    let mut s = String::with_capacity(dec.len() - i + digits + 4);
+    s.extend(dec[i..].iter().map(|&c| c as char));
+    s.push_str(" (0x");
+    for k in (0..digits).rev() {
+        s.push(char::from(
+            b"0123456789ABCDEF"[(n >> (k * 4)) as usize & 15],
+        ));
+    }
+    s.push(')');
+    s
 }
 
 /// CMTrace: date="10-23-2026", time="13:22:01.123-120" → "2026-10-23 13:22:01.123"
@@ -996,18 +1058,30 @@ fn format_datetime(date: &str, time: &str) -> String {
         Some(i) if t.len() > i + 4 => &t[..i + 4],
         _ => t,
     };
-    let d: Vec<&str> = date.split(['-', '/']).collect();
-    let d = if d.len() == 3 && d[2].len() == 4 {
-        // MM-DD-YYYY → YYYY-MM-DD (zero-padded)
-        format!("{}-{:0>2}-{:0>2}", d[2], d[0], d[1])
-    } else {
-        date.to_owned()
-    };
-    match (d.is_empty(), t.is_empty()) {
-        (true, _) => t.to_owned(),
-        (_, true) => d,
-        _ => format!("{d} {t}"),
+    // One string, no temporary ones (#33).
+    let mut out = String::with_capacity(date.len() + t.len() + 3);
+    let mut parts = date.split(['-', '/']);
+    match (parts.next(), parts.next(), parts.next(), parts.next()) {
+        (Some(m), Some(d), Some(y), None) if y.len() == 4 => {
+            // MM-DD-YYYY → YYYY-MM-DD (zero-padded to two characters)
+            out.push_str(y);
+            for part in [m, d] {
+                out.push('-');
+                for _ in part.chars().count()..2 {
+                    out.push('0');
+                }
+                out.push_str(part);
+            }
+        }
+        _ => out.push_str(date),
     }
+    if !t.is_empty() {
+        if !out.is_empty() {
+            out.push(' ');
+        }
+        out.push_str(t);
+    }
+    out
 }
 
 #[cfg(test)]
@@ -1020,6 +1094,108 @@ mod tests {
         split_complete_lines(text)
             .filter_map(|l| parse_line(&mut st, l, true, (0, 0)))
             .collect()
+    }
+
+    /// The parse helpers of #33 give the same results as the previous code (kept here).
+    #[test]
+    fn faster_cmtrace_helpers_are_equivalent() {
+        fn old_thread(t: &str) -> String {
+            match t.trim().parse::<u64>() {
+                Ok(n) => format!("{n} (0x{n:04X})"),
+                Err(_) => t.to_owned(),
+            }
+        }
+        fn old_datetime(date: &str, time: &str) -> String {
+            let t = match time.find(['+', '-']) {
+                Some(i) if i > 0 => &time[..i],
+                _ => time,
+            };
+            let t = match t.find('.') {
+                Some(i) if t.len() > i + 4 => &t[..i + 4],
+                _ => t,
+            };
+            let d: Vec<&str> = date.split(['-', '/']).collect();
+            let d = if d.len() == 3 && d[2].len() == 4 {
+                format!("{}-{:0>2}-{:0>2}", d[2], d[0], d[1])
+            } else {
+                date.to_owned()
+            };
+            match (d.is_empty(), t.is_empty()) {
+                (true, _) => t.to_owned(),
+                (_, true) => d,
+                _ => format!("{d} {t}"),
+            }
+        }
+        for t in [
+            "0",
+            "1",
+            "15",
+            "16",
+            "1234",
+            "65535",
+            "65536",
+            "4294967295",
+            " 77 ",
+            "+5",
+            "-5",
+            "",
+            "abc",
+            "0x10",
+            "18446744073709551615",
+            "18446744073709551616",
+            "007",
+        ] {
+            assert_eq!(format_thread(t), old_thread(t), "{t:?}");
+        }
+        let dates = [
+            "10-23-2026",
+            "1-2-2026",
+            "10/23/2026",
+            "2026-10-23",
+            "",
+            "1-2-3",
+            "1-2-26",
+            "a-b-cdef",
+            "1-2-2026-4",
+            "ž-č-2026",
+            "-1-2026",
+            "10--2026",
+            "1/2-2026",
+        ];
+        let times = [
+            "13:22:01.123-120",
+            "13:22:01.1234567+000",
+            "13:22:01",
+            "",
+            "-120",
+            "1.5",
+            "13:22:01.12",
+            "x+y",
+            "08:00:00.000+060",
+        ];
+        for d in dates {
+            for t in times {
+                assert_eq!(format_datetime(d, t), old_datetime(d, t), "{d:?} {t:?}");
+            }
+        }
+        let rests = [
+            r#"<time="13:22:01.123-120" date="10-23-2026" component="CcmExec" context="" type="1" thread="1234" file="x.cpp:1">"#,
+            r#"<time="1" date="2" component="c" type="3" thread="4">"#,
+            r#"<datetime="x" time="y" mytype="9" type="2">"#,
+            r#"<context=" time=" time="z" date="d">"#,
+            r#"<component="unclosed"#,
+            r#"<time="a"time="b" date="c" component= "d" thread="t	" type=""#,
+            "",
+            r#"time="first" time="second""#,
+            "<\ttime=\"tab\" date=\"\" component=\"\" thread=\"\" type=\"\">",
+            r#"<type="1" type="2" thread="x" thread="y" component="ž" date="1-1-2026">"#,
+        ];
+        for r in rests {
+            let new = cm_attrs(r);
+            for (k, key) in CM_ATTRS.iter().enumerate() {
+                assert_eq!(new[k], attr(r, key), "{r:?} {key}");
+            }
+        }
     }
 
     #[test]
@@ -1619,6 +1795,70 @@ mod tests {
             "BENCH private {:.0} -> {:.0} MB, working set {:.0} -> {:.0} MB, peak working set {:.0} MB",
             before.0, after.0, before.1, after.1, after.2
         );
+    }
+
+    /// Where loading spends its time (#33): reading, decoding, line splitting, parsing and
+    /// storing, each phase on top of the previous ones, in 8 MB chunks like `read_to_end`:
+    /// `RUSTRACE_BENCH_FILE=<log> cargo test --release bench_load_phases -- --ignored --nocapture`
+    #[test]
+    #[ignore]
+    fn bench_load_phases() {
+        use std::io::Read;
+        let path = std::env::var("RUSTRACE_BENCH_FILE").expect("RUSTRACE_BENCH_FILE");
+        let run = |phase: u8| {
+            let t = std::time::Instant::now();
+            let mut f = File::open(&path).unwrap();
+            let mut buf = Vec::new();
+            let mut leftover: Vec<u8> = Vec::new();
+            let mut st = ParserState::new();
+            let mut store = LogStore::new();
+            let mut lines = 0usize;
+            loop {
+                buf.clear();
+                let n = (&mut f).take(CHUNK).read_to_end(&mut buf).unwrap();
+                if n == 0 {
+                    break;
+                }
+                if phase == 0 {
+                    continue;
+                }
+                leftover.extend_from_slice(&buf);
+                let cut = leftover
+                    .iter()
+                    .rposition(|&c| c == b'\n')
+                    .map_or(0, |i| i + 1);
+                let tail = leftover.split_off(cut);
+                let complete = std::mem::replace(&mut leftover, tail);
+                let ends = line_ends(&complete, Encoding::Utf8);
+                lines += ends.len();
+                if phase == 1 {
+                    continue;
+                }
+                let text = String::from_utf8(complete).unwrap();
+                if phase == 2 {
+                    continue;
+                }
+                for (line, end) in split_complete_lines(&text).zip(ends) {
+                    if let Some(e) = parse_line(&mut st, line, true, (0, end as u64))
+                        && phase == 4
+                    {
+                        store.push(e, 0);
+                    }
+                }
+            }
+            (t.elapsed(), lines.max(store.len()))
+        };
+        let names = [
+            "read",
+            "+ line ends",
+            "+ UTF-8 check",
+            "+ parse_line",
+            "+ LogStore::push",
+        ];
+        for (phase, name) in names.iter().enumerate() {
+            let (time, n) = run(phase as u8);
+            println!("BENCH phase {name:<18} {time:>10.2?} ({n} lines / entries)");
+        }
     }
 
     #[test]

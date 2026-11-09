@@ -16,12 +16,12 @@ impl App {
             DeltaMode::Reference => return self.time_ref.map(|(r, _, _)| ts - r),
             // The rows shown above it (a hidden row: the shown rows before it).
             DeltaMode::Visible => {
-                let p = self.filtered.partition_point(|&f| f < idx);
+                let p = self.rows_before(idx);
                 self.filtered[..p]
                     .iter()
                     .rev()
                     .take(MAX_LOOK_BACK)
-                    .find_map(|&i| self.entries.timestamp(i))
+                    .find_map(|&i| self.entries.timestamp(i as usize))
             }
             DeltaMode::Log => (idx.saturating_sub(MAX_LOOK_BACK)..idx)
                 .rev()

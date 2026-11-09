@@ -63,7 +63,7 @@ impl App {
     /// Entry `i` was selected: like `follow_row_selected` for its row, or a pause when the row is
     /// hidden by the filters.
     pub(in crate::app) fn follow_entry_selected(&mut self, i: usize) {
-        match self.filtered.binary_search(&i) {
+        match self.row_of(i) {
             Ok(pos) => self.follow_row_selected(pos),
             Err(_) => self.follow.pause(),
         }

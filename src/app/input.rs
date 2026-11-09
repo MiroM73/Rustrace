@@ -109,9 +109,7 @@ impl App {
         }
         // Keyboard navigation in the table.
         let n = self.filtered.len();
-        let cur = self
-            .selected
-            .and_then(|s| self.filtered.binary_search(&s).ok());
+        let cur = self.selected.and_then(|s| self.row_of(s).ok());
         let (up, down, pgup, pgdn, home, end, copy, shift) = ctx.input(|i| {
             (
                 i.key_pressed(Key::ArrowUp),

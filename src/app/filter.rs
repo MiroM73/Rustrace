@@ -31,13 +31,109 @@ impl App {
         self.search_gen += 1;
         self.search_err = None;
         self.search_re = None;
+        let prev = self.search_key.take();
         if self.search_active() {
             match compile_pattern(&self.search_text, self.search_regex, self.search_case) {
-                Ok(re) => self.search_re = Some(re),
+                Ok(re) => {
+                    self.search_re = Some(re);
+                    self.search_key = Some(SearchKey {
+                        text: self.search_text.clone(),
+                        regex: self.search_regex,
+                        case: self.search_case,
+                    });
+                }
                 Err(e) => self.search_err = Some(e),
             }
         }
-        self.refilter_from(0);
+        if !self.cached_search() && !self.narrow_search(prev.as_ref()) {
+            self.refilter_from(0);
+        }
+    }
+
+    /// The entry shown in table row `pos` (`filtered` holds `u32` indexes, #33).
+    pub(in crate::app) fn row_entry(&self, pos: usize) -> usize {
+        self.filtered[pos] as usize
+    }
+
+    /// The table row of entry `idx`: `Ok(row)` when it is shown, else `Err(where it would be)`.
+    pub(in crate::app) fn row_of(&self, idx: usize) -> Result<usize, usize> {
+        match u32::try_from(idx) {
+            Ok(i) => self.filtered.binary_search(&i),
+            Err(_) => Err(self.filtered.len()),
+        }
+    }
+
+    /// Number of table rows showing entries before `idx`.
+    pub(in crate::app) fn rows_before(&self, idx: usize) -> usize {
+        self.filtered.partition_point(|&i| (i as usize) < idx)
+    }
+
+    /// Whether the full current result can be replaced by another search result right away:
+    /// nothing is being re-filtered and the result covers all entries.
+    fn result_complete(&self) -> bool {
+        self.filter_job.is_none()
+            && !self.filter_restart
+            && self.is_match.len() == self.entries.len()
+    }
+
+    /// The new search was one of the last few on the same data (#33): its match bits come from
+    /// the cache. Only without the filter mode, where the displayed rows do not depend on the
+    /// search.
+    fn cached_search(&mut self) -> bool {
+        let Some(key) = &self.search_key else {
+            return false;
+        };
+        if self.filter_mode || !self.result_complete() {
+            return false;
+        }
+        let Some(bits) = self
+            .search_cache
+            .get(key, self.data_gen, self.entries.len())
+            .cloned()
+        else {
+            return false;
+        };
+        let out = FilterOutput {
+            filtered: std::mem::take(&mut self.filtered),
+            is_match: bits,
+        };
+        self.overview_changed_from(0);
+        self.filter_done(out);
+        true
+    }
+
+    /// Keeps the match bits of the current search for `cached_search`.
+    fn remember_search_result(&mut self) {
+        if let Some(key) = &self.search_key {
+            self.search_cache.put(key, self.data_gen, &self.is_match);
+        }
+    }
+
+    /// The search text was extended (`acce` → `acces`, #33): only the rows that matched the
+    /// previous text are searched again, right here. `false` when that is not possible (other
+    /// search, a re-filter running or pending, too many previous matches) – then a full
+    /// re-filter is needed.
+    fn narrow_search(&mut self, prev: Option<&SearchKey>) -> bool {
+        let (Some(prev), Some(new)) = (prev, &self.search_key) else {
+            return false;
+        };
+        if !new.narrows(prev)
+            || !self.result_complete()
+            || self.is_match.count() > SYNC_FILTER_MAX_ENTRIES
+        {
+            return false;
+        }
+        let prev_out = FilterOutput {
+            filtered: std::mem::take(&mut self.filtered),
+            is_match: std::mem::take(&mut self.is_match),
+        };
+        let out = self.filter_spec().narrow(&self.entries, &prev_out);
+        self.overview_changed_from(0);
+        self.filter_done(out);
+        if !self.following() && self.selected.is_some() {
+            self.scroll_to_selected_after_filter();
+        }
+        true
     }
 
     /// The search text is searched: typed texts from `INSTANT_SEARCH_MIN_CHARS` characters on,
@@ -53,12 +149,15 @@ impl App {
             self.after_filter.select_first = true;
             return;
         }
-        let pos = self.filtered.iter().position(|&i| self.is_match.get(i));
+        let pos = self
+            .filtered
+            .iter()
+            .position(|&i| self.is_match.get(i as usize));
         if let Some(pos) = pos {
             self.select_row(pos);
         }
         self.typed_search
-            .first_selected(pos.map(|p| self.filtered[p]));
+            .first_selected(pos.map(|p| self.row_entry(p)));
     }
 
     /// Enter in the search field right after search as you type selected the first match, with
@@ -86,10 +185,7 @@ impl App {
     pub(in crate::app) fn scroll_to_selected_after_filter(&mut self) {
         if self.filter_job.is_some() {
             self.after_filter.scroll_selected = true;
-        } else if let Some(pos) = self
-            .selected
-            .and_then(|s| self.filtered.binary_search(&s).ok())
-        {
+        } else if let Some(pos) = self.selected.and_then(|s| self.row_of(s).ok()) {
             self.scroll_to = Some(pos);
         }
     }
@@ -143,9 +239,9 @@ impl App {
 
     /// Filters the entries from `start` on this thread.
     fn refilter_here(&mut self, start: usize, spec: &FilterSpec) {
-        let pos = self.filtered.partition_point(|&i| i < start);
+        let pos = self.rows_before(start);
         self.overview_changed_from(pos);
-        while self.filtered.last().is_some_and(|&i| i >= start) {
+        while self.filtered.last().is_some_and(|&i| i as usize >= start) {
             self.filtered.pop();
         }
         self.is_match.truncate(start);
@@ -241,6 +337,7 @@ impl App {
         self.is_match = out.is_match;
         debug_assert_eq!(self.is_match.count(), self.is_match.recount());
         debug_assert_eq!(self.is_match.len(), self.entries.len());
+        self.remember_search_result();
         if let Some(s) = self.selected
             && s >= self.entries.len()
         {
@@ -332,9 +429,7 @@ impl App {
         if n == 0 {
             return;
         }
-        let cur = self
-            .selected
-            .and_then(|s| self.filtered.binary_search(&s).ok());
+        let cur = self.selected.and_then(|s| self.row_of(s).ok());
         for k in 1..=n {
             let pos = match cur {
                 Some(p) if forward => (p + k) % n,
@@ -342,7 +437,7 @@ impl App {
                 None if forward => k - 1,
                 None => n - k,
             };
-            let idx = self.filtered[pos];
+            let idx = self.row_entry(pos);
             if entry_matches(&re, &self.entries.at(idx)) {
                 self.select_row(pos);
                 return;
@@ -353,7 +448,7 @@ impl App {
 
     /// Selects a row by its position in the displayed (filtered) list.
     pub(in crate::app) fn select_row(&mut self, pos: usize) {
-        if let Some(&idx) = self.filtered.get(pos) {
+        if let Some(idx) = self.filtered.get(pos).map(|&i| i as usize) {
             self.select_only(Some(idx));
             self.scroll_to = Some(pos);
             // Manual navigation pauses following the end (the last row resumes it, #37).

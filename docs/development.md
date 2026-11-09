@@ -23,7 +23,9 @@ detected format, encoding, files and entry counts.
 
 Benchmark (loading, search, random access and memory on a big log, Windows):
 `RUSTRACE_BENCH_FILE=<log> cargo test --release bench_large_file -- --ignored --nocapture`
-(`RUSTRACE_BENCH_MAPPED=1` = text in a temporary file)
+(`RUSTRACE_BENCH_MAPPED=1` = text in a temporary file). Search and date filter:
+`… bench_filter …`; where loading spends its time: `… bench_load_phases …` (same form; the
+results of #33 are in `docs/architecture.md` → Tests and benchmarks).
 
 The C runtime is linked statically (`.cargo/config.toml`), so the exe runs without the
 Visual C++ Redistributable. `build.rs` embeds the program icon (drawn in code by `src/icon.rs`) and

@@ -26,7 +26,7 @@ impl App {
     /// Mark of one displayed row.
     fn row_mark(&self, pos: usize) -> u8 {
         let o = &self.cfg.overview;
-        let idx = self.filtered[pos];
+        let idx = self.row_entry(pos);
         if o.bookmarks && !self.bookmark_rows.is_empty() && self.is_bookmarked(idx) {
             MARK_BOOKMARK
         } else if o.search && self.is_match.get(idx) {
@@ -119,7 +119,7 @@ impl App {
         }
         if let Some(pos) = resp.hover_pos() {
             let row = row_at(pos.y);
-            let e = self.entries.at(self.filtered[row]);
+            let e = self.entries.at(self.row_entry(row));
             let mut tip = t!("overview.tip.row", row = row + 1, line = e.line_no);
             if e.timestamp().is_some() {
                 tip = format!("{tip}\n{}", self.display_dt(&e.datetime()));

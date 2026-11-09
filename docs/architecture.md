@@ -68,7 +68,17 @@ links in `docs/` (`features.md`, `export.md`, `log-definitions.md`, `log-sets.md
 ## Reading
 - Encodings: UTF-8 (BOM or not), UTF-16 LE/BE (BOM), ANSI Windows-1250 fallback.
 - Incremental reading in a **background thread** in 8 MB chunks with progress + cancel; truncation /
-  rotation detection; provisional last line. 400 MB / 1.8 M lines ≈ 3.7 s in release.
+  rotation detection; provisional last line. 400 MB / 1.9 M entries ≈ 1.8 s in release (#33;
+  4.4 s before).
+- Load profile (#33, `bench_load_phases`): of the 4.3 s for the 400 MB CMTrace test log, parsing
+  took ~3.4 s – mostly the five `attr` lookups (a `format!` pattern and a search from the start
+  for each), `format_datetime` (a `Vec` and two `format!`) and `format_thread` (`format!`). Now
+  `cm_attrs` reads the five attributes in one pass (`memmem` for `="`, the same first-match /
+  boundary / closing-quote rules as `attr`, which stays as the test reference), the date and the
+  thread are built into one `String` by hand, and a UTF-8 chunk is validated once and becomes the
+  text without a copy (`String::from_utf8` of the drained bytes; `split_off` instead of
+  `drain(..).collect()`). `faster_cmtrace_helpers_are_equivalent` compares them with the old code.
+  Parsing directly into the store without `LogEntry` was not needed after that (push ≈ 0.3 s).
 
 ## Merged logs
 - **Different logs merged by time** (#21, `src/merge.rs`): `LogSet` = one or more `LogSource`s
@@ -250,6 +260,28 @@ links in `docs/` (`features.md`, `export.md`, `log-definitions.md`, `log-sets.md
   filter mode, severity, time range, `CellFilter` per column, file labels) → `eval` per entry,
   `run` (range, sequential) / `run_parallel` (64 Ki-entry chunks, scoped threads = cores − 1 so
   the UI thread keeps a core, cancel flag per chunk; same result as `run`, tested).
+- Interned values (#33): component, thread and extra columns are interned ids in the store, so a
+  run over at least as many rows as the interner has strings (`FilterSpec::id_tables`) first
+  evaluates the search and every text column filter of a component / thread / extra column once
+  per interned string (`IdBits::build`, a bit per id, on the worker threads in `run_parallel`)
+  and per entry only looks the bit up (`EntryRef::component_id` / `thread_id` / `extra_id(s)`);
+  the message is still searched per entry. Smaller runs (rows appended by an auto refresh)
+  evaluate per entry as before – no cache, so nothing can go stale. Tested against the
+  per-entry evaluation on random stores and patterns.
+- Narrowing while typing (#33): `App::search_key` (`SearchKey` = text, regex, case) is the search
+  of the current `is_match`; when the new plain-text search contains the previous plain text
+  with the same case flag (`SearchKey::narrows`), nothing is being re-filtered and the previous
+  matches are at most `SYNC_FILTER_MAX_ENTRIES`, `FilterSpec::narrow` searches only the previous
+  matches on the UI thread (filter mode: `filtered` ∩ new matches, else `filtered` unchanged).
+  Tested equal to a full search.
+- Search cache (#33): `SearchCache` keeps the match bits of the last 5 searches with
+  `data_gen` (every append / reset / drop bumps it, so old results are never reused); without
+  the filter mode (the displayed rows do not depend on the search) going back to one of them
+  (Backspace, history) takes its bits at once. `filter_done` stores every complete result.
+- `filtered` is `Vec<u32>` (#33, 4 instead of 8 bytes per shown row: 7.6 instead of 15 MB for
+  1.9 M rows, and the copies in jobs); `App::row_entry` / `row_of` / `rows_before` convert.
+  More than `u32::MAX` entries panic with a clear message in `FilterSpec::run` (the memory limit
+  keeps a log far below).
   `App::refilter_from(start)`: a full re-filter (`start == 0`) of more than
   `SYNC_FILTER_MAX_ENTRIES` (100 000) entries runs in a background thread (#16, `FilterJob`),
   everything else on the UI thread. `entries: Arc<LogStore>` is shared with the job; every
@@ -575,13 +607,37 @@ links in `docs/` (`features.md`, `export.md`, `log-definitions.md`, `log-sets.md
   program), names via `AssocQueryStringW`. Test `register_and_unregister` uses its own HKCU key.
 
 ## Tests and benchmarks
-- `cargo test` (150 tests: column filter AND / NOT / precedence / migration of old negations, also for the date column and the update restart state (#61), ReportingEvents.log definition / HRESULT cells (#63), update check failures – HTTP error kinds / retry delays / rate-limit headers / retry loop / check error texts (#60), console target / PowerShell pipe encoding (#62), empty standard columns of plain text hidden (#49), highlight rules import without duplicates / export of ticked rules (#51), Enter after search as you type (#47), IIS Win32 status texts (#43), numeric column filters (#42), table export scopes / cells / columns / cancel / CSV / XLSX / ZIP writer / statistics / sheet per file / JSONL / HTML / presets / `--export` (#32), MSI verbose log / header dates (#40), guides table / URLs / log set guides (#39), IIS column order with `*` (#41), follow end pause / resume (#37), rules window default width (#48), keyboard shortcut order (Shift+F3 / Shift+F2 not taken by F3 / F2, #46), log sets (set file parsing / translations / built-in sets, variables, loading priorities, file checks, remote computer names / variables / drive letters / share roots, network error codes, recent computers), HTTP status lookup / class fallback / lookup input parsing and ambiguity / cell values, status column keys of log definitions, command-line parsing (file association, all options, errors, `--restore`, language / time / regex checks, help text), overview buckets incremental = full / pixel runs, readable export with Δ, durations, match bits set / iterate, bookmark file id remap, update releases list / missed versions / check setting migration, merged logs (order by time, appended older rows, formats + rotated parts + re-read, single log unchanged, interleave), store copy_entry / split_off, raw lines of entries (all formats / encodings), filter (parallel = sequential, match bits), date column filter = text filter, updates (versions, release JSON, notes, sha256 file, ZIP, install, restore state), icon / .ico layout, search as you type threshold, status-bar position percentage, file association (registry in an own HKCU test key), search history, store drop_front / move to temp file, rotated parts (naming, merge on open, rotation while watching, replaced
+- `cargo test` (154 tests: interned-value tables = per-entry evaluation, narrowed search = full search, search cache, CMTrace attribute / date / thread helpers = the old code (#33), column filter AND / NOT / precedence / migration of old negations, also for the date column and the update restart state (#61), ReportingEvents.log definition / HRESULT cells (#63), update check failures – HTTP error kinds / retry delays / rate-limit headers / retry loop / check error texts (#60), console target / PowerShell pipe encoding (#62), empty standard columns of plain text hidden (#49), highlight rules import without duplicates / export of ticked rules (#51), Enter after search as you type (#47), IIS Win32 status texts (#43), numeric column filters (#42), table export scopes / cells / columns / cancel / CSV / XLSX / ZIP writer / statistics / sheet per file / JSONL / HTML / presets / `--export` (#32), MSI verbose log / header dates (#40), guides table / URLs / log set guides (#39), IIS column order with `*` (#41), follow end pause / resume (#37), rules window default width (#48), keyboard shortcut order (Shift+F3 / Shift+F2 not taken by F3 / F2, #46), log sets (set file parsing / translations / built-in sets, variables, loading priorities, file checks, remote computer names / variables / drive letters / share roots, network error codes, recent computers), HTTP status lookup / class fallback / lookup input parsing and ambiguity / cell values, status column keys of log definitions, command-line parsing (file association, all options, errors, `--restore`, language / time / regex checks, help text), overview buckets incremental = full / pixel runs, readable export with Δ, durations, match bits set / iterate, bookmark file id remap, update releases list / missed versions / check setting migration, merged logs (order by time, appended older rows, formats + rotated parts + re-read, single log unchanged, interleave), store copy_entry / split_off, raw lines of entries (all formats / encodings), filter (parallel = sequential, match bits), date column filter = text filter, updates (versions, release JSON, notes, sha256 file, ZIP, install, restore state), icon / .ico layout, search as you type threshold, status-bar position percentage, file association (registry in an own HKCU test key), search history, store drop_front / move to temp file, rotated parts (naming, merge on open, rotation while watching, replaced
   file), export segments by file, time range bounds, column filter syntax, parsers, chunked/ANSI/UTF-16 reading, log definitions (CBS, DISM, IIS,
   Exchange connectivity / CSV separator, choice by name/content, appending across refreshes), store (32-byte record, ISO ↔ ms, push /
   truncate / append, mapped temp file growing past 64 MB, interner), export incl. end-to-end and
   visible rows as highlighted rows, error codes, i18n completeness, config migration)
 - Filter benchmark (ignored): `RUSTRACE_BENCH_FILE=<log> cargo test --release bench_filter --
-  --ignored --nocapture` – date column filter as text vs ranges, search sequential vs parallel.
+  --ignored --nocapture` – loads with the built-in log definitions; date column filter as text vs
+  ranges (dated logs), search `error 0x8007` and a search hitting extra columns
+  (`RUSTRACE_BENCH_SEARCH2`, default `jdoe` = an IIS user) sequential vs parallel.
+- Load phases (ignored): `RUSTRACE_BENCH_FILE=<log> cargo test --release bench_load_phases --
+  --ignored --nocapture` – read, line ends, UTF-8 check, `parse_line`, `LogStore::push`, each on
+  top of the previous ones (CMTrace / plain text).
+- #33 before / after (release, the generated test logs, two runs each, Windows 11):
+
+  | Log | Measure | Before | After |
+  |---|---|---|---|
+  | CMTrace 400 MB, 1.9 M entries | load (`bench_large_file`) | 4.43 / 4.60 s | 1.77 / 1.79 s |
+  | | private bytes after load | 237–238 MB | 221 MB |
+  | | search `error 0x8007` sequential / parallel | 144–169 / 65–79 ms | 102–103 / 44–52 ms |
+  | | search `jdoe` (no hit) sequential / parallel | 144–178 / 82–97 ms | 90–93 / 42–46 ms |
+  | IIS 100 MB, 0.8 M entries, 10 extra columns | load | 378–379 ms | 304–319 ms |
+  | | private bytes | 153 MB | 137 MB |
+  | | search `error 0x8007` sequential / parallel | 144–145 / 61–62 ms | 48 / 23–24 ms |
+  | | search `jdoe` (201 560 hits) sequential / parallel | 137–144 / 78–92 ms | 44–47 / 21–25 ms |
+  | CBS 100 MB, 1.0 M entries | load | 434–439 ms | 359–362 ms |
+  | | private bytes | 161 MB | 145 MB |
+  | | search sequential / parallel | 63–71 / 28–42 ms | 47–52 / 21–23 ms |
+
+  Date column filter and random access unchanged. Narrowing and the cache are UI paths: on the
+  400 MB log typing `0x800` → `0x8007` searched only the 54 379 previous matches (32 663 left)
+  and Backspace back to `0x800` took the cached bits (54 379), the counts equal a full search.
 - Benchmark (ignored test, Windows): `RUSTRACE_BENCH_FILE=<log> cargo test --release
   bench_large_file -- --ignored --nocapture` (`RUSTRACE_BENCH_MAPPED=1` = temp file); prints load /
   search / random access times and private bytes. A realistic 400 MB CMTrace log can be generated

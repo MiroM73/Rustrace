@@ -8,7 +8,8 @@ use crate::export::{self, ExportFormat, ReadableRow};
 #[cfg(windows)]
 use crate::fileassoc::{self, ExtStatus};
 use crate::filter::{
-    CellFilter, FilterOutput, FilterSpec, MatchBits, entry_matches, other_columns_match,
+    CellFilter, FilterOutput, FilterSpec, MatchBits, SearchCache, SearchKey, entry_matches,
+    other_columns_match,
 };
 use crate::guides;
 use crate::httpstatus::{self, HttpStatus};
@@ -206,7 +207,7 @@ pub struct App {
     /// Number of "final" entries; provisional ones follow (incomplete last line).
     committed_len: usize,
     /// Indexes of the displayed entries (after filtering).
-    filtered: Vec<usize>,
+    filtered: Vec<u32>,
     /// For every entry: does it match the search? (Keeps the match count.)
     is_match: MatchBits,
     /// Background re-filter in progress, cancelled ones that may still hold the entries, and
@@ -234,6 +235,10 @@ pub struct App {
     search_case: bool,
     filter_mode: bool,
     search_re: Option<Regex>,
+    /// The search `is_match` was computed with (`None` = no search), for narrowing (#33).
+    search_key: Option<SearchKey>,
+    /// The match bits of the last searches (#33).
+    search_cache: SearchCache,
     search_err: Option<String>,
     show_sev: [bool; 3], // info, warning, error
 
@@ -459,6 +464,8 @@ impl App {
             search_case: false,
             filter_mode: false,
             search_re: None,
+            search_key: None,
+            search_cache: SearchCache::default(),
             search_err: None,
             show_sev: [true; 3],
             selected: None,

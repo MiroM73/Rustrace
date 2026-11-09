@@ -117,7 +117,7 @@ impl App {
     pub(in crate::app) fn table_export_rows(&mut self, scope: Scope) -> Rows {
         match scope {
             Scope::All => Rows::All(self.entries.len()),
-            Scope::Visible => Rows::List(self.filtered.clone()),
+            Scope::Visible => Rows::List(self.filtered.iter().map(|&i| i as usize).collect()),
             Scope::Selected => Rows::List(self.sel.ones().collect()),
             Scope::Bookmarked => Rows::List(self.bookmark_rows.clone()),
             Scope::Highlighted => {

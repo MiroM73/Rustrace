@@ -178,7 +178,7 @@ pub fn export(
             })
         })
         .collect();
-    let rows = Rows::List(out.filtered);
+    let rows = Rows::List(out.filtered.into_iter().map(|i| i as usize).collect());
     let count = rows.len();
     let format_name = if schema.name.is_empty() {
         t!("format.builtin")

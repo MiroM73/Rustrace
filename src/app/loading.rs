@@ -34,19 +34,19 @@ impl App {
         if k == 0 {
             return;
         }
-        let pos_selected = self
-            .selected
-            .and_then(|s| self.filtered.binary_search(&s).ok());
+        let pos_selected = self.selected.and_then(|s| self.row_of(s).ok());
         self.bookmarks_drop_front(k);
         self.entries_mut().drop_front(k);
         self.committed_len -= k;
         self.dropped += k;
         self.data_gen += 1;
         // Shift every entry index by k; indexes of removed entries disappear.
-        let gone = self.filtered.partition_point(|&i| i < k);
+        let gone = self.rows_before(k);
         self.filtered.drain(..gone);
+        // k <= the number of entries, which fits in u32 (`filtered` holds u32 indexes).
+        let k32 = k as u32;
         for i in &mut self.filtered {
-            *i -= k;
+            *i -= k32;
         }
         self.is_match.drain_front(k);
         self.overview_changed_from(0);

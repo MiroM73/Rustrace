@@ -490,6 +490,27 @@ impl<'a> EntryRef<'a> {
         let (store, idx) = (self.store, self.idx);
         store.extra.iter().map(move |c| store.strings.get(c[idx]))
     }
+
+    /// Interned id of the component (`LogStore::string`, #33).
+    pub fn component_id(&self) -> u32 {
+        self.store.recs[self.idx].component
+    }
+
+    /// Interned id of the thread (#33).
+    pub fn thread_id(&self) -> u32 {
+        self.store.recs[self.idx].thread
+    }
+
+    /// Interned id of an extra column (0 = "" when missing, #33).
+    pub fn extra_id(&self, col: usize) -> u32 {
+        self.store.extra.get(col).map_or(0, |c| c[self.idx])
+    }
+
+    /// Interned ids of all extra columns, in the order of `extras` (#33).
+    pub fn extra_ids(&self) -> impl Iterator<Item = u32> + 'a {
+        let (store, idx) = (self.store, self.idx);
+        store.extra.iter().map(move |c| c[idx])
+    }
 }
 
 impl LogStore {
@@ -519,6 +540,17 @@ impl LogStore {
 
     pub fn len(&self) -> usize {
         self.recs.len()
+    }
+
+    /// Number of interned strings (components, threads, extra column values, dates that are not
+    /// ISO): their ids are `0..strings_len()` (#33).
+    pub fn strings_len(&self) -> usize {
+        self.strings.len()
+    }
+
+    /// The interned string `id` (#33).
+    pub fn string(&self, id: u32) -> &str {
+        self.strings.get(id)
     }
 
     pub fn is_empty(&self) -> bool {

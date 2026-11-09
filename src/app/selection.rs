@@ -39,15 +39,14 @@ impl App {
 
     /// Position of an entry in the table, or where it would be when it is hidden.
     fn table_pos(&self, i: usize) -> usize {
-        self.filtered
-            .partition_point(|&f| f < i)
+        self.rows_before(i)
             .min(self.filtered.len().saturating_sub(1))
     }
 
     /// Selects the displayed rows between the anchor and position `pos` (Shift + click / arrows);
     /// `add` keeps the rows selected before (Ctrl+Shift + click).
     pub(in crate::app) fn extend_selection(&mut self, pos: usize, add: bool) {
-        let Some(&idx) = self.filtered.get(pos) else {
+        let Some(idx) = self.filtered.get(pos).map(|&i| i as usize) else {
             return;
         };
         let anchor = self.sel_anchor.map_or(pos, |a| self.table_pos(a));
@@ -56,7 +55,7 @@ impl App {
         }
         let (a, b) = (anchor.min(pos), anchor.max(pos));
         for &i in &self.filtered[a..=b] {
-            self.sel.set(i, true);
+            self.sel.set(i as usize, true);
         }
         if self.sel_anchor.is_none() {
             self.sel_anchor = Some(idx);
@@ -71,7 +70,7 @@ impl App {
     /// pauses following the end, the last row resumes it (#37).
     pub(in crate::app) fn click_row(&mut self, idx: usize, mods: Modifiers) {
         if mods.shift {
-            if let Ok(pos) = self.filtered.binary_search(&idx) {
+            if let Ok(pos) = self.row_of(idx) {
                 self.extend_selection(pos, mods.command);
                 self.scroll_to = None;
             }
@@ -102,10 +101,10 @@ impl App {
     pub(in crate::app) fn select_all_visible(&mut self) {
         self.sel.clear();
         for &i in &self.filtered {
-            self.sel.set(i, true);
+            self.sel.set(i as usize, true);
         }
         if self.selected.is_none_or(|s| !self.sel.get(s)) {
-            self.selected = self.filtered.first().copied();
+            self.selected = self.filtered.first().map(|&i| i as usize);
             self.sel_anchor = self.selected;
         }
     }

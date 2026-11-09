@@ -138,7 +138,7 @@ impl App {
         let shown: Vec<usize> = self
             .bookmark_rows
             .iter()
-            .filter_map(|i| self.filtered.binary_search(i).ok())
+            .filter_map(|&i| self.row_of(i).ok())
             .collect();
         if shown.is_empty() {
             self.info(t!(if self.bookmarks.is_empty() {
@@ -150,8 +150,8 @@ impl App {
         }
         // Position of the selected row in the table, or where it would be when it is hidden.
         let cur = self.selected.map(|s| {
-            let p = self.filtered.partition_point(|&i| i < s);
-            (p, self.filtered.get(p) == Some(&s))
+            let p = self.rows_before(s);
+            (p, self.filtered.get(p).is_some_and(|&i| i as usize == s))
         });
         let last = shown[shown.len() - 1];
         let pos = match cur {
@@ -172,7 +172,7 @@ impl App {
     /// Selects an entry and scrolls to it (bookmarks window); a row hidden by the filters is
     /// only selected.
     pub(in crate::app) fn jump_to_entry(&mut self, i: usize) {
-        match self.filtered.binary_search(&i) {
+        match self.row_of(i) {
             Ok(pos) => self.select_row(pos),
             Err(_) => {
                 self.select_only(Some(i));

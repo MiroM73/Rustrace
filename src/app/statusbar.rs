@@ -77,7 +77,7 @@ impl App {
                 ui.separator();
                 // Position of the selected row among the displayed rows (#3).
                 if let Some(sel) = self.selected
-                    && let Ok(pos) = self.filtered.binary_search(&sel)
+                    && let Ok(pos) = self.row_of(sel)
                 {
                     let total = self.filtered.len();
                     let line = self.entries.get(sel).map_or(0, |e| e.line_no);

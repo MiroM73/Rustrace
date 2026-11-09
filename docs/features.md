@@ -85,7 +85,7 @@ The logs of one troubleshooting scenario in one step – details in [Log sets](l
 - **Pause / Resume** (Ctrl+P), manual refresh F5, full reload Ctrl+F5
 - reading runs **in a background thread** in 8 MB chunks – the window never freezes, even with logs of
   hundreds of MB; the first load shows progress in % with a **Cancel** button, later refreshes in the status bar
-- only newly appended data is read; test: 400 MB / 1.8 million lines ≈ 3.7 s (release build)
+- only newly appended data is read; test: 400 MB / 1.9 million entries ≈ 1.8 s (release build)
 - **rotated logs are merged** (View → "Merge rotated parts of the log", default on): when
   `service.log` is opened, its older parts `service.lo_` (ConfigMgr renames the full log) and
   `service-YYYYMMDD-HHMMSS.log` (newer ConfigMgr versions keeping more history files) are shown

@@ -83,7 +83,7 @@ impl App {
         let all_hits = if self.export_selected {
             self.sel.ones().collect()
         } else if self.cfg.export_visible_only {
-            self.filtered.clone()
+            self.filtered.iter().map(|&i| i as usize).collect()
         } else {
             self.export_hits().to_vec()
         };
