@@ -554,6 +554,9 @@ pub struct SessionState {
     pub window: Option<WindowState>,
     /// Bookmarks: (file id, line number, note).
     pub bookmarks: Vec<(u16, usize, String)>,
+    /// Syntax of `col_filters` (`colfilter::SYNTAX_VERSION`, #61); 0 = written by a version
+    /// before #61, whose filters are migrated when they are read.
+    pub filter_syntax: u32,
 }
 
 /// Command line switch of the restarted program.
@@ -573,7 +576,20 @@ impl SessionState {
     pub fn take(path: &Path) -> Option<Self> {
         let text = std::fs::read_to_string(path).ok();
         let _ = std::fs::remove_file(path);
-        serde_json::from_str(&text?).ok()
+        let mut state: Self = serde_json::from_str(&text?).ok()?;
+        state.migrate_filters();
+        Some(state)
+    }
+
+    /// The column filters of an older version in the current filter syntax (#61): a leading `!`
+    /// negated the whole filter before, now it negates one term (`!a|b` → `!a&!b`).
+    fn migrate_filters(&mut self) {
+        if self.filter_syntax < crate::colfilter::SYNTAX_VERSION {
+            for (_, t) in &mut self.col_filters {
+                *t = crate::colfilter::migrate_v1(t);
+            }
+            self.filter_syntax = crate::colfilter::SYNTAX_VERSION;
+        }
     }
 }
 
@@ -891,7 +907,7 @@ mod tests {
             show_sev: [true, false, true],
             col_filters: vec![
                 (ColumnKind::Role(Role::Component), "ccm".into()),
-                (ColumnKind::Extra(2), "!x".into()),
+                (ColumnKind::Extra(2), "!x|y".into()),
             ],
             window: Some(WindowState {
                 pos: Some([10.0, 20.0]),
@@ -901,9 +917,26 @@ mod tests {
             bookmarks: vec![(0, 7, String::new()), (1, 12, "install failed".into())],
             ..Default::default()
         };
+        let state = SessionState {
+            filter_syntax: crate::colfilter::SYNTAX_VERSION,
+            ..state
+        };
         let file = state.save_temp().unwrap();
-        assert_eq!(SessionState::take(&file), Some(state));
+        assert_eq!(SessionState::take(&file), Some(state.clone()));
         assert!(!file.exists());
+        // The state of a version before #61 (no filter_syntax): its filters in the new syntax.
+        let old = SessionState {
+            filter_syntax: 0,
+            ..state
+        };
+        let mut json: serde_json::Value = serde_json::to_value(&old).unwrap();
+        json.as_object_mut().unwrap().remove("filter_syntax");
+        let file = old.save_temp().unwrap();
+        std::fs::write(&file, json.to_string()).unwrap();
+        let back = SessionState::take(&file).unwrap();
+        assert_eq!(back.col_filters[0].1, "ccm");
+        assert_eq!(back.col_filters[1].1, "!x&!y");
+        assert_eq!(back.filter_syntax, crate::colfilter::SYNTAX_VERSION);
     }
 
     /// Real download of the latest release (network): `cargo test fetch_latest_release -- --ignored`.

@@ -1,60 +1,121 @@
 //! Filters of single table columns (the filter row under the column headers).
 //!
-//! Syntax of a filter text (always case-insensitive):
+//! Syntax of a filter text (always case-insensitive), a list of terms:
 //! * `text` – the value contains `text`,
 //! * `=text` – the value is exactly `text`,
-//! * `a|b|c` – any of the alternatives (each one may start with `=`),
 //! * `>n`, `>=n`, `<n`, `<=n`, `a..b` (inclusive, either bound may be left out) – the value is a
-//!   number in that range (#42); a value that is not a number never matches such an alternative,
-//! * `!…` at the start – negation: the value matches none of the alternatives.
+//!   number in that range (#42); a value that is not a number never matches such a term,
+//! * `!term` – NOT: the value does not match the term (#61),
+//! * `a&b` – AND: both terms match (#61),
+//! * `a|b|c` – OR: any of the alternatives.
 //!
-//! Spaces around alternatives are ignored; an empty filter (or only `!`) filters nothing. The
-//! date/time column (`DateFilter`) has no numeric alternatives, it compares time ranges.
+//! Precedence `!` > `&` > `|`: `a&b|c` = (a AND b) OR c; no parentheses.
+//! Spaces around `|`, `&` and after `!` are ignored; empty terms are ignored (`a&` = `a`), an
+//! empty filter (or only `!`) filters nothing. The date/time column (`DateFilter`) has no numeric
+//! terms, it compares time ranges.
+//!
+//! Before #61 (port of MMPortLens#35) a leading `!` negated the whole filter (`!a|b` = neither a
+//! nor b); [`migrate_v1`] rewrites such saved texts to the new form (`!a&!b`).
 
 use crate::store::{EntryRef, iso_to_ms, ms_to_iso, ms_to_iso_bytes};
 use regex::{Regex, RegexBuilder};
 use std::ops::{Bound, RangeBounds};
 
-/// Numbers matched by a numeric alternative.
+/// Numbers matched by a numeric term.
 type NumRange = (Bound<f64>, Bound<f64>);
 
+/// The version of the filter syntax written by this program: 1 = AND / per-term NOT (#61).
+pub const SYNTAX_VERSION: u32 = 1;
+
+/// One compiled term of a filter.
 #[derive(Clone)]
-pub struct ColumnFilter {
-    /// The text alternatives; `None` when all alternatives are numeric.
-    re: Option<Regex>,
-    ranges: Vec<NumRange>,
-    negate: bool,
+enum Term {
+    /// Contains / exact, compiled case-insensitive.
+    Text(Regex),
+    Range(NumRange),
 }
 
-/// One alternative of a filter text: the text and whether it must match exactly (`=`).
+impl Term {
+    fn matches(&self, value: &str) -> bool {
+        match self {
+            Term::Text(re) => re.is_match(value),
+            Term::Range(r) => number(value).is_some_and(|v| r.contains(&v)),
+        }
+    }
+}
+
+/// A compiled filter: OR of groups, each group an AND of (negated?) terms. The groups that are
+/// one plain term (the usual `a|b|=c|>5`) are merged into one regex / one range list, so such a
+/// filter costs one regex search per value as before #61.
+#[derive(Clone)]
+pub struct ColumnFilter {
+    /// Union of the single, not negated text terms.
+    any_text: Option<Regex>,
+    /// The single, not negated numeric terms.
+    any_ranges: Vec<NumRange>,
+    /// The other groups.
+    groups: Vec<Vec<(bool, Term)>>,
+}
+
+/// One term of a filter text: the text, whether it must match exactly (`=`) and whether it is
+/// negated (`!`).
 struct Alternative<'a> {
     text: &'a str,
     exact: bool,
+    negate: bool,
 }
 
-/// Splits a filter text into the negation flag and its alternatives (none = filters nothing).
-fn split(input: &str) -> (bool, Vec<Alternative<'_>>) {
-    let input = input.trim();
-    let (negate, body) = match input.strip_prefix('!') {
-        Some(rest) => (true, rest),
-        None => (false, input),
+/// The alternatives (`|`) of a filter text, each a list of AND (`&`) terms. Empty terms and
+/// groups are left out (none = filters nothing).
+fn split(input: &str) -> Vec<Vec<Alternative<'_>>> {
+    input
+        .split('|')
+        .map(|alt| {
+            alt.split('&')
+                .filter_map(|t| {
+                    let mut t = t.trim();
+                    let mut negate = false;
+                    while let Some(rest) = t.strip_prefix('!') {
+                        negate = !negate;
+                        t = rest.trim_start();
+                    }
+                    let (text, exact) = match t.strip_prefix('=') {
+                        Some(e) => (e.trim(), true),
+                        None => (t, false),
+                    };
+                    (!text.is_empty()).then_some(Alternative {
+                        text,
+                        exact,
+                        negate,
+                    })
+                })
+                .collect::<Vec<_>>()
+        })
+        .filter(|g| !g.is_empty())
+        .collect()
+}
+
+/// Rewrites a filter text saved before #61 (syntax 0) to the current syntax: a leading `!`
+/// negated all alternatives, so `!a|b` (neither a nor b) becomes `!a&!b`. A leading `!` with one
+/// alternative, and every text without a leading `!`, stay as they are.
+pub fn migrate_v1(text: &str) -> String {
+    let trimmed = text.trim();
+    let Some(body) = trimmed.strip_prefix('!') else {
+        return text.to_owned();
     };
-    let alternatives = body
+    let parts: Vec<&str> = body
         .split('|')
         .map(str::trim)
-        .filter(|a| !a.is_empty() && *a != "=")
-        .map(|a| match a.strip_prefix('=') {
-            Some(exact) => Alternative {
-                text: exact.trim(),
-                exact: true,
-            },
-            None => Alternative {
-                text: a,
-                exact: false,
-            },
-        })
+        .filter(|p| !p.is_empty() && *p != "=")
         .collect();
-    (negate, alternatives)
+    if parts.len() < 2 {
+        return text.to_owned();
+    }
+    parts
+        .iter()
+        .map(|p| format!("!{p}"))
+        .collect::<Vec<_>>()
+        .join("&")
 }
 
 /// A number of a filter or a cell: optional sign, digits, optional decimal point (`-1.5`).
@@ -67,7 +128,7 @@ fn number(s: &str) -> Option<f64> {
     valid.then(|| s.parse().ok()).flatten()
 }
 
-/// The numbers selected by a numeric alternative (`>n`, `>=n`, `<n`, `<=n`, `a..b`).
+/// The numbers selected by a numeric term (`>n`, `>=n`, `<n`, `<=n`, `a..b`).
 fn number_range(text: &str) -> Option<NumRange> {
     use Bound::{Excluded, Included, Unbounded};
     if let Some(n) = text.strip_prefix(">=") {
@@ -93,50 +154,83 @@ fn number_range(text: &str) -> Option<NumRange> {
     }
 }
 
+/// The regex source of a text term (`^…$` for an exact one).
+fn text_pattern(a: &Alternative) -> String {
+    match a.exact {
+        true => format!("^{}$", regex::escape(a.text)),
+        false => regex::escape(a.text),
+    }
+}
+
+fn compile(pattern: &str) -> Option<Regex> {
+    RegexBuilder::new(pattern)
+        .case_insensitive(true)
+        .build()
+        .ok()
+}
+
 impl ColumnFilter {
     /// Compiles a filter text; `None` when it filters nothing.
     pub fn parse(input: &str) -> Option<ColumnFilter> {
         Self::build(input, true)
     }
 
-    /// Like `parse`, but every alternative is text (the date/time column).
+    /// Like `parse`, but every term is text (the date/time column).
     fn parse_text(input: &str) -> Option<ColumnFilter> {
         Self::build(input, false)
     }
 
     fn build(input: &str, numeric: bool) -> Option<ColumnFilter> {
-        let (negate, alternatives) = split(input);
-        if alternatives.is_empty() {
+        let groups = split(input);
+        if groups.is_empty() {
             return None;
         }
-        let mut ranges = Vec::new();
+        let range = |a: &Alternative| {
+            (numeric && !a.exact)
+                .then(|| number_range(a.text))
+                .flatten()
+        };
         let mut texts = Vec::new();
-        for a in &alternatives {
-            match a.exact {
-                true => texts.push(format!("^{}$", regex::escape(a.text))),
-                false => match number_range(a.text).filter(|_| numeric) {
-                    Some(range) => ranges.push(range),
-                    None => texts.push(regex::escape(a.text)),
+        let mut any_ranges = Vec::new();
+        let mut rest = Vec::new();
+        for g in groups {
+            match g.as_slice() {
+                [a] if !a.negate => match range(a) {
+                    Some(r) => any_ranges.push(r),
+                    None => texts.push(text_pattern(a)),
                 },
+                _ => {
+                    let mut terms = Vec::with_capacity(g.len());
+                    for a in &g {
+                        let term = match range(a) {
+                            Some(r) => Term::Range(r),
+                            None => Term::Text(compile(&text_pattern(a))?),
+                        };
+                        terms.push((a.negate, term));
+                    }
+                    rest.push(terms);
+                }
             }
         }
-        let re = match texts.is_empty() {
+        let any_text = match texts.is_empty() {
             true => None,
-            false => Some(
-                RegexBuilder::new(&format!("(?:{})", texts.join("|")))
-                    .case_insensitive(true)
-                    .build()
-                    .ok()?,
-            ),
+            false => Some(compile(&format!("(?:{})", texts.join("|")))?),
         };
-        Some(ColumnFilter { re, ranges, negate })
+        Some(ColumnFilter {
+            any_text,
+            any_ranges,
+            groups: rest,
+        })
     }
 
     pub fn matches(&self, value: &str) -> bool {
-        let hit = self.re.as_ref().is_some_and(|re| re.is_match(value))
-            || (!self.ranges.is_empty()
-                && number(value).is_some_and(|v| self.ranges.iter().any(|r| r.contains(&v))));
-        hit != self.negate
+        self.any_text.as_ref().is_some_and(|re| re.is_match(value))
+            || (!self.any_ranges.is_empty()
+                && number(value).is_some_and(|v| self.any_ranges.iter().any(|r| r.contains(&v))))
+            || self
+                .groups
+                .iter()
+                .any(|g| g.iter().all(|(negate, t)| t.matches(value) != *negate))
     }
 }
 
@@ -243,16 +337,20 @@ impl DateLayout {
     }
 }
 
+/// A term of a `DateFilter` as time ranges: (negated, inclusive ms ranges whose union matches).
+type DateTerm = (bool, Vec<(i64, i64)>);
+
 /// A filter of the date/time column with the same meaning as a `ColumnFilter` on the displayed
-/// text. Alternatives that select time ranges (a part of the displayed date/time that fixes the
-/// digits from the year on, e.g. `23.10.2026 10:3` or `2026-10`) are compared with the stored
-/// timestamp – no text per row. Other inputs (e.g. `:30`) match the displayed text, written into
-/// a buffer on the stack; entries without a parsed timestamp match their date text.
+/// text. Terms that select time ranges (a part of the displayed date/time that fixes the digits
+/// from the year on, e.g. `23.10.2026 10:3` or `2026-10`) are compared with the stored timestamp
+/// – no text per row. Other inputs (e.g. `:30`) match the displayed text, written into a buffer
+/// on the stack; entries without a parsed timestamp match their date text.
 #[derive(Clone)]
 pub struct DateFilter {
     text: ColumnFilter,
-    /// Inclusive ms ranges whose union matches; `None` = the displayed text has to be matched.
-    ranges: Option<Vec<(i64, i64)>>,
+    /// The OR groups of AND terms (negated?, inclusive ms ranges whose union matches); `None` =
+    /// the displayed text has to be matched.
+    ranges: Option<Vec<Vec<DateTerm>>>,
     layout: DateLayout,
 }
 
@@ -261,12 +359,14 @@ impl DateFilter {
     pub fn parse(input: &str, date_pattern: &str) -> Option<DateFilter> {
         let text = ColumnFilter::parse_text(input)?;
         let layout = DateLayout::new(date_pattern);
-        let (_, alternatives) = split(input);
-        let ranges = alternatives
+        let ranges = split(input)
             .iter()
-            .map(|a| alternative_ranges(&layout, a))
-            .collect::<Option<Vec<_>>>()
-            .map(|r| r.concat());
+            .map(|g| {
+                g.iter()
+                    .map(|a| alternative_ranges(&layout, a).map(|r| (a.negate, r)))
+                    .collect::<Option<Vec<_>>>()
+            })
+            .collect::<Option<Vec<_>>>();
         Some(DateFilter {
             text,
             ranges,
@@ -277,9 +377,11 @@ impl DateFilter {
     /// The filter matches the date/time of the entry as displayed.
     pub fn matches(&self, e: &EntryRef) -> bool {
         match (e.timestamp(), &self.ranges) {
-            (Some(ts), Some(ranges)) => {
-                ranges.iter().any(|&(lo, hi)| lo <= ts && ts <= hi) != self.text.negate
-            }
+            (Some(ts), Some(groups)) => groups.iter().any(|g| {
+                g.iter().all(|(negate, ranges)| {
+                    ranges.iter().any(|&(lo, hi)| lo <= ts && ts <= hi) != *negate
+                })
+            }),
             (Some(ts), None) => self.layout.with_displayed(ts, |s| self.text.matches(s)),
             (None, _) => self.text.matches(&self.layout.format_iso(&e.datetime())),
         }
@@ -292,7 +394,7 @@ impl DateFilter {
     }
 }
 
-/// The timestamps whose displayed text contains (`=`: equals) the alternative, as inclusive ms
+/// The timestamps whose displayed text contains (`=`: equals) the term (its negation aside), as inclusive ms
 /// ranges; `None` when that set cannot be described by ranges here.
 fn alternative_ranges(layout: &DateLayout, a: &Alternative) -> Option<Vec<(i64, i64)>> {
     let pat: Vec<char> = a.text.chars().collect();
@@ -397,10 +499,14 @@ mod tests {
         assert!(!m("=info", "Information"));
         assert!(m("=500|=404", "404"));
         assert!(!m("=500|=404", "4040"));
-        // negation applies to all alternatives
+        // negation of one term (#61): "!a|b" = (not a) or b
         assert!(m("!dism", "CBS"));
-        assert!(!m("!dism|cbs", "CBS"));
+        assert!(m("!dism|cbs", "CBS"));
+        assert!(!m("!dism|cbs", "DISM"));
+        assert!(!m("!dism&!cbs", "CBS"));
         assert!(m("!=info", "Information"));
+        assert!(m("! = info", "Information"));
+        assert!(m("!!info", "Info"), "double negation");
         // special characters are literal
         assert!(m("a.b(", "xa.b(y"));
         assert!(!m("a.b", "axb"));
@@ -443,6 +549,7 @@ mod tests {
         assert!(m("!500..599", "404"));
         assert!(!m("!500..599", "503"));
         assert!(!m("!>0", "5"));
+        assert!(m("!0", "5"));
         // a cell that is not a number never matches a numeric alternative
         for cell in [
             "",
@@ -456,7 +563,7 @@ mod tests {
             ".",
         ] {
             assert!(!m(">=0|<0", cell), "{cell:?}");
-            assert!(m("!>=0|<0", cell), "{cell:?}");
+            assert!(m("!>=0&!<0", cell), "{cell:?}");
         }
         // not numbers: compared as text
         assert!(m(">abc", "x>abc"));
@@ -466,6 +573,56 @@ mod tests {
         assert!(m(">", "a > b"));
         assert!(m("=0", "0"));
         assert!(!m("=0", "0.0"));
+    }
+
+    #[test]
+    fn and_not_and_precedence() {
+        // Status 1-99: AND of two conditions (OR would match every number).
+        for (v, hit) in [("0", false), ("1", true), ("99", true), ("100", false)] {
+            assert_eq!(m(">0&<100", v), hit, "{v}");
+            assert!(m(">0|<100", v), "{v}");
+        }
+        // Every status except 404 (`!=404`; `!404` excludes every value containing 404).
+        assert!(m(">0&!=404", "4040") && !m(">0&!=404", "404"));
+        assert!(!m(">0&!404", "404") && !m(">0&!404", "4040"));
+        assert!(m(">=400&!500..599", "404"));
+        assert!(!m(">=400&!500..599", "503"));
+        assert!(m(">=400&!500..599", "600"));
+        // Severity column: everything except Info and Warning.
+        assert!(m("!Info&!Warning", "Error"));
+        assert!(!m("!Info&!Warning", "Info"));
+        assert!(!m("!Info&!Warning", "Warning"));
+        // Component: contains ccm but is not ccmexec.
+        assert!(m("ccm&!ccmexec", "CcmMessaging"));
+        assert!(!m("ccm&!ccmexec", "CcmExec"));
+        // Precedence: "a&b|c" = (a and b) or c.
+        assert!(m("dism&error|=cbs", "DISM error"));
+        assert!(!m("dism&error|=cbs", "DISM"));
+        assert!(m("dism&error|=cbs", "CBS"));
+        // Merged single terms and AND groups together.
+        assert!(m("a|b&c|>5", "xa"));
+        assert!(m("a|b&c|>5", "bc"));
+        assert!(m("a|b&c|>5", "6"));
+        assert!(!m("a|b&c|>5", "b"));
+        // Spaces and empty terms are ignored.
+        assert!(m(" a & ! b ", "a"));
+        assert!(m("a&", "xa") && m("&a&&", "xa"));
+        assert!(ColumnFilter::parse(" & | ! & ").is_none());
+    }
+
+    #[test]
+    fn migration_of_old_negations() {
+        assert_eq!(migrate_v1("!a|b"), "!a&!b");
+        assert_eq!(migrate_v1(" ! ccmexec | =Info |"), "!ccmexec&!=Info");
+        // One term, no leading "!", empty: unchanged.
+        for same in ["!a", "a|b", "a|!b", "", "!", "!|", "!a|="] {
+            assert_eq!(migrate_v1(same), same, "{same}");
+        }
+        // The rewritten filter selects the same values as the old one did.
+        for v in ["CcmExec", "Info", "CcmMessaging", "Information"] {
+            let old_hit = !(v.to_lowercase().contains("ccmexec") || v == "Info");
+            assert_eq!(m(&migrate_v1("!ccmexec|=info"), v), old_hit, "{v}");
+        }
     }
 
     /// Log with entries around the given times plus a few without a parsed timestamp.
@@ -531,6 +688,9 @@ mod tests {
                     ("23.10.2026|24.10.2026", true),
                     ("23.10.2026 10:2|23.10.2026 10:4", true),
                     ("!23.10.2026 10|23.10.2026 11", true),
+                    ("!23.10.2026 10&!23.10.2026 11", true),
+                    ("2026&!23.10.2026|24.10.2026 10", true),
+                    ("23.10.2026&!:30", false),
                     ("2026", true),
                     (".2026", true),
                     ("10.2026", true),

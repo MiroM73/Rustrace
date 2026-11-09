@@ -270,7 +270,9 @@ links in `docs/` (`features.md`, `export.md`, `log-definitions.md`, `log-sets.md
   slots (literal / chronological digit `YYYYMMDDHHMMSSmmm`). Every alternative is aligned at
   every offset of the layout; the fixed digits of each fitting offset must be a chronological
   prefix → inclusive ms range (lowest = zeros with month/day ≥ 1, invalid → empty; highest =
-  nines clamped per field); union of ranges, `!` negates, `=` only at offset 0 with full length.
+  nines clamped per field); union of ranges per term, `=` only at offset 0 with full length; the
+  terms keep the OR / AND / NOT structure of #61 (`ranges: Option<Vec<Vec<DateTerm>>>`, `DateTerm`
+  = (negated, ranges)) and are used only when every term is a range.
   Otherwise (e.g. `:30`, `23.10` without the year, non-ASCII) the displayed text is written
   into a stack buffer (`with_displayed`) and matched like before; entries without a parsed
   timestamp match their text. Tests compare it with the plain text filter for many inputs.
@@ -307,12 +309,20 @@ links in `docs/` (`features.md`, `export.md`, `log-definitions.md`, `log-sets.md
 - Column filters (`src/colfilter.rs`, toolbar toggle `cfg.show_column_filters`): filter row in the
   table header built from `Schema::columns` (adapts to the log type); `App::col_filter_text`
   (by `ColumnKind`) → `col_filters` compiled; checked in `refilter_from` via
-  `passes_column_filters` (date/time as displayed). Syntax: contains / `=exact` / `a|b` / leading
-  `!` negation, case-insensitive. Numeric alternatives (#42): `number_range` turns `>n`, `>=n`,
-  `<n`, `<=n`, `a..b` (either bound may be empty) into a `(Bound<f64>, Bound<f64>)`; text
-  alternatives stay in one regex (`re: Option<Regex>`), `matches` = regex hit or the cell parsed by
-  `number` (optional sign, digits, one `.`; no exponents / hex / thousands separators) lies in a
-  range, then `!` negates. A text like `>abc` or `10.20.7.42` stays a text alternative. The
+  `passes_column_filters` (date/time as displayed). Syntax: contains / `=exact` / OR `a|b` / AND
+  `a&b` / per-term NOT `!a` (#61, port of MMPortLens#35; precedence `!` > `&` > `|`, no
+  parentheses), case-insensitive. `split` → OR groups of AND terms (`Alternative { text, exact,
+  negate }`, repeated `!` toggles, empty terms / groups dropped). Numeric terms (#42):
+  `number_range` turns `>n`, `>=n`, `<n`, `<=n`, `a..b` (either bound may be empty) into a
+  `(Bound<f64>, Bound<f64>)`. Compiled: groups of one non-negated term are merged into one regex
+  (`any_text`) / range list (`any_ranges`) – a plain `a|b|>5` filter costs one regex search per
+  cell as before; other groups are `Vec<(negated, Term::Text | Term::Range)>`; `matches` = merged
+  hit or any group whose terms all match (≠ negated). A cell is a number when `number` parses it
+  (optional sign, digits, one `.`; no exponents / hex / thousands separators). Migration: before
+  #61 a leading `!` negated the whole filter; `colfilter::migrate_v1` (`!a|b` → `!a&!b`, one term
+  unchanged) is applied to `SessionState::col_filters` (the only place filters are saved – the
+  update restart) when `filter_syntax` < `SYNTAX_VERSION` (`#[serde(default)]` = 0 for the state
+  of an older version). Highlight rules use their own pattern syntax (no migration). A text like `>abc` or `10.20.7.42` stays a text alternative. The
   date/time column uses `parse_text` (no numeric alternatives, its own time ranges). Cleared when
   the columns change (other log type).
 - Error code lookup (Ctrl+E) + automatic explanation in the details pane; descriptions from language
@@ -565,7 +575,7 @@ links in `docs/` (`features.md`, `export.md`, `log-definitions.md`, `log-sets.md
   program), names via `AssocQueryStringW`. Test `register_and_unregister` uses its own HKCU key.
 
 ## Tests and benchmarks
-- `cargo test` (148 tests: ReportingEvents.log definition / HRESULT cells (#63), update check failures – HTTP error kinds / retry delays / rate-limit headers / retry loop / check error texts (#60), console target / PowerShell pipe encoding (#62), empty standard columns of plain text hidden (#49), highlight rules import without duplicates / export of ticked rules (#51), Enter after search as you type (#47), IIS Win32 status texts (#43), numeric column filters (#42), table export scopes / cells / columns / cancel / CSV / XLSX / ZIP writer / statistics / sheet per file / JSONL / HTML / presets / `--export` (#32), MSI verbose log / header dates (#40), guides table / URLs / log set guides (#39), IIS column order with `*` (#41), follow end pause / resume (#37), rules window default width (#48), keyboard shortcut order (Shift+F3 / Shift+F2 not taken by F3 / F2, #46), log sets (set file parsing / translations / built-in sets, variables, loading priorities, file checks, remote computer names / variables / drive letters / share roots, network error codes, recent computers), HTTP status lookup / class fallback / lookup input parsing and ambiguity / cell values, status column keys of log definitions, command-line parsing (file association, all options, errors, `--restore`, language / time / regex checks, help text), overview buckets incremental = full / pixel runs, readable export with Δ, durations, match bits set / iterate, bookmark file id remap, update releases list / missed versions / check setting migration, merged logs (order by time, appended older rows, formats + rotated parts + re-read, single log unchanged, interleave), store copy_entry / split_off, raw lines of entries (all formats / encodings), filter (parallel = sequential, match bits), date column filter = text filter, updates (versions, release JSON, notes, sha256 file, ZIP, install, restore state), icon / .ico layout, search as you type threshold, status-bar position percentage, file association (registry in an own HKCU test key), search history, store drop_front / move to temp file, rotated parts (naming, merge on open, rotation while watching, replaced
+- `cargo test` (150 tests: column filter AND / NOT / precedence / migration of old negations, also for the date column and the update restart state (#61), ReportingEvents.log definition / HRESULT cells (#63), update check failures – HTTP error kinds / retry delays / rate-limit headers / retry loop / check error texts (#60), console target / PowerShell pipe encoding (#62), empty standard columns of plain text hidden (#49), highlight rules import without duplicates / export of ticked rules (#51), Enter after search as you type (#47), IIS Win32 status texts (#43), numeric column filters (#42), table export scopes / cells / columns / cancel / CSV / XLSX / ZIP writer / statistics / sheet per file / JSONL / HTML / presets / `--export` (#32), MSI verbose log / header dates (#40), guides table / URLs / log set guides (#39), IIS column order with `*` (#41), follow end pause / resume (#37), rules window default width (#48), keyboard shortcut order (Shift+F3 / Shift+F2 not taken by F3 / F2, #46), log sets (set file parsing / translations / built-in sets, variables, loading priorities, file checks, remote computer names / variables / drive letters / share roots, network error codes, recent computers), HTTP status lookup / class fallback / lookup input parsing and ambiguity / cell values, status column keys of log definitions, command-line parsing (file association, all options, errors, `--restore`, language / time / regex checks, help text), overview buckets incremental = full / pixel runs, readable export with Δ, durations, match bits set / iterate, bookmark file id remap, update releases list / missed versions / check setting migration, merged logs (order by time, appended older rows, formats + rotated parts + re-read, single log unchanged, interleave), store copy_entry / split_off, raw lines of entries (all formats / encodings), filter (parallel = sequential, match bits), date column filter = text filter, updates (versions, release JSON, notes, sha256 file, ZIP, install, restore state), icon / .ico layout, search as you type threshold, status-bar position percentage, file association (registry in an own HKCU test key), search history, store drop_front / move to temp file, rotated parts (naming, merge on open, rotation while watching, replaced
   file), export segments by file, time range bounds, column filter syntax, parsers, chunked/ANSI/UTF-16 reading, log definitions (CBS, DISM, IIS,
   Exchange connectivity / CSV separator, choice by name/content, appending across refreshes), store (32-byte record, ISO ↔ ms, push /
   truncate / append, mapped temp file growing past 64 MB, interner), export incl. end-to-end and

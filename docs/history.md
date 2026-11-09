@@ -365,10 +365,22 @@ Notes for Claude, linked from `CLAUDE.md`.
     `hresult` (column with an HRESULT, explained like an error code in the details pane and the
     cell tooltip). Verified: unit tests `reporting_events_log` (4 real-form lines incl. `(null)`,
     a `-0500` offset, a missing correlation vector) and the HRESULT cell parser; release build on a
-    copy of this PC's ReportingEvents.log (1005 lines) with `--errors`: detected by name, 8 Failure
+    copy of this PC's ReportingEvents.log (~1030 lines) with `--errors`: detected by name, 9 Failure
     rows (`182 [AGENT_INSTALLING_FAILED]`, `80073d02` / `8024200b`), the details pane explains
     `0x80073D02` ("The package could not be installed because resources it modifies are currently
     in use."); the new-definitions notice lists it.
+87. #61 Column filters: AND (`&`) and per-term NOT (`!`) (port of MMPortLens#35): precedence
+    `!` > `&` > `|`; a filter is OR groups of AND terms; single plain terms still merged into one
+    regex (no slowdown of the usual `a|b`); the date column keeps comparing time ranges with the
+    new structure. A leading `!` now negates one term (`!a|b` = (not a) or b, before: neither) –
+    `migrate_v1` rewrites the column filters of the update-restart state of an older version
+    (`filter_syntax` field). RusTrace has no `/regex/` terms, number `a-b` ranges or address
+    alternatives in column filters, and highlight rules do not use this syntax, so those parts of
+    the MMPortLens change were not needed. Tooltip `filter.tip` in all four languages. Verified:
+    ported unit tests (syntax, numbers, AND / NOT / precedence, migration), date filter =
+    text filter for AND / NOT inputs, session state of an older version migrated (`!x|y` →
+    `!x&!y`); release build on the copy of ReportingEvents.log: Status column filter
+    `!Success&!Unknown` → exactly the 9 Failure rows.
 
 ## Ideas not done yet (offered by the owner)
 - `--set "<name>"` command-line option for log sets (#27): would need the set loading, the file

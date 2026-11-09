@@ -185,6 +185,7 @@ impl App {
             time_to: self.time_to.clone(),
             window: Some(window),
             bookmarks: self.bookmark_state(),
+            filter_syntax: crate::colfilter::SYNTAX_VERSION,
         }
     }
 
