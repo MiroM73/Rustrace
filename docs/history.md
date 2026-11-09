@@ -352,6 +352,12 @@ Notes for Claude, linked from `CLAUDE.md`.
     `update_last_check` unchanged after exit, Help → Check for updates showed "GitHub is
     temporarily unavailable (HTTP 503). Try again later." with the status page link after ~17 s
     (config.json backed up and restored).
+85. #59 `release.ps1` under Windows PowerShell 5.1: the workflow run of the new tag is found by
+    filtering the `gh run list --json databaseId,headBranch` output in PowerShell (`Select-RunId`)
+    instead of `--jq` with a quoted string, which 5.1 passed to gh without the quotes (port of
+    MMPortLens#25). Verified: `Select-RunId` extracted from the script and run on the real run list
+    under `powershell.exe` 5.1 and `pwsh` 7.6: v1.1.9 → its run id, a missing tag / empty output →
+    nothing, a one-element array → its id; the script parses without errors in both.
 
 ## Ideas not done yet (offered by the owner)
 - `--set "<name>"` command-line option for log sets (#27): would need the set loading, the file

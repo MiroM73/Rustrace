@@ -83,6 +83,16 @@ function Get-NativeOutput([string]$File, [string[]]$Arguments) {
     return (($out | Out-String).Trim())
 }
 
+# The id of the workflow run of $Tag in the JSON of 'gh run list --json databaseId,headBranch'
+# (for a tag push its headBranch is the tag); $null when there is none.
+function Select-RunId([string]$Json, [string]$Tag) {
+    if (-not $Json) { return $null }
+    # ForEach-Object unrolls the array that ConvertFrom-Json emits as one object in 5.1.
+    return @($Json | ConvertFrom-Json) | ForEach-Object { $_ } |
+        Where-Object { $_.headBranch -eq $Tag } |
+        Select-Object -First 1 -ExpandProperty databaseId
+}
+
 # --- Version -----------------------------------------------------------------------------------
 $Version = $Version.Trim().TrimStart('v')
 if ($Version -notmatch '^\d+\.\d+\.\d+$') { throw "Version '$Version' is not in the form major.minor.patch, e.g. 0.6.0." }
@@ -190,9 +200,11 @@ Write-Step 'Waiting for the GitHub workflow to start'
 $runId = $null
 for ($i = 0; $i -lt 30 -and -not $runId; $i++) {
     Start-Sleep -Seconds 4
-    $runId = Get-NativeOutput gh @('run', 'list', '--workflow', 'release.yml', '--limit', '10',
-        '--json', 'databaseId,headBranch', '--jq', ".[] | select(.headBranch == `"$tag`") | .databaseId")
-    $runId = ($runId -split "`n" | Select-Object -First 1)
+    # Filtered in PowerShell, not with --jq: Windows PowerShell 5.1 drops the double quotes of a
+    # jq string literal when it passes the argument to gh (#59).
+    $runs = Get-NativeOutput gh @('run', 'list', '--workflow', 'release.yml', '--limit', '10',
+        '--json', 'databaseId,headBranch')
+    $runId = Select-RunId $runs $tag
 }
 if (-not $runId) { throw "The workflow run for $tag did not appear - check the Actions tab on GitHub." }
 
