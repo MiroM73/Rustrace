@@ -1,0 +1,39 @@
+# RusTrace log definition – Windows Update ReportingEvents log
+# (C:\Windows\SoftwareDistribution\ReportingEvents.log, UTF-16, one tab-separated line per event)
+#
+# Example lines (tabs shown as "→"):
+#   {3B39CB38-8361-403E-97AA-CE86FD3D3300}→2026-10-22 20:56:10:263+0200→1→147 [AGENT_DETECTION_FINISHED]→101→{00000000-0000-0000-0000-000000000000}→0→0→Windows Defender→Success→Software Synchronization→Windows Update Client successfully detected 0 updates.→5GR1F1CyIkWAj6j6.1.1.0.3.0
+#   {17BA0651-FF3C-4A24-A6D1-4D9958B55C00}→2026-10-18 18:26:31:536+0200→1→182 [AGENT_INSTALLING_FAILED]→101→{08EF6B1A-A865-422F-BCAC-8EC0842EC8D5}→1→80073d02→Update;…→Failure→Content Install→Installation Failure: Windows failed to install the following update with error 0x80073D02: …→VgMvGJu3JEWEPIPG.1.53.1.0.0.1.0
+#
+# Fields: event instance id, time at the target (local time with its UTC offset), namespace id,
+# event id [event name], source id, update id, revision, Win32 HRESULT (hex without "0x"),
+# application, status (Success / Failure / Unknown), category, message, correlation vector.
+# The time is shown as written (the offset is not converted). Status "Failure" is an error, a
+# cancelled download a warning; the HRESULT column is explained like an error code.
+
+name = Windows Update ReportingEvents log
+files = reportingevents.log; reportingevents*.log
+detect = ^\{[0-9A-Fa-f-]{36}\}\t\d{4}-\d\d-\d\d \d\d:\d\d:\d\d:\d{3}[+-]\d{4}\t
+
+pattern = ^(?P<instance>\{[0-9A-Fa-f-]{36}\})\t(?P<datetime>\d{4}-\d\d-\d\d \d\d:\d\d:\d\d:\d{3})(?:[+-]\d{4})?\t(?P<namespace>\d*)\t(?P<event>[^\t]*)\t(?P<source>[^\t]*)\t(?P<update>[^\t]*)\t(?P<revision>[^\t]*)\t(?P<hresult>[^\t]*)\t(?P<app>[^\t]*)\t(?P<status>[^\t]*)\t(?P<category>[^\t]*)\t(?P<message>[^\t]*)(?:\t(?P<cv>[^\t]*))?.*$
+datetime.format = %Y-%m-%d %H:%M:%S:%3f
+unmatched = append
+
+role.severity = status event
+severity.error = ^Failure\b
+severity.warning = _CANCELED\]
+
+hresult = hresult
+
+columns = datetime status event category hresult message app update *
+title.status = Status
+title.event = Event
+title.category = Category
+title.hresult = HRESULT
+title.app = Application
+title.update = Update ID
+title.instance = Event instance ID
+title.namespace = Namespace
+title.source = Source
+title.revision = Revision
+title.cv = Correlation vector

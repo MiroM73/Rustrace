@@ -53,7 +53,7 @@ Both create:
 RusTrace\
     rustrace.exe      the program (no installation, no Visual C++ runtime needed)
     lang\*.lang       language files – edit or add translations here
-    logdef\*.def      log definitions (IIS, Exchange, DISM, CBS, MSI) – edit or add your own formats here
+    logdef\*.def      log definitions (IIS, Exchange, DISM, CBS, MSI, ReportingEvents) – edit or add your own formats here
     logsets\*.set     log sets (groups of ConfigMgr / Intune logs opened together)
     LICENSE           the Unlicense (public domain)
 ```

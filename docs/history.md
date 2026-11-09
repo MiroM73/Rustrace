@@ -358,6 +358,17 @@ Notes for Claude, linked from `CLAUDE.md`.
     MMPortLens#25). Verified: `Select-RunId` extracted from the script and run on the real run list
     under `powershell.exe` 5.1 and `pwsh` 7.6: v1.1.9 → its run id, a missing tag / empty output →
     nothing, a one-element array → its id; the script parses without errors in both.
+86. #63 Windows Update `ReportingEvents.log`: built-in `reportingevents.log.def` – the pattern of
+    the issue adjusted to the real file (UTF-16 LE, 13 tab-separated fields, event names such as
+    `175 [(null)]`, empty category / message, HRESULT in hex without `0x`, status
+    Success / Failure / Unknown): Failure = error, `_CANCELED]` = warning; new log definition key
+    `hresult` (column with an HRESULT, explained like an error code in the details pane and the
+    cell tooltip). Verified: unit tests `reporting_events_log` (4 real-form lines incl. `(null)`,
+    a `-0500` offset, a missing correlation vector) and the HRESULT cell parser; release build on a
+    copy of this PC's ReportingEvents.log (1005 lines) with `--errors`: detected by name, 8 Failure
+    rows (`182 [AGENT_INSTALLING_FAILED]`, `80073d02` / `8024200b`), the details pane explains
+    `0x80073D02` ("The package could not be installed because resources it modifies are currently
+    in use."); the new-definitions notice lists it.
 
 ## Ideas not done yet (offered by the owner)
 - `--set "<name>"` command-line option for log sets (#27): would need the set loading, the file

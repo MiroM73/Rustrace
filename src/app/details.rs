@@ -36,12 +36,19 @@ impl App {
                     .win32
                     .and_then(|c| httpstatus::win32_from_cell(e.extra(c)))
                     .filter(|&v| v != 0);
+                // An HRESULT column (#63) first, then the codes found in the message.
+                let hresult = st
+                    .hresult
+                    .and_then(|c| httpstatus::hresult_from_cell(e.extra(c)))
+                    .filter(|&v| v != 0);
+                let mut codes: Vec<u32> = hresult.into_iter().collect();
+                for v in errcodes::find_codes(e.message) {
+                    if Some(v) != win32 && !codes.contains(&v) {
+                        codes.push(v);
+                    }
+                }
                 RowCodes {
-                    codes: errcodes::find_codes(e.message)
-                        .into_iter()
-                        .filter(|&v| Some(v) != win32)
-                        .map(errcodes::lookup)
-                        .collect(),
+                    codes: codes.into_iter().map(errcodes::lookup).collect(),
                     http: st.http.and_then(|c| {
                         httpstatus::from_cells(e.extra(c), st.substatus.map(|s| e.extra(s)))
                     }),
@@ -71,6 +78,19 @@ impl App {
             }
             let info = errcodes::lookup(v);
             return Some(format!("Win32 {v}: {}\n{}", info.short(), info.forms()));
+        }
+        if st.hresult == Some(c) {
+            let v = httpstatus::hresult_from_cell(e.extra(c))?;
+            if v == 0 {
+                return Some(t!("code.success"));
+            }
+            let info = errcodes::lookup(v);
+            return Some(format!(
+                "{}: {}\n{}",
+                info.hex(),
+                info.short(),
+                info.forms()
+            ));
         }
         None
     }

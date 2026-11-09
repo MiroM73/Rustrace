@@ -16,7 +16,8 @@ Everything RusTrace can do, area by area.
   as soon as a row has a value in it; in a merged view it stays when any log fills it (e.g.
   plain text + a CMTrace log). CMTrace logs and log definitions always keep their columns
 - **any other layout described by a log definition** – built in: **IIS web logs** (W3C),
-  **Exchange Transport Connectivity logs**, **dism.log**, **CBS.log**; your own in `logdef\*.def` (see [Log definitions](log-definitions.md))
+  **Exchange Transport Connectivity logs**, **dism.log**, **CBS.log**, **Windows Installer verbose
+  logs**, Windows Update **ReportingEvents.log**; your own in `logdef\*.def` (see [Log definitions](log-definitions.md))
 - encodings UTF-8, UTF-16 LE/BE (by BOM), ANSI (Windows-1250)
 
 ## Several logs in one view, sorted by time

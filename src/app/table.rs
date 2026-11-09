@@ -308,7 +308,7 @@ impl App {
             .body(|body| {
                 let st = self.status_columns();
                 let status_cols =
-                    [st.http, st.substatus, st.win32].map(|c| c.map(ColumnKind::Extra));
+                    [st.http, st.substatus, st.win32, st.hresult].map(|c| c.map(ColumnKind::Extra));
                 body.rows(row_h, self.filtered.len(), |mut row| {
                     let r = row.index();
                     drawn = Some(drawn.map_or((r, r), |(a, b)| (a.min(r), b.max(r))));

@@ -28,7 +28,7 @@ are in `docs/features.md` and the other documents linked from `README.md`.
 
 Feature index (file → section of `docs/architecture.md`):
 - Formats, encodings, chunked background reading – `src/parser.rs` → Formats, Reading
-- Log definitions (`.def`, W3C, groups, update notice, `header.date` for MSI logs #40, `columns` `*` #41) –
+- Log definitions (`.def`, W3C, groups, update notice, `header.date` for MSI logs #40, `columns` `*` #41, ReportingEvents.log + `hresult` key #63) –
   `src/logdef.rs`, `app/logdefs.rs` → Log definitions
 - Several logs merged by time – `src/merge.rs` → Merged logs
 - Log sets (File → Open log set, `.set` files, variables, remote computer) – `src/logset.rs`, `dialogs/logsets.rs` → Log sets
@@ -91,7 +91,7 @@ Feature index (file → section of `docs/architecture.md`):
   `egui::MenuBar::new().ui(..)`, `ui.close()`, `egui::Id::unique(..)` (not `Id::new`).
 
 ## Commands
-- `cargo build --release` → `target\release\rustrace.exe`; `cargo test` (147 tests; what they
+- `cargo build --release` → `target\release\rustrace.exe`; `cargo test` (148 tests; what they
   cover: `docs/architecture.md` → Tests and benchmarks).
 - `cargo fmt` + `cargo clippy --all-targets --locked -- -D warnings` – the code is rustfmt-clean and
   clippy-clean; CI (`.github/workflows/ci.yml`) fails otherwise. Formatting-only commits go into

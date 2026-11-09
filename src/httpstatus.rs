@@ -88,6 +88,29 @@ pub fn win32_from_cell(value: &str) -> Option<u32> {
         .and_then(|v| u32::try_from(v).ok())
 }
 
+/// Value of an HRESULT cell (`hresult` of a log definition, #63): hex with or without `0x`
+/// (`80073d02`, `0x80073D02`, `240010`) or a negative decimal (`-2147023293`); `None` for an empty
+/// or non-numeric value.
+pub fn hresult_from_cell(value: &str) -> Option<u32> {
+    let v = value.trim();
+    if let Some(neg) = v.strip_prefix('-') {
+        return neg
+            .parse::<u32>()
+            .ok()
+            .filter(|_| !neg.is_empty())
+            .and_then(|n| i32::try_from(-(n as i64)).ok())
+            .map(|n| n as u32);
+    }
+    let hex = v
+        .strip_prefix("0x")
+        .or_else(|| v.strip_prefix("0X"))
+        .unwrap_or(v);
+    if hex.is_empty() || hex.len() > 8 {
+        return None;
+    }
+    u32::from_str_radix(hex, 16).ok()
+}
+
 /// An HTTP status entered in the error code lookup.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct HttpQuery {
@@ -236,5 +259,13 @@ mod tests {
         assert_eq!(win32_from_cell("2148074254"), Some(0x8009_030E));
         assert_eq!(win32_from_cell(""), None);
         assert_eq!(win32_from_cell("-"), None);
+        assert_eq!(hresult_from_cell("80073d02"), Some(0x8007_3D02));
+        assert_eq!(hresult_from_cell(" 0x8024000B "), Some(0x8024_000B));
+        assert_eq!(hresult_from_cell("240010"), Some(0x0024_0010));
+        assert_eq!(hresult_from_cell("0"), Some(0));
+        assert_eq!(hresult_from_cell("-2147023293"), Some(0x8007_0643));
+        for bad in ["", "-", "0x", "zz", "123456789", "-x"] {
+            assert_eq!(hresult_from_cell(bad), None, "{bad}");
+        }
     }
 }

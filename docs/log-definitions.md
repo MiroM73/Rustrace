@@ -20,7 +20,11 @@ Server Transport Connectivity logs `CONNECTLOG*.LOG`, comma-separated W3C-like f
 line, so the rows are placed at their real time in a merged view; columns MSI context `s` / `c`,
 process:thread, message; errors are only the real failures – `Return value 3`, `Error 1722.`,
 `returned actual error code 1603`, `@@ERR:`, *Installation failed*, `error status: 1603` – not the
-harmless `Note: 1: 2205 2:  3: Error` lines or `error status: 0`; `Return value 2` = warning).
+harmless `Note: 1: 2205 2:  3: Error` lines or `error status: 0`; `Return value 2` = warning) and
+`reportingevents.log.def` (Windows Update `C:\Windows\SoftwareDistribution\ReportingEvents.log`:
+columns Date / time, Status, Event, Category, HRESULT, Message, Application, Update ID, then the
+event instance ID, namespace, source, revision and correlation vector; status *Failure* = error, a
+cancelled download = warning; the HRESULT, e.g. `80073d02`, is explained like an error code).
 
 **Choosing the format** – View → Log format:
 - **Automatic** (default for every opened file): a definition whose `files` patterns match the file
@@ -93,6 +97,7 @@ title.severity = Level
 | `columns` | order of the table columns (role or column names); `*` = all the other columns in the order of the pattern / header (e.g. `columns = datetime sc-status message *`); without `*` the columns not listed are hidden; default: the order in the pattern / header |
 | `title.<column>` | column header, e.g. `title.sc-status = Status`, `title.message = Request` |
 | `http_status`, `http_substatus`, `win32_status` | optional: the columns holding an HTTP status, an IIS substatus and a Win32 status code (decimal) – explained in the details pane and in the cell tooltip, e.g. `http_status = sc-status`; a named column missing in the log is ignored; only extra columns (not used by a role) are explained |
+| `hresult` | optional: the column holding an HRESULT / error code – hex with or without `0x` (`80073d02`, `0x80070643`) or a negative decimal (`-2147023293`); explained in the details pane (first among the error codes) and in the cell tooltip, `0` = success, e.g. `hresult = hresult` |
 
 Columns not used by a role (e.g. IIS `sc-status`, `c-ip`, DISM `function`) are **extra columns**:
 they are shown in the table and the details pane, searched by the search box and by highlight rules

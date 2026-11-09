@@ -24,6 +24,7 @@
 //! | `columns` | order of the columns in the table (role names or column names, `*` = all the other columns in the order of the pattern / header); columns not listed are hidden unless `*` is used; default: order in the pattern / header |
 //! | `title.<column>` | column header (`title.message = Request`) |
 //! | `http_status`, `http_substatus`, `win32_status` | columns with an HTTP status, an IIS substatus and a Win32 status code (decimal) – explained in the details pane, in the cell tooltip and in the error code lookup (#28); optional, a missing column is ignored |
+//! | `hresult` | column with an HRESULT / error code (hex with or without `0x`, or negative decimal) – explained like the error codes of the message (#63) |
 //!
 //! Columns that are not used by `role.message/component/thread/datetime` are kept as extra
 //! columns (shown in the table, searchable). Definitions are built in (`logdef/*.def` in the
@@ -48,6 +49,10 @@ const BUILTIN: &[(&str, &str)] = &[
     ),
     ("iisweb.log.def", include_str!("../logdef/iisweb.log.def")),
     ("msi.log.def", include_str!("../logdef/msi.log.def")),
+    (
+        "reportingevents.log.def",
+        include_str!("../logdef/reportingevents.log.def"),
+    ),
 ];
 
 /// Date/time formats tried when `datetime.format` does not match.
@@ -129,12 +134,14 @@ pub struct Schema {
 }
 
 /// Names of the columns with status codes (`.def` keys `http_status`, `http_substatus`,
-/// `win32_status`, #28). Only extra columns are explained (not columns used by a role).
+/// `win32_status`, #28; `hresult`, #63). Only extra columns are explained (not columns used by a role).
 #[derive(Clone, PartialEq, Eq, Debug, Hash, Default)]
 pub struct StatusFields {
     pub http: Option<String>,
     pub substatus: Option<String>,
     pub win32: Option<String>,
+    /// An HRESULT / error code in hex, with or without `0x` (#63).
+    pub hresult: Option<String>,
 }
 
 /// Extra column indexes of the status columns in a schema (`StatusFields::resolve`).
@@ -143,11 +150,15 @@ pub struct StatusColumns {
     pub http: Option<usize>,
     pub substatus: Option<usize>,
     pub win32: Option<usize>,
+    pub hresult: Option<usize>,
 }
 
 impl StatusFields {
     pub fn is_empty(&self) -> bool {
-        self.http.is_none() && self.substatus.is_none() && self.win32.is_none()
+        self.http.is_none()
+            && self.substatus.is_none()
+            && self.win32.is_none()
+            && self.hresult.is_none()
     }
 
     /// Finds the columns in the extra column names (case-insensitive); missing ones are `None`.
@@ -160,6 +171,7 @@ impl StatusFields {
             http: find(&self.http),
             substatus: find(&self.substatus),
             win32: find(&self.win32),
+            hresult: find(&self.hresult),
         }
     }
 }
@@ -401,6 +413,7 @@ impl LogDef {
                     | "http_status"
                     | "http_substatus"
                     | "win32_status"
+                    | "hresult"
             ) {
                 return Err(format!("unknown key \"{k}\""));
             }
@@ -509,6 +522,7 @@ impl LogDef {
                 http: get("http_status").map(str::to_owned),
                 substatus: get("http_substatus").map(str::to_owned),
                 win32: get("win32_status").map(str::to_owned),
+                hresult: get("hresult").map(str::to_owned),
             },
         })
     }
@@ -1258,9 +1272,54 @@ mod tests {
                 "dism.log.def",
                 "exchconnect.log.def",
                 "iisweb.log.def",
-                "msi.log.def"
+                "msi.log.def",
+                "reportingevents.log.def"
             ]
         );
+    }
+
+    /// Windows Update ReportingEvents.log (#63): tab-separated, the event name may be "(null)",
+    /// the HRESULT is hex without "0x", the status gives the severity.
+    #[test]
+    fn reporting_events_log() {
+        let def = builtin("reportingevents.log.def");
+        let lines = [
+            "{3B39CB38-8361-403E-97AA-CE86FD3D3300}\t2026-10-22 20:56:10:263+0200\t1\t147 [AGENT_DETECTION_FINISHED]\t101\t{00000000-0000-0000-0000-000000000000}\t0\t0\tWindows Defender\tSuccess\tSoftware Synchronization\tWindows Update Client successfully detected 0 updates.\t5GR1F1CyIkWAj6j6.1.1.0.3.0",
+            "{57FC5E73-EAC9-4B19-80DF-04A9A03B7712}\t2026-10-18 18:26:30:927+0200\t1\t175 [(null)]\t101\t{08EF6B1A-A865-422F-BCAC-8EC0842EC8D5}\t1\t0\tUpdate;MoUpdateOrchestratorDeviceScan\tUnknown\t\t\tVgMvGJu3JEWEPIPG.1.2.1.0.0.127.1.0",
+            "{17BA0651-FF3C-4A24-A6D1-4D9958B55C00}\t2026-10-18 18:26:31:536+0200\t1\t182 [AGENT_INSTALLING_FAILED]\t101\t{08EF6B1A-A865-422F-BCAC-8EC0842EC8D5}\t1\t80073d02\tUpdate;x\tFailure\tContent Install\tInstallation Failure: Windows failed to install the following update with error 0x80073D02: x.\tVgMvGJu3JEWEPIPG.1.53.1.0.0.1.0",
+            "{27BA0651-FF3C-4A24-A6D1-4D9958B55C00}\t2026-10-18 18:27:00:000-0500\t1\t163 [AGENT_DOWNLOAD_CANCELED]\t101\t{08EF6B1A-A865-422F-BCAC-8EC0842EC8D5}\t1\t240006\tUpdate;x\tSuccess\tContent Download\tDownload canceled.",
+        ];
+        assert!(def.detects(&lines[..1]));
+        let (e, s) = parse_lines(def, &lines);
+        assert_eq!(e.len(), 4);
+        // The time as written, the UTC offset dropped.
+        assert_eq!(e[0].datetime, "2026-10-22 20:56:10.263");
+        assert_eq!(e[3].datetime, "2026-10-18 18:27:00.000");
+        assert_eq!(
+            e[0].message,
+            "Windows Update Client successfully detected 0 updates."
+        );
+        assert_eq!(e[0].severity, Severity::Info);
+        assert_eq!(extra(&e[1], &s, "event"), "175 [(null)]");
+        assert_eq!(e[1].message, "");
+        assert_eq!(e[1].severity, Severity::Info);
+        assert_eq!(e[2].severity, Severity::Error);
+        assert_eq!(extra(&e[2], &s, "hresult"), "80073d02");
+        assert_eq!(e[3].severity, Severity::Warning);
+        assert_eq!(extra(&e[3], &s, "cv"), "");
+        // The HRESULT column is a status column (explained like an error code).
+        let st = s.status.resolve(&s.extra_names);
+        assert_eq!(
+            st.hresult.map(|c| s.extra_names[c].as_str()),
+            Some("hresult")
+        );
+        let titles: Vec<String> = s
+            .columns
+            .iter()
+            .take(6)
+            .map(|c| c.title.clone().unwrap_or_default())
+            .collect();
+        assert_eq!(titles, ["", "Status", "Event", "Category", "HRESULT", ""]);
     }
 
     #[test]
@@ -1821,7 +1880,8 @@ mod tests {
                 ("cbs.log.def", 0),
                 ("dism.log.def", 0),
                 ("exchconnect.log.def", 0),
-                ("msi.log.def", 0)
+                ("msi.log.def", 0),
+                ("reportingevents.log.def", 0)
             ]
         );
         assert!(set.defs[0].is_own() && !set.defs[0].same_as(&set.defs[3]));
@@ -1842,7 +1902,8 @@ mod tests {
                 "Windows CBS log",
                 "DISM log",
                 "Exchange Transport Connectivity log",
-                "Windows Installer log (MSI)"
+                "Windows Installer log (MSI)",
+                "Windows Update ReportingEvents log"
             ]
         );
         // The texts for the notice are there whatever the filter is.
@@ -1855,7 +1916,8 @@ mod tests {
                 "dism.log.def",
                 "exchconnect.log.def",
                 "iisweb.log.def",
-                "msi.log.def"
+                "msi.log.def",
+                "reportingevents.log.def"
             ]
         );
         assert_eq!(
