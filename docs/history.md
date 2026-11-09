@@ -407,6 +407,12 @@ Notes for Claude, linked from `CLAUDE.md`.
     54 379 matches, `0x8007` 32 663 (narrowed), Backspace 54 379 (cache), filter mode "Shown
     32663 of 1899482" – the counts equal an independent count of the file.
     `docs/history.md` "Possible further memory work": the `Vec<u32>` item is done.
+90. Release v1.2.0 (#62, #60, #59, #63, #61, #33 and the shared settings between instances; the
+    minor number raised for the changed meaning of a leading `!` in column filters). origin/master
+    had the shared-settings commit, so the work was merged (doc conflicts only). `release.ps1 1.2.0
+    -Publish -Yes` under pwsh: tests, tag, GitHub build watched to the end (the `Select-RunId` of
+    #59 found the run), published with the .exe / .zip and their .sha256; release notes (What's
+    new / changed / fixed / removed) set with `gh release edit`.
 
 ## Ideas not done yet (offered by the owner)
 - `--set "<name>"` command-line option for log sets (#27): would need the set loading, the file
