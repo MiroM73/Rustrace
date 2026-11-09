@@ -333,7 +333,20 @@ Notes for Claude, linked from `CLAUDE.md`.
     ticked rules, #49 empty plain-text columns hidden). `release.ps1 1.1.9 -Publish -Yes` under
     pwsh: tests, tag, GitHub build, published with the .exe / .zip and their .sha256; release notes
     (What's new / changed / fixed / removed) set with `gh release edit`.
-83. #62 Console messages through a PowerShell pipe (port of MMPortLens#40): `src/console.rs`
+83. Settings shared by running instances: a settings change in one window shows up in the other
+    running RusTrace windows within ~1 s (`app/sync.rs`). The settings file is written atomically
+    (temporary file + rename), a watcher thread checks its time / size every second, changes are
+    merged per top-level setting against the file as last read / written (`config::merge_settings`,
+    so a window never overwrites settings it did not change) and applied with their side effects
+    (theme, UI zoom – egui applies it one frame later, so `handle_zoom` compares with the zoom of
+    the previous frame –, language, rules, overview, follow end, memory limit, log definitions,
+    re-read for keyword severity / rotated parts / definition sources). Unit test
+    `settings_of_two_instances_are_merged`. Verified with two release instances driven by a
+    script (config.json backed up / restored): an external atomic write of `theme = dark` turned
+    both dark; Ctrl+P + Ctrl+= in A saved `auto_refresh = false`, `ui_zoom = 1.1` and kept the
+    dark theme, B did not revert them; Ctrl+P in B then wrote `auto_refresh = true` (B had taken
+    over A's pause); no temporary files left. Built with rustc 1.99.1 (egui 0.37 needs ≥ 1.95).
+84. #62 Console messages through a PowerShell pipe (port of MMPortLens#40): `src/console.rs`
     writes the text in the console code page when the output is a pipe read by Windows
     PowerShell / PowerShell 7 (before, UTF-8 bytes were decoded as OEM 852 / 437: `ý` → `├╜`);
     a console, a file or a bash pipe unchanged. `attach_console` moved there from `batch.rs`.
@@ -341,7 +354,7 @@ Notes for Claude, linked from `CLAUDE.md`.
     encoding); release build under `powershell.exe` 5.1 and `pwsh` 7 with code page 852:
     `rustrace t.log --lang sk --export out.csv 2>&1 | Out-String` equals `Exportovaných 1
     riadkov do out.csv`.
-84. #60 Update check: transient GitHub errors retried and explained (port of MMPortLens#26):
+85. #60 Update check: transient GitHub errors retried and explained (port of MMPortLens#26):
     typed `HttpError` with rate-limit headers, `http::retry` (502 / 503 / 504, WinHTTP timeouts:
     waits 2, 5, 10 s, `Retry-After` up to 30 s), `CheckError` with translated texts that keep the
     raw code, a "GitHub status page" link for 5xx, a transient failure of the automatic check not
@@ -352,13 +365,13 @@ Notes for Claude, linked from `CLAUDE.md`.
     `update_last_check` unchanged after exit, Help → Check for updates showed "GitHub is
     temporarily unavailable (HTTP 503). Try again later." with the status page link after ~17 s
     (config.json backed up and restored).
-85. #59 `release.ps1` under Windows PowerShell 5.1: the workflow run of the new tag is found by
+86. #59 `release.ps1` under Windows PowerShell 5.1: the workflow run of the new tag is found by
     filtering the `gh run list --json databaseId,headBranch` output in PowerShell (`Select-RunId`)
     instead of `--jq` with a quoted string, which 5.1 passed to gh without the quotes (port of
     MMPortLens#25). Verified: `Select-RunId` extracted from the script and run on the real run list
     under `powershell.exe` 5.1 and `pwsh` 7.6: v1.1.9 → its run id, a missing tag / empty output →
     nothing, a one-element array → its id; the script parses without errors in both.
-86. #63 Windows Update `ReportingEvents.log`: built-in `reportingevents.log.def` – the pattern of
+87. #63 Windows Update `ReportingEvents.log`: built-in `reportingevents.log.def` – the pattern of
     the issue adjusted to the real file (UTF-16 LE, 13 tab-separated fields, event names such as
     `175 [(null)]`, empty category / message, HRESULT in hex without `0x`, status
     Success / Failure / Unknown): Failure = error, `_CANCELED]` = warning; new log definition key
@@ -369,7 +382,7 @@ Notes for Claude, linked from `CLAUDE.md`.
     rows (`182 [AGENT_INSTALLING_FAILED]`, `80073d02` / `8024200b`), the details pane explains
     `0x80073D02` ("The package could not be installed because resources it modifies are currently
     in use."); the new-definitions notice lists it.
-87. #61 Column filters: AND (`&`) and per-term NOT (`!`) (port of MMPortLens#35): precedence
+88. #61 Column filters: AND (`&`) and per-term NOT (`!`) (port of MMPortLens#35): precedence
     `!` > `&` > `|`; a filter is OR groups of AND terms; single plain terms still merged into one
     regex (no slowdown of the usual `a|b`); the date column keeps comparing time ranges with the
     new structure. A leading `!` now negates one term (`!a|b` = (not a) or b, before: neither) –
@@ -381,7 +394,7 @@ Notes for Claude, linked from `CLAUDE.md`.
     text filter for AND / NOT inputs, session state of an older version migrated (`!x|y` →
     `!x&!y`); release build on the copy of ReportingEvents.log: Status column filter
     `!Success&!Unknown` → exactly the 9 Failure rows.
-88. #33 Search and load optimizations, same results (baseline and after: `docs/architecture.md`
+89. #33 Search and load optimizations, same results (baseline and after: `docs/architecture.md`
     → Tests and benchmarks): (1) search / column filters of component, thread and extra columns
     evaluated once per interned value in full runs (IIS search 145 → 48 ms sequential); (2) a
     typed plain-text search that extends the previous one searches only the previous matches;
@@ -390,7 +403,7 @@ Notes for Claude, linked from `CLAUDE.md`.
     without temporary strings, UTF-8 chunks validated once and not copied – 400 MB load 4.4 →
     1.8 s, ~16 MB less private memory. `bench_filter` now loads with the log definitions and
     measures a search hitting extra columns; new `bench_load_phases`. Verified: equivalence
-    tests for 1, 2, 3 and 5; 154 tests, fmt, clippy; release build on the 400 MB log: `0x800`
+    tests for 1, 2, 3 and 5; 154 tests (155 with the shared settings), fmt, clippy; release build on the 400 MB log: `0x800`
     54 379 matches, `0x8007` 32 663 (narrowed), Backspace 54 379 (cache), filter mode "Shown
     32663 of 1899482" – the counts equal an independent count of the file.
     `docs/history.md` "Possible further memory work": the `Vec<u32>` item is done.

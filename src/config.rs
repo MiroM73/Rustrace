@@ -540,12 +540,32 @@ impl Config {
     pub fn load() -> (Self, bool) {
         let text = Self::path().and_then(|p| std::fs::read_to_string(p).ok());
         let existed = text.is_some();
-        let mut cfg: Config = text
-            .and_then(|s| serde_json::from_str(&s).ok())
-            .unwrap_or_default();
+        let cfg = text.and_then(|s| Self::parse(&s)).unwrap_or_default();
+        (cfg, existed)
+    }
+
+    fn parse(text: &str) -> Option<Self> {
+        let mut cfg: Config = serde_json::from_str(text).ok()?;
         cfg.fill_missing_dark();
         cfg.migrate_update_check();
-        (cfg, existed)
+        Some(cfg)
+    }
+
+    /// The settings file as it is now, `None` when it is missing or cannot be read.
+    pub fn read_file() -> Option<Self> {
+        Self::parse(&std::fs::read_to_string(Self::path()?).ok()?)
+    }
+
+    /// The settings as JSON – the form in which instances compare and merge them.
+    pub fn to_value(&self) -> serde_json::Value {
+        serde_json::to_value(self).unwrap_or_default()
+    }
+
+    pub fn from_value(v: serde_json::Value) -> Option<Self> {
+        let mut cfg: Config = serde_json::from_value(v).ok()?;
+        cfg.fill_missing_dark();
+        cfg.migrate_update_check();
+        Some(cfg)
     }
 
     /// The old switch "check automatically (once a day)": on → at every start, off → never.
@@ -555,13 +575,21 @@ impl Config {
         }
     }
 
-    pub fn save(&self) -> std::io::Result<()> {
+    /// Writes the settings file through a temporary file, so another running instance never
+    /// reads a half-written file.
+    pub fn write_value(v: &serde_json::Value) -> std::io::Result<()> {
         let Some(p) = Self::path() else { return Ok(()) };
         if let Some(dir) = p.parent() {
             std::fs::create_dir_all(dir)?;
         }
-        let json = serde_json::to_string_pretty(self).map_err(std::io::Error::other)?;
-        std::fs::write(p, json)
+        let json = serde_json::to_string_pretty(v).map_err(std::io::Error::other)?;
+        let tmp = p.with_extension(format!("json.{}.tmp", std::process::id()));
+        std::fs::write(&tmp, &json)?;
+        if std::fs::rename(&tmp, &p).is_err() {
+            let _ = std::fs::remove_file(&tmp);
+            std::fs::write(&p, json)?;
+        }
+        Ok(())
     }
 
     /// Adds dark colors to rules from older versions or imported files.
@@ -686,9 +714,52 @@ impl Config {
     }
 }
 
+/// Settings shared by several running instances: puts every top-level setting this instance
+/// changed since `base` (the file as it was last read or written) into `disk` (the file now);
+/// the other settings keep the value of `disk`, i.e. the changes of the other instances.
+pub fn merge_settings(
+    base: &serde_json::Value,
+    mine: &serde_json::Value,
+    disk: &mut serde_json::Value,
+) {
+    let (Some(mine), Some(disk)) = (mine.as_object(), disk.as_object_mut()) else {
+        return;
+    };
+    for (key, value) in mine {
+        if base.get(key) != Some(value) {
+            disk.insert(key.clone(), value.clone());
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn settings_of_two_instances_are_merged() {
+        let base = Config::default();
+        let mut mine = base.clone();
+        mine.font_size = 16.0;
+        mine.push_search("mine");
+        let mut other = base.clone();
+        other.theme = "dark".into();
+        other.font_size = 10.0;
+        other.rules.clear();
+        let mut disk = other.to_value();
+        merge_settings(&base.to_value(), &mine.to_value(), &mut disk);
+        let merged = Config::from_value(disk).unwrap();
+        // Own changes win for the settings this instance changed, the others come from the file.
+        assert_eq!(merged.font_size, 16.0);
+        assert_eq!(merged.search_history, ["mine"]);
+        assert_eq!(merged.theme, "dark");
+        assert!(merged.rules.is_empty());
+
+        // Nothing changed here: the file is taken as it is.
+        let mut disk = other.to_value();
+        merge_settings(&base.to_value(), &base.to_value(), &mut disk);
+        assert_eq!(disk, other.to_value());
+    }
 
     #[test]
     fn importing_rules_twice_creates_no_duplicates() {

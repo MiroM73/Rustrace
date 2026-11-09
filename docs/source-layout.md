@@ -46,6 +46,7 @@ What every source file and folder of the repository contains.
   - `delta.rs` – the Δ time column (modes, reference row, long gaps)
   - `selection.rs` – selection of several rows, copying them (messages, table, original lines)
   - `bookmarks.rs` – bookmarks: toggling, F2 navigation, kept on their lines through refreshes (+ tests)
+  - `sync.rs` – settings shared by running instances (file watcher, merge, applying changes)
   - `widgets.rs` – small shared UI helpers (color button, theme switch, …)
   - `dialogs/` – highlight rules, colors, error code lookup, export, bookmarks, help / about,
     default app (Windows), new versions, open log set
