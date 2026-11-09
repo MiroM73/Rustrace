@@ -304,9 +304,9 @@ pub fn help_text(languages: &str, tabs: bool) -> String {
 /// has no console), `boxed` in a message box.
 pub fn show_message(title: &str, console: &str, boxed: &str, error: bool) {
     if error {
-        eprintln!("{console}");
+        crate::console::err(console);
     } else {
-        println!("{console}");
+        crate::console::out(console);
     }
     #[cfg(windows)]
     message_box(title, boxed, error);

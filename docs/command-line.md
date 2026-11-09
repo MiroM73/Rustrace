@@ -19,7 +19,7 @@ rustrace [OPTIONS] [FILE]...
 | `--from <TIME>` / `--to <TIME>` | Time range (`--to` inclusive, a date alone = the whole day). The same formats as the time range in the toolbar: ISO (`2026-10-27 13:05:30`, `2026-10-27T13:05`, `2026-10-27`) always, or the date order of the UI language (e.g. `27.10.2026 13:05` in Slovak). |
 | `--tail` / `--no-follow` | Follow / do not follow the end of the log (default: the "Follow end" setting; the options set it like the toolbar checkbox). |
 | `--merge` | Open several FILEs as one view merged by time. Several FILEs are merged also without it (the same as opening or dropping several files), the option just makes it explicit. |
-| `--export <FILE>` | Write the table export (CSV / Excel / JSON Lines / HTML by the extension of FILE) of the rows the other options select and exit without a window – see [Export table](export.md#export-table--csv--excel). Messages go to the console; exit code 0 = written, 1 = export error, 2 = invalid command line. |
+| `--export <FILE>` | Write the table export (CSV / Excel / JSON Lines / HTML by the extension of FILE) of the rows the other options select and exit without a window – see [Export table](export.md#export-table--csv--excel). Messages go to the console (also through a PowerShell pipe such as `| Out-Host` or `2>&1` with the right accented letters); exit code 0 = written, 1 = export error, 2 = invalid command line. |
 | `--lang <CODE>` | UI language for this run only (`en`, `sk`, `cs`, `de` or an external language file); not saved in the settings. |
 | `--help`, `-h`, `/?` | Show the options (in a window; also printed when started from a console). |
 | `--version`, `-V` | Show the version. |

@@ -9,6 +9,7 @@ mod batch;
 mod cli;
 mod colfilter;
 mod config;
+mod console;
 mod errcodes;
 mod excerpt;
 mod export;
@@ -170,7 +171,7 @@ fn command_line() -> Startup {
     if opts.export.is_some() {
         // Scripted export: messages go to the console it was started from, never to a message
         // box (an unattended task must not wait for a click).
-        batch::attach_console();
+        console::attach_console();
     }
     let languages: Vec<String> = i18n::available().into_iter().map(|l| l.code).collect();
     // The language first, so the help and the messages are already in it.
@@ -206,7 +207,7 @@ fn command_line() -> Startup {
     }
     if let Err(e) = cli::validate(&opts.view, &t!("format.date")) {
         if opts.export.is_some() {
-            eprintln!("{}", e.message());
+            console::err(&e.message());
             std::process::exit(2)
         }
         fail(e)
@@ -215,11 +216,11 @@ fn command_line() -> Startup {
         let (cfg, _) = config::Config::load();
         match batch::export(&opts.files, &opts.view, target, &cfg) {
             Ok(msg) => {
-                println!("{msg}");
+                console::out(&msg);
                 std::process::exit(0)
             }
             Err(e) => {
-                eprintln!("{}", t!("error.export", error = e));
+                console::err(&t!("error.export", error = e));
                 std::process::exit(1)
             }
         }

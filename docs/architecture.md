@@ -445,8 +445,8 @@ links in `docs/` (`features.md`, `export.md`, `log-definitions.md`, `log-sets.md
   channel. `--export` (`src/batch.rs`, `cli::Options::export`, `NeedsFile`): `LogSet` read once
   (defs, merge_rotated from the config), `FilterSpec` from the view options (search + filter,
   severities, `parse_range_bound`), `FilterSpec::run`, columns = saved choice or table columns,
-  rules compiled from the config; `attach_console` (`AttachConsole(ATTACH_PARENT_PROCESS)`) before
-  printing, no message boxes; exit 0 / 1 / 2. Measured: 400 MB log, `--errors --export x.csv` →
+  rules compiled from the config; `console::attach_console` (`AttachConsole(ATTACH_PARENT_PROCESS)`)
+  before printing, no message boxes; exit 0 / 1 / 2. Measured: 400 MB log, `--errors --export x.csv` →
   95 133 rows in ~5 s (mostly reading).
 
 ## Updates
@@ -484,6 +484,17 @@ links in `docs/` (`features.md`, `export.md`, `log-definitions.md`, `log-sets.md
   `compile_pattern`). Help / version / errors: `cli::show_message` = stdout / stderr +
   `MessageBoxW` on Windows (help with tabs in the box, padded on the console); errors exit 2,
   help / version exit 0, before the splash and `update::cleanup_old`.
+- **Console encoding** (#62, `src/console.rs`, port of MMPortLens#40): every console message
+  (`--export` result / errors, help, version, command-line errors) goes through `console::out` /
+  `console::err` instead of `println!` / `eprintln!`. The target is decided per handle
+  (`console::target`, pure + tested): a console → as before (the standard library writes UTF-16
+  with `WriteConsoleW`); a pipe while a console is attached (`GetConsoleOutputCP()` ≠ 0 / 65001)
+  and the parent process (Toolhelp snapshot, `parent_of`) is `powershell.exe` / `pwsh.exe` /
+  `powershell_ise.exe` → the text in the console code page via `WideCharToMultiByte` (best fit,
+  `–` → `-`), because PowerShell decodes the bytes of a native program with
+  `[Console]::OutputEncoding`; anything else (a file, a bash / grep pipe, no console) → UTF-8.
+  The console code page is never changed (`SetConsoleOutputCP` would not help – PowerShell fixes
+  its decoder when it starts the process).
 - `--restore <file>` (update restart, `update::RESTORE_ARG`) is the same form as since #15, so an
   older installed version installing this one restarts it correctly; it is accepted anywhere,
   hidden from the help, and when present the other arguments are ignored.
@@ -534,7 +545,7 @@ links in `docs/` (`features.md`, `export.md`, `log-definitions.md`, `log-sets.md
   program), names via `AssocQueryStringW`. Test `register_and_unregister` uses its own HKCU key.
 
 ## Tests and benchmarks
-- `cargo test` (138 tests: empty standard columns of plain text hidden (#49), highlight rules import without duplicates / export of ticked rules (#51), Enter after search as you type (#47), IIS Win32 status texts (#43), numeric column filters (#42), table export scopes / cells / columns / cancel / CSV / XLSX / ZIP writer / statistics / sheet per file / JSONL / HTML / presets / `--export` (#32), MSI verbose log / header dates (#40), guides table / URLs / log set guides (#39), IIS column order with `*` (#41), follow end pause / resume (#37), rules window default width (#48), keyboard shortcut order (Shift+F3 / Shift+F2 not taken by F3 / F2, #46), log sets (set file parsing / translations / built-in sets, variables, loading priorities, file checks, remote computer names / variables / drive letters / share roots, network error codes, recent computers), HTTP status lookup / class fallback / lookup input parsing and ambiguity / cell values, status column keys of log definitions, command-line parsing (file association, all options, errors, `--restore`, language / time / regex checks, help text), overview buckets incremental = full / pixel runs, readable export with Δ, durations, match bits set / iterate, bookmark file id remap, update releases list / missed versions / check setting migration, merged logs (order by time, appended older rows, formats + rotated parts + re-read, single log unchanged, interleave), store copy_entry / split_off, raw lines of entries (all formats / encodings), filter (parallel = sequential, match bits), date column filter = text filter, updates (versions, release JSON, notes, sha256 file, ZIP, install, restore state), icon / .ico layout, search as you type threshold, status-bar position percentage, file association (registry in an own HKCU test key), search history, store drop_front / move to temp file, rotated parts (naming, merge on open, rotation while watching, replaced
+- `cargo test` (142 tests: console target / PowerShell pipe encoding (#62), empty standard columns of plain text hidden (#49), highlight rules import without duplicates / export of ticked rules (#51), Enter after search as you type (#47), IIS Win32 status texts (#43), numeric column filters (#42), table export scopes / cells / columns / cancel / CSV / XLSX / ZIP writer / statistics / sheet per file / JSONL / HTML / presets / `--export` (#32), MSI verbose log / header dates (#40), guides table / URLs / log set guides (#39), IIS column order with `*` (#41), follow end pause / resume (#37), rules window default width (#48), keyboard shortcut order (Shift+F3 / Shift+F2 not taken by F3 / F2, #46), log sets (set file parsing / translations / built-in sets, variables, loading priorities, file checks, remote computer names / variables / drive letters / share roots, network error codes, recent computers), HTTP status lookup / class fallback / lookup input parsing and ambiguity / cell values, status column keys of log definitions, command-line parsing (file association, all options, errors, `--restore`, language / time / regex checks, help text), overview buckets incremental = full / pixel runs, readable export with Δ, durations, match bits set / iterate, bookmark file id remap, update releases list / missed versions / check setting migration, merged logs (order by time, appended older rows, formats + rotated parts + re-read, single log unchanged, interleave), store copy_entry / split_off, raw lines of entries (all formats / encodings), filter (parallel = sequential, match bits), date column filter = text filter, updates (versions, release JSON, notes, sha256 file, ZIP, install, restore state), icon / .ico layout, search as you type threshold, status-bar position percentage, file association (registry in an own HKCU test key), search history, store drop_front / move to temp file, rotated parts (naming, merge on open, rotation while watching, replaced
   file), export segments by file, time range bounds, column filter syntax, parsers, chunked/ANSI/UTF-16 reading, log definitions (CBS, DISM, IIS,
   Exchange connectivity / CSV separator, choice by name/content, appending across refreshes), store (32-byte record, ISO ↔ ms, push /
   truncate / append, mapped temp file growing past 64 MB, interner), export incl. end-to-end and

@@ -333,6 +333,14 @@ Notes for Claude, linked from `CLAUDE.md`.
     ticked rules, #49 empty plain-text columns hidden). `release.ps1 1.1.9 -Publish -Yes` under
     pwsh: tests, tag, GitHub build, published with the .exe / .zip and their .sha256; release notes
     (What's new / changed / fixed / removed) set with `gh release edit`.
+83. #62 Console messages through a PowerShell pipe (port of MMPortLens#40): `src/console.rs`
+    writes the text in the console code page when the output is a pipe read by Windows
+    PowerShell / PowerShell 7 (before, UTF-8 bytes were decoded as OEM 852 / 437: `ý` → `├╜`);
+    a console, a file or a bash pipe unchanged. `attach_console` moved there from `batch.rs`.
+    Verified: unit tests (decision table, PowerShell names, parent in the process list, 852 / 437
+    encoding); release build under `powershell.exe` 5.1 and `pwsh` 7 with code page 852:
+    `rustrace t.log --lang sk --export out.csv 2>&1 | Out-String` equals `Exportovaných 1
+    riadkov do out.csv`.
 
 ## Ideas not done yet (offered by the owner)
 - `--set "<name>"` command-line option for log sets (#27): would need the set loading, the file

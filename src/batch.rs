@@ -313,23 +313,6 @@ pub fn export(
     Ok(t!("tabexport.done", rows = n, path = target.display()))
 }
 
-/// Lets a program without a console (the release build) print to the console it was started
-/// from (`cmd`, PowerShell); does nothing when there is none.
-pub fn attach_console() {
-    #[cfg(windows)]
-    {
-        #[link(name = "kernel32")]
-        unsafe extern "system" {
-            fn AttachConsole(process: u32) -> i32;
-        }
-        const ATTACH_PARENT_PROCESS: u32 = u32::MAX;
-        // SAFETY: no pointers; failing (no parent console) is fine.
-        unsafe {
-            AttachConsole(ATTACH_PARENT_PROCESS);
-        }
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;

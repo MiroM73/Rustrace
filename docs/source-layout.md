@@ -26,6 +26,7 @@ What every source file and folder of the repository contains.
   parsing, last-N blocks, output formats (+ tests)
 - `src/i18n.rs` – localization: language files, fallback, `t!()` macro (+ tests)
 - `src/cli.rs` – command-line arguments: parsing, checks, help text, message box (+ tests)
+- `src/console.rs` – console messages of the runs without a window: attaching to the parent console, the encoding a PowerShell pipe needs (+ tests)
 - `src/config.rs` – settings and rules (serde/JSON)
 - `src/overview.rs` – marks of the overview strip in buckets, updated from the first changed
   row on (+ tests)
