@@ -379,7 +379,13 @@ the window sets the automatic check: it runs in the background without slowing d
 newer version opens this window and a green `⬆ <version>` button appears in the status bar (it
 stays there after "Later" and opens the window again). A skipped version does not open the window
 again, a newer one does. Errors of the automatic check (e.g. no internet) are not shown, and there
-is no check right after the program was restarted by an update. The check uses the Windows HTTP stack (WinHTTP), so the system
+is no check right after the program was restarted by an update. When GitHub has a passing
+problem (HTTP 502 / 503 / 504, a timeout or a broken connection) the check is repeated up to three
+times (after 2, 5 and 10 seconds, longer when GitHub asks for it); if it still fails, the window
+explains it – "GitHub is temporarily unavailable (HTTP 503)", "the GitHub API rate limit was
+reached … try again after 14:05", "GitHub could not be reached … check the internet connection" –
+with a link to the GitHub status page for server errors, and such a failed automatic check is not
+counted, so with "once a day" it is tried again at the next start. The check uses the Windows HTTP stack (WinHTTP), so the system
 proxy and certificates apply; only `api.github.com` / GitHub downloads are contacted, nothing is sent
 except the request itself (user agent `RusTrace/<version>`).
 

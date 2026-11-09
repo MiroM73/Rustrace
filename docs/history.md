@@ -341,6 +341,17 @@ Notes for Claude, linked from `CLAUDE.md`.
     encoding); release build under `powershell.exe` 5.1 and `pwsh` 7 with code page 852:
     `rustrace t.log --lang sk --export out.csv 2>&1 | Out-String` equals `Exportovaných 1
     riadkov do out.csv`.
+84. #60 Update check: transient GitHub errors retried and explained (port of MMPortLens#26):
+    typed `HttpError` with rate-limit headers, `http::retry` (502 / 503 / 504, WinHTTP timeouts:
+    waits 2, 5, 10 s, `Retry-After` up to 30 s), `CheckError` with translated texts that keep the
+    raw code, a "GitHub status page" link for 5xx, a transient failure of the automatic check not
+    counted as done; `RUSTRACE_UPDATE_URL` for testing. Verified: 5 unit tests + the ignored
+    network test `real_http_errors` (httpbin.org 404 / 503 with 3 retries, GitHub 404 with
+    rate-limit headers, `name.invalid` = network); release build with
+    `RUSTRACE_UPDATE_URL=https://httpbin.org/status/503`: the automatic check at start left
+    `update_last_check` unchanged after exit, Help → Check for updates showed "GitHub is
+    temporarily unavailable (HTTP 503). Try again later." with the status page link after ~17 s
+    (config.json backed up and restored).
 
 ## Ideas not done yet (offered by the owner)
 - `--set "<name>"` command-line option for log sets (#27): would need the set loading, the file

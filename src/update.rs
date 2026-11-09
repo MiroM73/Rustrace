@@ -8,6 +8,7 @@
 //! by the ones from the archive (other files there are left alone).
 
 use crate::logdef::ColumnKind;
+use crate::t;
 use serde::{Deserialize, Serialize};
 use std::io::Read;
 use std::path::{Path, PathBuf};
@@ -214,11 +215,91 @@ pub fn plain_notes(notes: &str) -> Vec<(bool, String)> {
 
 /// Asks GitHub for the published releases and compares them with this program (blocking – call
 /// it in a background thread).
-pub fn fetch_updates() -> Result<Updates, String> {
-    let url = releases_url(env!("CARGO_PKG_REPOSITORY")).ok_or("no GitHub repository")?;
-    let body = crate::http::get(&url, "application/vnd.github+json", |n, _| n < 16 << 20)?;
+/// A transient failure (GitHub unavailable, rate limit, timeout) is retried first
+/// (`http::retry`, #60).
+pub fn fetch_updates() -> Result<Updates, CheckError> {
+    // `RUSTRACE_UPDATE_URL` replaces the GitHub URL, for testing the failures (#60).
+    let url = std::env::var("RUSTRACE_UPDATE_URL")
+        .ok()
+        .filter(|u| !u.is_empty())
+        .or_else(|| releases_url(env!("CARGO_PKG_REPOSITORY")))
+        .ok_or("no GitHub repository")?;
+    let body = crate::http::retry(
+        || crate::http::get(&url, "application/vnd.github+json", |n, _| n < 16 << 20),
+        std::thread::sleep,
+    )
+    .map_err(|e| CheckError::from_http(&e))?;
     let all = parse_releases(&String::from_utf8_lossy(&body))?;
-    Updates::new(&all, &current_version()).ok_or_else(|| "no published release".to_owned())
+    Ok(Updates::new(&all, &current_version()).ok_or("no published release")?)
+}
+
+/// Why the update check failed (#60).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct CheckError {
+    /// The translated text for the user, with the raw code (e.g. "HTTP 503") in it.
+    pub message: String,
+    /// A passing problem of GitHub or the network: an automatic check that failed this way is
+    /// not counted as done, so it is tried again at the next start.
+    pub transient: bool,
+    /// GitHub itself failed (HTTP 5xx): the Updates window links to its status page.
+    pub server: bool,
+}
+
+/// GitHub's status page, shown when GitHub answers with HTTP 5xx.
+pub const GITHUB_STATUS_URL: &str = "https://www.githubstatus.com";
+
+impl CheckError {
+    /// The meaning of an HTTP failure; `rate_reset` is shown as the local time.
+    pub fn from_http(e: &crate::http::HttpError) -> Self {
+        use crate::http::{ErrorKind, HttpError};
+        let error = e.to_string();
+        let (message, transient) = match e.kind() {
+            ErrorKind::ServerUnavailable => (t!("update.err.unavailable", error = error), true),
+            ErrorKind::RateLimited => {
+                let reset = match e {
+                    HttpError::Status { limits, .. } => limits.rate_reset,
+                    _ => None,
+                };
+                let time = reset
+                    .and_then(|t| chrono::DateTime::from_timestamp(t, 0))
+                    .map(|t| t.with_timezone(&chrono::Local).format("%H:%M").to_string());
+                let message = match time {
+                    Some(time) => t!("update.err.rate_limited_until", error = error, time = time),
+                    None => t!("update.err.rate_limited", error = error),
+                };
+                (message, true)
+            }
+            ErrorKind::Network => (t!("update.err.network", error = error), true),
+            ErrorKind::NotFound | ErrorKind::Other => (error, false),
+        };
+        CheckError {
+            message,
+            transient,
+            server: e.kind() == ErrorKind::ServerUnavailable,
+        }
+    }
+}
+
+impl From<String> for CheckError {
+    fn from(message: String) -> Self {
+        CheckError {
+            message,
+            transient: false,
+            server: false,
+        }
+    }
+}
+
+impl From<&str> for CheckError {
+    fn from(message: &str) -> Self {
+        message.to_owned().into()
+    }
+}
+
+impl std::fmt::Display for CheckError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(&self.message)
+    }
 }
 
 /// The checksum for `name` from a `sha256sum`-style file ("<hex>  <name>", or only the hex).
@@ -511,6 +592,43 @@ pub fn restart(exe: &Path, state: &SessionState) -> Result<(), String> {
 mod tests {
     use super::*;
     use crate::logdef::Role;
+
+    /// The meaning of a failed check: transient ones keep the raw code in the text and are not
+    /// counted as a check; only 5xx links to GitHub's status page (#60).
+    #[test]
+    fn check_errors_from_http() {
+        use crate::http::{HttpError, Limits};
+        let status = |code, limits| CheckError::from_http(&HttpError::Status { code, limits });
+        let e = status(503, Limits::default());
+        assert!(e.message.contains("HTTP 503"), "{}", e.message);
+        assert!(e.message.contains("GitHub"), "{}", e.message);
+        assert!(e.transient && e.server);
+        let reset = chrono::Local::now().timestamp() + 600;
+        let limits = Limits {
+            rate_remaining: Some(0),
+            rate_reset: Some(reset),
+            ..Limits::default()
+        };
+        let e = status(403, limits);
+        let time = chrono::DateTime::from_timestamp(reset, 0)
+            .unwrap()
+            .with_timezone(&chrono::Local)
+            .format("%H:%M")
+            .to_string();
+        assert!(e.message.contains("HTTP 403"), "{}", e.message);
+        assert!(e.message.contains(&time), "{}", e.message);
+        assert!(e.transient && !e.server);
+        let e = CheckError::from_http(&HttpError::Network {
+            code: 12002,
+            text: "WinHttpSendRequest: the request timed out (12002)".into(),
+        });
+        assert!(e.message.contains("timed out (12002)"), "{}", e.message);
+        assert!(e.transient && !e.server);
+        let e = status(404, Limits::default());
+        assert_eq!(e.message, "HTTP 404");
+        assert!(!e.transient && !e.server);
+        assert!(!CheckError::from("no published release").transient);
+    }
 
     #[test]
     fn versions() {

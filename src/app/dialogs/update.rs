@@ -21,7 +21,7 @@ impl App {
             });
         self.update = match spawned {
             Ok(_) => UpdateState::Checking { rx, silent },
-            Err(e) => UpdateState::Failed(e.to_string()),
+            Err(e) => UpdateState::Failed(e.to_string().into()),
         };
     }
 
@@ -33,10 +33,14 @@ impl App {
                 let res = match rx.try_recv() {
                     Ok(res) => res,
                     Err(mpsc::TryRecvError::Empty) => return,
-                    Err(mpsc::TryRecvError::Disconnected) => Err(t!("error.read_internal")),
+                    Err(mpsc::TryRecvError::Disconnected) => Err(t!("error.read_internal").into()),
                 };
-                self.cfg.update_last_check = chrono::Local::now().timestamp();
-                self.cfg_dirty = true;
+                // A passing problem of GitHub / the network does not count as a check: the daily
+                // check is tried again at the next start (#60).
+                if !matches!(&res, Err(e) if e.transient) {
+                    self.cfg.update_last_check = chrono::Local::now().timestamp();
+                    self.cfg_dirty = true;
+                }
                 self.update = match res {
                     Ok(u) => {
                         let newer = u.is_newer();
@@ -265,6 +269,9 @@ impl App {
                     }
                     UpdateState::Failed(e) => {
                         ui.colored_label(RED, t!("update.check_failed", error = e));
+                        if e.server {
+                            ui.hyperlink_to(t!("update.github_status"), update::GITHUB_STATUS_URL);
+                        }
                     }
                     UpdateState::Checked(u) if u.is_newer() => {
                         let r = &u.latest;

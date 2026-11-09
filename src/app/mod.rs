@@ -144,10 +144,10 @@ enum UpdateState {
     Idle,
     /// Asking GitHub; `silent` = automatic check at start-up (no window unless a new version).
     Checking {
-        rx: mpsc::Receiver<Result<Updates, String>>,
+        rx: mpsc::Receiver<Result<Updates, update::CheckError>>,
         silent: bool,
     },
-    Failed(String),
+    Failed(update::CheckError),
     /// The latest release (newer or not) and the missed ones.
     Checked(Updates),
     /// Download + installation; `exe` = the program path before it was renamed.
