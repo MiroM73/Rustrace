@@ -113,3 +113,20 @@ Feature index (file → section of `docs/architecture.md`):
   in-app update window shows these notes. Example: v1.1.6.
 - Line endings: `.gitattributes` forces LF for all text files (`* text=auto eol=lf`); write new
   files with LF.
+
+## Working economically
+- `docs/architecture.md` (~700 lines) and `docs/history.md` (~420 lines) are
+  never read whole. Grep for the section heading and read that section. For the
+  new `docs/history.md` line read only the place where it goes.
+- Large sources (`logdef.rs` and `parser.rs` ~2,000 lines each, `store.rs`,
+  `tabexport/mod.rs`): find the function with grep and read its range.
+- While iterating use `cargo check -q --message-format=short`. Run the full set
+  once, when the change is finished: `cargo test -q`, `cargo fmt`,
+  `cargo clippy -q --all-targets --locked -- -D warnings`.
+- When a test fails, rerun only that test (`cargo test -q <name>`) until it
+  passes, then run the whole suite once.
+- Generate `testlogs/` with `--small-only` unless the task is about performance
+  or memory.
+- When an advisor is configured: consult it before finalizing a plan that
+  touches more than one module, when the same compile or test error appears a
+  second time, and before the final commit of such a change.
