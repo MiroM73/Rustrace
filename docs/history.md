@@ -333,6 +333,13 @@ Notes for Claude, linked from `CLAUDE.md`.
     ticked rules, #49 empty plain-text columns hidden). `release.ps1 1.1.9 -Publish -Yes` under
     pwsh: tests, tag, GitHub build, published with the .exe / .zip and their .sha256; release notes
     (What's new / changed / fixed / removed) set with `gh release edit`.
+83. #64 Default app window: `.log` showed *opened by another program (RusTrace)* although RusTrace was
+    the default. On the owner's PC `UserChoice\ProgId` held a stale `AppX…` ProgID while
+    `UserChoiceLatest\ProgId` was `RusTrace.LogFile`, so judging by ProgID strings was unreliable.
+    The state is now decided by the executable Windows starts (`decide`, `ASSOCSTR_EXECUTABLE`) with
+    a new *another copy of RusTrace* state; the ProgID check is only the fallback. The original
+    orange state could not be reproduced live (the registry had been repaired since the report);
+    covered by the unit test `decide_trusts_the_resolved_program` with the real values.
 
 ## Ideas not done yet (offered by the owner)
 - `--set "<name>"` command-line option for log sets (#27): would need the set loading, the file

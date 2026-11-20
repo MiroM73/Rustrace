@@ -33,6 +33,8 @@ impl App {
                                 ExtStatus::Other(prog) => {
                                     ui.colored_label(ORANGE, t!("assoc.ext.other", prog = prog))
                                 }
+                                ExtStatus::OtherCopy(path) => ui
+                                    .colored_label(ORANGE, t!("assoc.ext.other_copy", path = path)),
                                 ExtStatus::None => ui.label(t!("assoc.ext.none")),
                             };
                             ui.end_row();
@@ -62,7 +64,7 @@ impl App {
                 if info
                     .exts
                     .iter()
-                    .any(|(_, s)| matches!(s, ExtStatus::Other(_)))
+                    .any(|(_, s)| matches!(s, ExtStatus::Other(_) | ExtStatus::OtherCopy(_)))
                 {
                     ui.add_space(6.0);
                     ui.add(egui::Label::new(t!("assoc.choice_hint")).wrap());

@@ -672,6 +672,7 @@ assoc.title = Standard-App für Logdateien
 assoc.intro = RusTrace kann .log- und .lo_-Dateien per Doppelklick im Explorer öffnen. Die Registrierung gilt nur für Ihr Benutzerkonto, Administratorrechte sind nicht nötig.
 assoc.ext.rustrace = ✔ wird mit RusTrace geöffnet
 assoc.ext.other = wird mit einem anderen Programm geöffnet ({prog})
+assoc.ext.other_copy = wird mit einer anderen RusTrace-Kopie geöffnet ({path})
 assoc.ext.none = kein Programm festgelegt
 assoc.other_copy = ⚠ Registriert ist eine andere Kopie von RusTrace: {command}
 assoc.register = RusTrace als Standard-App festlegen

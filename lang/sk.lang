@@ -672,6 +672,7 @@ assoc.title = Predvolený program pre súbory logov
 assoc.intro = RusTrace môže otvárať súbory .log a .lo_ dvojklikom v Prieskumníkovi. Registrácia sa uloží len pre tvoj používateľský účet, netreba administrátorské práva.
 assoc.ext.rustrace = ✔ otvára RusTrace
 assoc.ext.other = otvára iný program ({prog})
+assoc.ext.other_copy = otvára iná kópia RusTrace ({path})
 assoc.ext.none = nie je nastavený žiadny program
 assoc.other_copy = ⚠ Registrovaná je iná kópia RusTrace: {command}
 assoc.register = Nastaviť RusTrace ako predvolený program

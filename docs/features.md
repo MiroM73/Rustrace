@@ -393,7 +393,11 @@ program replace an app **you chose yourself** (e.g. Notepad for `.log`); the win
 Default apps, where one click switches the extension to RusTrace (or right-click a `.log` file →
 Open with → Choose another app → RusTrace → Always). "Remove the registration" deletes everything
 RusTrace wrote. The registration stores the path of `rustrace.exe` – after moving the program,
-set it as the default app again (the window warns when another copy is registered).
+set it as the default app again (the window warns when another copy is registered). The state of each
+extension comes from what Windows really starts for it, not from the registry ProgID alone (#64):
+green *opened by RusTrace* when that is this `rustrace.exe`, orange *opened by another copy of
+RusTrace (path)* for a `rustrace*.exe` somewhere else, orange *opened by another program (Notepad)*
+otherwise.
 
 
 ## Settings
