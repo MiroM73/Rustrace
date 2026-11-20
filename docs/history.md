@@ -453,6 +453,7 @@ Notes for Claude, linked from `CLAUDE.md`.
     stays an error), and the window starts with such a rule in the settings; the combo and the
     live re-apply of an edited rule were not clicked through. No timing was measured on the 400 MB
     log (nothing runs without a severity rule).
+96. Release v1.3.0 (#50 severity set by highlight rules, #67 `--set` / `--computer`). Done at the owner's request by Claude with `release.ps1 1.3.0 -Publish -Yes` under pwsh; release notes set with `gh release edit`.
 
 ## Ideas not done yet (offered by the owner)
 - `--set "<name>"` command-line option for log sets (#27): would need the set loading, the file
