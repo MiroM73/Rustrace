@@ -88,3 +88,8 @@ file = C:\MyApp\Logs\install.log
 | `description`, `description.<language>` | one or two sentences under the name |
 | `file` | one log of the set (one line per log, in the order shown) |
 | `guide` | optional, repeatable: a guide for the scenario, shown as a 📖 button next to the set – a file name of [docs/guides](guides/README.md) (e.g. `guide = failed-app-install.md`, opened on GitHub with its translated title), or a URL / path of your own guide (`guide = https://intranet/wiki/AppDeploy`, `guide = \\server\docs\deploy.pdf`) |
+
+## From the command line
+
+`rustrace --set "SCCM client"` (or `--set C:\Sets\my.set`, optionally `--computer PC01`) opens a set
+without the window – see [Command line](command-line.md).

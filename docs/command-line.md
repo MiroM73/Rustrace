@@ -19,6 +19,8 @@ rustrace [OPTIONS] [FILE]...
 | `--from <TIME>` / `--to <TIME>` | Time range (`--to` inclusive, a date alone = the whole day). The same formats as the time range in the toolbar: ISO (`2026-10-27 13:05:30`, `2026-10-27T13:05`, `2026-10-27`) always, or the date order of the UI language (e.g. `27.10.2026 13:05` in Slovak). |
 | `--tail` / `--no-follow` | Follow / do not follow the end of the log (default: the "Follow end" setting; the options set it like the toolbar checkbox). |
 | `--merge` | Open several FILEs as one view merged by time. Several FILEs are merged also without it (the same as opening or dropping several files), the option just makes it explicit. |
+| `--set <NAME\|FILE.set>` | Open a log set exactly like File → Open log set (#67): a built-in or own set by its file name (`appdeploy`, `appdeploy.set`) or its name in any language (`"SCCM client"`), or the path of a `.set` file. The path variables are resolved for this computer; the logs are merged by time. FILEs on the command line are **added** to the set. `--merge` is accepted and has no effect (a set is always merged); `--line` cannot be combined with `--set` (exit code 2). `--search`, `--filter`, `--errors`, `--warnings`, `--from`, `--to`, `--tail` / `--no-follow` and `--export` work with a set. An unknown set, an unreadable `.set` file or a log that is missing / not accessible ends with the same wording as the window (message box + stderr, exit code 2). |
+| `--computer <PC>` | With `--set`: read the logs from this remote computer (name or IP address) over its administrative shares, like the *Remote computer* option of the window. Needs `--set`. The check of the files can wait for the SMB timeout (about 10 s) when the computer is offline. |
 | `--export <FILE>` | Write the table export (CSV / Excel / JSON Lines / HTML by the extension of FILE) of the rows the other options select and exit without a window – see [Export table](export.md#export-table--csv--excel). Messages go to the console (also through a PowerShell pipe such as `| Out-Host` or `2>&1` with the right accented letters); exit code 0 = written, 1 = export error, 2 = invalid command line. |
 | `--lang <CODE>` | UI language for this run only (`en`, `sk`, `cs`, `de` or an external language file); not saved in the settings. |
 | `--help`, `-h`, `/?` | Show the options (in a window; also printed when started from a console). |
@@ -40,6 +42,9 @@ rustrace C:\Windows\CCM\Logs\AppEnforce.log --search 0x87D00324 --filter
 rustrace AppEnforce.log --line 1500
 rustrace AppEnforce.log --errors --from "2026-10-27 08:00" --to "2026-10-27 09:30"
 rustrace --merge AppDiscovery.log AppEnforce.log --search "fail.*0x8" --regex
+rustrace --set "SCCM client" --errors
+rustrace --set C:\Setspp-deploy.set --computer PC01 D:\Logs\extra.log
+rustrace --set "SCCM client" --from "2026-10-27 08:00" --export client-errors.xlsx
 rustrace --lang de AppEnforce.log
 rustrace AppEnforce.log AppDiscovery.log --errors --from "2026-10-27 08:00" --export errors.xlsx
 ```

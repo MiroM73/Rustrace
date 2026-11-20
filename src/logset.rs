@@ -120,6 +120,16 @@ impl LogSetDef {
         localized(&self.descriptions, code)
     }
 
+    /// Whether `query` names this set: its file name (with or without `.set`) or its name in any
+    /// language, ignoring case (`--set`, #67).
+    pub fn matches(&self, query: &str) -> bool {
+        let q = query.trim().to_lowercase();
+        let id = self.id.to_lowercase();
+        q == id
+            || id.strip_suffix(".set") == Some(q.as_str())
+            || self.names.values().any(|n| n.to_lowercase() == q)
+    }
+
     /// A set from the user's folder.
     pub fn is_own(&self) -> bool {
         self.priority == PRIO_USER
@@ -201,6 +211,16 @@ pub fn local_vars(ccm_log_dir: Option<String>) -> Vars {
         env: true,
         remote: None,
     }
+}
+
+/// The variables of this computer (`%CCMLOGS%` from the registry of the ConfigMgr client).
+pub fn this_computer_vars() -> Vars {
+    #[cfg(windows)]
+    let ccm =
+        crate::fileassoc::hklm_string(r"SOFTWARE\Microsoft\CCM\Logging\@Global", "LogDirectory");
+    #[cfg(not(windows))]
+    let ccm = None;
+    local_vars(ccm)
 }
 
 /// Replaces the `%NAME%` variables of a `file` line; an unknown variable is an error (its name).

@@ -25,6 +25,7 @@ mod logset;
 mod merge;
 mod overview;
 mod parser;
+mod setcli;
 mod splash;
 mod store;
 mod tabexport;
@@ -212,9 +213,33 @@ fn command_line() -> Startup {
         }
         fail(e)
     }
+    let (cfg, _) = config::Config::load();
+    // `--set`: the logs of the set first, the FILEs are added (#67).
+    let mut files = opts.files.clone();
+    if let Some(set) = &opts.set {
+        match setcli::open(set, opts.computer.as_deref(), cfg.merge_rotated) {
+            Ok(mut paths) => {
+                paths.append(&mut files);
+                files = paths;
+            }
+            Err(e) => {
+                let msg = format!(
+                    "{e}
+
+{}",
+                    t!("cli.error.hint")
+                );
+                if opts.export.is_some() {
+                    console::err(&msg);
+                    std::process::exit(2)
+                }
+                cli::show_message(&t!("cli.title.error"), &msg, &msg, true);
+                std::process::exit(2)
+            }
+        }
+    }
     if let Some(target) = &opts.export {
-        let (cfg, _) = config::Config::load();
-        match batch::export(&opts.files, &opts.view, target, &cfg) {
+        match batch::export(&files, &opts.view, target, &cfg) {
             Ok(msg) => {
                 console::out(&msg);
                 std::process::exit(0)
@@ -226,7 +251,7 @@ fn command_line() -> Startup {
         }
     }
     Startup {
-        paths: opts.files,
+        paths: files,
         view: opts.view,
         lang,
         restore: None,

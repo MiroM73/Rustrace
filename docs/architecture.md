@@ -587,6 +587,18 @@ links in `docs/` (`features.md`, `export.md`, `log-definitions.md`, `log-sets.md
   `after_filter.scroll_end` dropped; none → status info `cli.line_not_found`. `FirstMatch` =
   `select_first_match` (waits for a background re-filter). `filter_done` now runs `scroll_end`
   before `select_first`, so a pending first match wins over following the end.
+- **`--set` / `--computer`** (#67, `src/setcli.rs`): `cli::Options::{set, computer}`; `--line` + `--set`
+  → `CliError::LineWithSet`, `--computer` without `--set` → `NeedsSet`; `--line` / `--export` accept
+  a set instead of a FILE. `main::command_line` (after `validate`): `setcli::open` → `find` (an
+  existing file or a `….set` path is parsed with `LogSetDef::parse`; else `LogSetDef::matches` =
+  file name with / without `.set` or the name in any language, case-insensitive, own sets win over
+  predefined ones) → `paths` (`logset::resolve` with `this_computer_vars()` or `remote_vars(pc)`; an
+  unknown variable is an error) → `logset::check_file` of every path (blocking, also over SMB –
+  up to the remote timeout). Any problem → one message (wording of the window: *Not found*, *Access
+  denied* …) – message box + stderr, or stderr only with `--export`, exit 2. The set paths come
+  first, FILEs of the command line are appended, then it is the normal merged start (`open_files`)
+  or `batch::export`. `--merge` is not special (a set is always merged). `local_vars` of the dialog
+  moved to `logset::this_computer_vars`.
 - Help → About: row "Command line" (`about.cmdline`) pointing to `rustrace.exe --help`.
 
 ## Guides

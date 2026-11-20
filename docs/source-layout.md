@@ -25,6 +25,7 @@ What every source file and folder of the repository contains.
 - `src/export.rs` – export around highlighted rows: range merging, date/time filter and input
   parsing, last-N blocks, output formats (+ tests)
 - `src/i18n.rs` – localization: language files, fallback, `t!()` macro (+ tests)
+- `src/setcli.rs` – `--set`: finding a log set, resolving and checking its logs (+ tests)
 - `src/cli.rs` – command-line arguments: parsing, checks, help text, message box (+ tests)
 - `src/console.rs` – console messages of the runs without a window: attaching to the parent console, the encoding a PowerShell pipe needs (+ tests)
 - `src/config.rs` – settings and rules (serde/JSON)

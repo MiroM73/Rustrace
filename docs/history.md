@@ -436,6 +436,13 @@ Notes for Claude, linked from `CLAUDE.md`.
     `release.ps1 1.2.1 -Publish -Yes` under pwsh: tests, tag, GitHub build watched to the end,
     published with the .exe / .zip and their .sha256; release notes set with `gh release edit`.
 
+94. #67 `--set <NAME|FILE.set>` (+ `--computer <PC>`, the remote computer of the window): opens a log
+    set from the command line (`src/setcli.rs`). FILEs are added to the set, `--line` is rejected,
+    `--export` and the view options work. Only `--computer` was added from the issue's "consider
+    `--set-var`" (generic variables not done). Checked with headless `--export` on a temp `.set`
+    (merged by time, missing log → exit 2 with the list, unknown set, `--line`); the window start
+    with `--set` was not clicked through.
+
 
 ## Ideas not done yet (offered by the owner)
 - `--set "<name>"` command-line option for log sets (#27): would need the set loading, the file

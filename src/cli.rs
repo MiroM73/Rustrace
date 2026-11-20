@@ -71,6 +71,10 @@ pub struct Options {
     pub restore: Option<PathBuf>,
     /// Write the table export to this file and exit without a window (#32).
     pub export: Option<PathBuf>,
+    /// Open this log set (name or `.set` file); the FILEs are added to it (#67).
+    pub set: Option<String>,
+    /// Remote computer for the paths of `--set`.
+    pub computer: Option<String>,
 }
 
 /// An invalid command line.
@@ -80,11 +84,21 @@ pub enum CliError {
     MissingValue(String),
     UnexpectedValue(String),
     InvalidLine(String),
-    InvalidLanguage { value: String, available: String },
-    InvalidTime { option: String, value: String },
+    InvalidLanguage {
+        value: String,
+        available: String,
+    },
+    InvalidTime {
+        option: String,
+        value: String,
+    },
     InvalidRegex(String),
     NeedsSearch(String),
     NeedsFile(String),
+    /// `--line` with `--set`: it is not clear which log is the first one.
+    LineWithSet,
+    /// `--computer` without `--set`.
+    NeedsSet(String),
 }
 
 impl CliError {
@@ -104,6 +118,8 @@ impl CliError {
             CliError::InvalidRegex(e) => t!("cli.error.regex", error = e),
             CliError::NeedsSearch(o) => t!("cli.error.needs_search", option = o),
             CliError::NeedsFile(o) => t!("cli.error.needs_file", option = o),
+            CliError::LineWithSet => t!("cli.error.line_set"),
+            CliError::NeedsSet(o) => t!("cli.error.needs_set", option = o),
         };
         format!("{msg}\n\n{}", t!("cli.error.hint"))
     }
@@ -137,7 +153,14 @@ pub fn parse<I: IntoIterator<Item = OsString>>(args: I) -> Result<Options, CliEr
         };
         let takes_value = matches!(
             name.as_str(),
-            "--line" | "--search" | "--from" | "--to" | "--lang" | "--export"
+            "--line"
+                | "--search"
+                | "--from"
+                | "--to"
+                | "--lang"
+                | "--export"
+                | "--set"
+                | "--computer"
         ) || name == RESTORE_ARG;
         let value = if takes_value {
             match inline {
@@ -178,6 +201,8 @@ pub fn parse<I: IntoIterator<Item = OsString>>(args: I) -> Result<Options, CliEr
             "--merge" => o.merge = true,
             "--lang" => o.lang = Some(value),
             "--export" => o.export = Some(PathBuf::from(value)),
+            "--set" => o.set = Some(value),
+            "--computer" => o.computer = Some(value),
             "--help" | "-h" | "-?" | "/?" => o.help = true,
             "--version" | "-V" => o.version = true,
             n if n == RESTORE_ARG => o.restore = Some(PathBuf::from(value)),
@@ -195,10 +220,19 @@ pub fn parse<I: IntoIterator<Item = OsString>>(args: I) -> Result<Options, CliEr
             }
         }
     }
-    if o.view.line.is_some() && o.files.is_empty() && o.restore.is_none() {
+    if o.restore.is_none() {
+        if o.view.line.is_some() && o.set.is_some() {
+            return Err(CliError::LineWithSet);
+        }
+        if o.computer.is_some() && o.set.is_none() {
+            return Err(CliError::NeedsSet("--computer".into()));
+        }
+    }
+    let no_logs = o.files.is_empty() && o.set.is_none();
+    if o.view.line.is_some() && no_logs && o.restore.is_none() {
         return Err(CliError::NeedsFile("--line".into()));
     }
-    if o.export.is_some() && o.files.is_empty() && o.restore.is_none() {
+    if o.export.is_some() && no_logs && o.restore.is_none() {
         return Err(CliError::NeedsFile("--export".into()));
     }
     Ok(o)
@@ -245,7 +279,7 @@ pub fn validate(view: &ViewOptions, date_pattern: &str) -> Result<(), CliError> 
 /// its description are separated by a tab (message box) instead of padding (console).
 pub fn help_text(languages: &str, tabs: bool) -> String {
     let meta = |key: &str| format!("<{}>", t!(key));
-    let opts: [(String, String); 17] = [
+    let opts: [(String, String); 19] = [
         ("--line <N>".into(), t!("cli.opt.line")),
         (
             format!("--search {}", meta("cli.meta.text")),
@@ -264,6 +298,11 @@ pub fn help_text(languages: &str, tabs: bool) -> String {
         ("--tail".into(), t!("cli.opt.tail")),
         ("--no-follow".into(), t!("cli.opt.no_follow")),
         ("--merge".into(), t!("cli.opt.merge")),
+        (format!("--set {}", meta("cli.meta.set")), t!("cli.opt.set")),
+        (
+            format!("--computer {}", meta("cli.meta.computer")),
+            t!("cli.opt.computer"),
+        ),
         (
             format!("--export {}", meta("cli.meta.file")),
             t!("cli.opt.export"),
@@ -550,5 +589,24 @@ mod tests {
         let help = help_text("cs, de, en, sk", false);
         assert!(help.contains("--search <") && !help.contains("--restore"));
         assert!(!help.contains("cli.opt"), "{help}");
+    }
+
+    #[test]
+    fn set_option() {
+        let o = p(&["--set", "SCCM client", "extra.log", "--computer=PC01"]).unwrap();
+        assert_eq!(o.set.as_deref(), Some("SCCM client"));
+        assert_eq!(o.computer.as_deref(), Some("PC01"));
+        assert_eq!(o.files, vec![PathBuf::from("extra.log")]);
+        // --merge is accepted, --export and the view options work with a set alone.
+        assert!(p(&["--set", "a", "--merge", "--errors", "--export", "o.csv"]).is_ok());
+        assert_eq!(
+            p(&["--set", "a", "--line", "5"]),
+            Err(CliError::LineWithSet)
+        );
+        assert_eq!(
+            p(&["--computer", "PC01", "x.log"]),
+            Err(CliError::NeedsSet("--computer".into()))
+        );
+        assert_eq!(p(&["--set"]), Err(CliError::MissingValue("--set".into())));
     }
 }

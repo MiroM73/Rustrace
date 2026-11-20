@@ -88,16 +88,6 @@ impl LogSetDialog {
     }
 }
 
-/// The variables of this computer (`%CCMLOGS%` from the registry of the ConfigMgr client).
-fn local_vars() -> logset::Vars {
-    #[cfg(windows)]
-    let ccm =
-        crate::fileassoc::hklm_string(r"SOFTWARE\Microsoft\CCM\Logging\@Global", "LogDirectory");
-    #[cfg(not(windows))]
-    let ccm = None;
-    logset::local_vars(ccm)
-}
-
 /// The text above the buttons when a share of the computer cannot be used.
 fn share_problem_text(share: &str, state: &FileState) -> String {
     let pc = logset::share_host(share);
@@ -164,7 +154,7 @@ impl App {
                 }
             }
         } else {
-            local_vars()
+            logset::this_computer_vars()
         };
         dlg.checked_pc = vars.remote.clone();
         dlg.rows = dlg.set().map_or_else(Vec::new, |s| {
