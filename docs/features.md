@@ -154,6 +154,14 @@ The logs of one troubleshooting scenario in one step – details in [Log sets](l
 - any number of rules: plain text or **regex**, optional case sensitivity
 - scope **Whole row** (text + background color of the row) or **Text only** (colors just the match in the message)
 - optionally match the Component column as well (and the extra columns of a log definition)
+- optionally set the **Severity** of the matching rows (*Info / Warning / Error*, default
+  *(unchanged)*; #50): the row is then really an info / warning / error – the Info / Warnings /
+  Errors toggles, the overview strip, the status bar counts, `--errors` / `--warnings`, the export
+  criteria and the exports follow, not just the color. Examples: `0 errors|error status: 0` →
+  Info (a harmless line the keywords mark as an error), `exit code [1-9]\d*` → Error (a real
+  failure without the word *error*). The first matching rule with a severity wins, in any log
+  format (CMTrace, log definitions, plain text); rows no such rule matches keep the severity of the
+  log. Editing a rule re-applies the severities to the open log (a very big log takes a moment).
 - order = priority (up/down arrows), on/off, live preview, invalid regex warning
 - the window opens wide enough for the whole table (up to the size of the main window); long names
   and patterns are shown in full in the tooltip of their field; a narrower window shows a

@@ -152,6 +152,19 @@ pub struct HighlightRule {
     pub bg_dark: [u8; 4],
     /// Also match against the Component column.
     pub match_component: bool,
+    /// Severity given to the rows the rule matches (the first matching rule with a severity
+    /// wins); `None` = unchanged (#50).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub severity: Option<RuleSeverity>,
+}
+
+/// The severity a highlight rule can set (#50).
+#[derive(Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Debug)]
+#[serde(rename_all = "lowercase")]
+pub enum RuleSeverity {
+    Info,
+    Warning,
+    Error,
 }
 
 /// Marker for a color that has not been set (fully transparent).
@@ -252,6 +265,7 @@ impl Default for HighlightRule {
             fg_dark: [255, 255, 255, 255],
             bg_dark: [150, 90, 20, 255],
             match_component: false,
+            severity: None,
         }
     }
 }

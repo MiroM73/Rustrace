@@ -91,7 +91,9 @@ pub fn export(
 ) -> Result<String, String> {
     let format = TableFormat::from_path(target)
         .ok_or_else(|| t!("cli.error.export_format", file = target.display()))?;
-    let (store, set) = read(files, cfg)?;
+    let (mut store, set) = read(files, cfg)?;
+    // Highlight rules that set a severity (#50) count for --errors / --warnings and the Severity column.
+    crate::sevrules::SevRules::from_config(&cfg.rules).apply(&mut store, 0);
     let schema = set.schema().clone();
     let date_pattern = t!("format.date");
     let bound = |text: &Option<String>, end| {

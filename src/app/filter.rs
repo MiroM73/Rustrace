@@ -25,6 +25,35 @@ impl App {
                 Err(e) => self.rule_errors.push(Some(e)),
             }
         }
+        self.update_severity_rules();
+    }
+
+    /// Rebuilds the rules that set a severity (#50); when they differ from the applied ones the
+    /// severity of every entry is set again and the view is re-filtered.
+    fn update_severity_rules(&mut self) {
+        let new = SevRules::from_config(&self.cfg.rules);
+        if new == *self.sev_rules {
+            return;
+        }
+        self.sev_rules = Arc::new(new);
+        self.sev_reapply = !self.entries.is_empty();
+        self.reapply_severity();
+    }
+
+    /// Sets the severity of every entry by the current rules (waits while a table export reads
+    /// the entries). Rows that are not in the store yet (a read in progress) get the rules when
+    /// they arrive.
+    pub(in crate::app) fn reapply_severity(&mut self) {
+        if !self.sev_reapply || self.table_export_running() {
+            return;
+        }
+        self.sev_reapply = false;
+        let rules = self.sev_rules.clone();
+        rules.apply(self.entries_mut(), 0);
+        self.data_gen += 1;
+        self.code_cache = None;
+        self.overview_changed_from(0);
+        self.refilter_from(0);
     }
 
     pub(in crate::app) fn recompile_search(&mut self) {

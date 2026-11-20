@@ -104,6 +104,7 @@ impl App {
                                 "Aa".to_owned(),
                                 t!("rules.col.scope"),
                                 t!("rules.col.component"),
+                                t!("rules.col.severity"),
                                 t!("rules.col.text"),
                                 t!("rules.col.background"),
                                 t!("rules.col.preview"),
@@ -168,6 +169,27 @@ impl App {
                                     )
                                     .on_hover_text(t!("rules.component.tip"))
                                     .changed();
+                                let before = r.severity;
+                                egui::ComboBox::from_id_salt(("severity", i))
+                                    .selected_text(rule_severity_label(r.severity))
+                                    .width(100.0)
+                                    .show_ui(ui, |ui| {
+                                        for s in [
+                                            None,
+                                            Some(RuleSeverity::Info),
+                                            Some(RuleSeverity::Warning),
+                                            Some(RuleSeverity::Error),
+                                        ] {
+                                            ui.selectable_value(
+                                                &mut r.severity,
+                                                s,
+                                                rule_severity_label(s),
+                                            );
+                                        }
+                                    })
+                                    .response
+                                    .on_hover_text(t!("rules.sev.tip"));
+                                changed |= before != r.severity;
                                 ui.horizontal(|ui| {
                                     changed |= ui.checkbox(&mut r.use_fg, "").changed();
                                     let (fg, _) = r.colors_mut(edit_dark);

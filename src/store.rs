@@ -432,7 +432,11 @@ struct Rec {
     thread: u32,
     /// Which file of the log (rotated parts + active file) the entry comes from.
     file: u16,
+    /// What the row shows and filters by: the parsed severity, or the one a highlight rule
+    /// sets (#50).
     severity: Severity,
+    /// The severity as parsed (what `severity` returns to when no rule sets one).
+    base: Severity,
 }
 
 /// All entries of a log.
@@ -587,6 +591,7 @@ impl LogStore {
             thread: self.strings.intern(&e.thread),
             file,
             severity: e.severity,
+            base: e.severity,
         });
         let n = self.recs.len();
         while self.extra.len() < e.extra.len() {
@@ -809,6 +814,16 @@ impl LogStore {
 
     pub fn severity(&self, i: usize) -> Severity {
         self.recs[i].severity
+    }
+
+    /// The severity of entry `i` as parsed, before highlight rules (#50).
+    pub fn base_severity(&self, i: usize) -> Severity {
+        self.recs[i].base
+    }
+
+    /// Sets what entry `i` shows as its severity (a highlight rule, #50).
+    pub fn set_severity(&mut self, i: usize, s: Severity) {
+        self.recs[i].severity = s;
     }
 
     pub fn line_no(&self, i: usize) -> usize {

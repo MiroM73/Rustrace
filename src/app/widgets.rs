@@ -64,6 +64,16 @@ pub(in crate::app) fn kb(shortcut: &str) -> String {
         .replace("Shift", &t!("key.shift"))
 }
 
+/// Text of the severity a highlight rule sets (`None` = unchanged, #50).
+pub(in crate::app) fn rule_severity_label(s: Option<RuleSeverity>) -> String {
+    match s {
+        None => t!("rules.sev.unchanged"),
+        Some(RuleSeverity::Info) => t!("severity.info"),
+        Some(RuleSeverity::Warning) => t!("severity.warning"),
+        Some(RuleSeverity::Error) => t!("severity.error"),
+    }
+}
+
 pub(in crate::app) fn scope_label(s: HighlightScope) -> String {
     match s {
         HighlightScope::Row => t!("rules.scope.row"),

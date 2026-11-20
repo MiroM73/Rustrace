@@ -248,10 +248,15 @@ impl App {
         let (tx, rx) = mpsc::channel();
         let prog = progress.clone();
         let ctx = self.ctx.clone();
+        let sev = self.sev_rules.clone();
+        let thread_sev = sev.clone();
         let spawned = std::thread::Builder::new()
             .name("rustrace-reader".into())
             .spawn(move || {
-                let res = src.poll(&prog);
+                let mut res = src.poll(&prog);
+                if let Ok(r) = &mut res {
+                    thread_sev.apply_to_result(r);
+                }
                 // Nothing new: no extra frame, the next scheduled refresh picks the result up.
                 let changed = !matches!(res, Ok(ReadResult::Unchanged));
                 // If the UI no longer waits for the result (other file, cancelled), send fails – that's fine.
@@ -267,6 +272,7 @@ impl App {
                     progress,
                     started: Instant::now(),
                     full,
+                    sev,
                 });
             }
             Err(e) => {
@@ -278,6 +284,7 @@ impl App {
 
     /// Takes over the result from the background thread when it is ready.
     pub(in crate::app) fn check_loading(&mut self) {
+        self.reapply_severity();
         // While a background re-filter uses the entries the result waits (only a moment), so
         // appending does not have to stop the re-filter.
         // The same for a table export (#32): its thread reads the entries.
@@ -287,7 +294,13 @@ impl App {
         let Some(l) = &self.loading else { return };
         let started = l.started;
         match l.rx.try_recv() {
-            Ok((src, res)) => {
+            Ok((src, mut res)) => {
+                // The rules changed while the thread was reading: apply the current ones.
+                if !Arc::ptr_eq(&l.sev, &self.sev_rules)
+                    && let Ok(r) = &mut res
+                {
+                    self.sev_rules.apply_to_result(r);
+                }
                 self.loading = None;
                 self.encoding_name = src.encoding_name();
                 self.file_size = src.file_size();

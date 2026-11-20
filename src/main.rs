@@ -26,6 +26,7 @@ mod merge;
 mod overview;
 mod parser;
 mod setcli;
+mod sevrules;
 mod splash;
 mod store;
 mod tabexport;

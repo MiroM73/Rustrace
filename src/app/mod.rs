@@ -1,6 +1,7 @@
 use crate::colfilter::{ColumnFilter, DateFilter, DateLayout};
 use crate::config::{
-    Config, DeltaMode, DetailsView, HighlightRule, HighlightScope, IntervalUnit, UpdateCheck,
+    Config, DeltaMode, DetailsView, HighlightRule, HighlightScope, IntervalUnit, RuleSeverity,
+    UpdateCheck,
 };
 use crate::errcodes::{self, CodeInfo};
 use crate::excerpt;
@@ -17,6 +18,7 @@ use crate::i18n;
 use crate::logdef::{self, Column as LogColumn, ColumnKind, LogDef, Role, Schema};
 use crate::merge::{self, LogSet, ReadResult};
 use crate::parser::{FormatChoice, Progress, Severity, SourceFile};
+use crate::sevrules::SevRules;
 use crate::store::{EntryRef, LogStore, iso_to_ms, ms_to_iso};
 use crate::t;
 use crate::update::{self, FormatState, Release, SessionState, Updates, WindowState};
@@ -90,7 +92,11 @@ fn c32(c: [u8; 4]) -> Color32 {
     Color32::from_rgba_unmultiplied(c[0], c[1], c[2], c[3])
 }
 
-fn compile_pattern(pattern: &str, is_regex: bool, case_sensitive: bool) -> Result<Regex, String> {
+pub(crate) fn compile_pattern(
+    pattern: &str,
+    is_regex: bool,
+    case_sensitive: bool,
+) -> Result<Regex, String> {
     let p = if is_regex {
         pattern.to_owned()
     } else {
@@ -123,6 +129,8 @@ struct Loading {
     started: Instant,
     /// The log is read from the beginning (first load or full reload), not a refresh read.
     full: bool,
+    /// The severity rules the thread applies to what it reads (#50).
+    sev: Arc<SevRules>,
 }
 
 /// Full re-filter of a big log in a background thread (#16).
@@ -278,6 +286,10 @@ pub struct App {
 
     rules: Vec<CompiledRule>,
     rule_errors: Vec<Option<String>>,
+    /// Rules that set a severity (#50), applied to the entries.
+    sev_rules: Arc<SevRules>,
+    /// The entries still have to get the severity of `sev_rules`.
+    sev_reapply: bool,
 
     /// "Follow end" paused while a row is selected (#37); not saved.
     follow: Follow,
@@ -497,6 +509,8 @@ impl App {
             overview_dirty: 0,
             rules: Vec::new(),
             rule_errors: Vec::new(),
+            sev_rules: Arc::default(),
+            sev_reapply: false,
             follow: Follow::default(),
             show_rules: false,
             rules_was_open: false,

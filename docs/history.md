@@ -443,6 +443,16 @@ Notes for Claude, linked from `CLAUDE.md`.
     (merged by time, missing log → exit 2 with the list, unknown set, `--line`); the window start
     with `--set` was not clicked through.
 
+95. #50 Highlight rules can set the severity of matching rows (combo *Severity* in the rules
+    window; JSON key `severity`). Open question of the issue decided as suggested: it applies to all
+    logs (CMTrace, definitions, plain text) because the rule is explicit user intent; documented
+    in `docs/features.md`. Implemented as `base` + effective severity in the store (no change in
+    record size), applied by the reader thread, re-applied on the UI thread when rules change.
+    Checked with headless `--export --errors` on a plain log with `0 errors` → Info and
+    `exit code [1-9]\d*` → Error rules (exactly the real failures remain; a keyword-only line
+    stays an error), and the window starts with such a rule in the settings; the combo and the
+    live re-apply of an edited rule were not clicked through. No timing was measured on the 400 MB
+    log (nothing runs without a severity rule).
 
 ## Ideas not done yet (offered by the owner)
 - `--set "<name>"` command-line option for log sets (#27): would need the set loading, the file
