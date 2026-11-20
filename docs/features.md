@@ -34,7 +34,9 @@ Everything RusTrace can do, area by area.
   rows inside one log never changes
 - the **File** column shows where every row comes from, with a color mark per log (View →
   "Color mark per log in the File column"); the status bar shows "📚 N logs merged" – its
-  tooltip lists every log with its format, its files, their row counts and encodings
+  tooltip lists every log with its format, its files, their row counts and encodings. While row(s)
+  of one log are selected the status bar shows the **full path of that log** (with its color mark)
+  instead; with nothing selected, or rows of several logs, it shows "N logs merged" again (#65)
 - every log is watched and refreshed on its own; new rows normally go at the end, a row older
   than the newest one in the view is merged into the right place (only the end of the view after
   its time is rearranged)
@@ -355,7 +357,12 @@ and a rotating ring of dots) shows that the program is starting, until the main 
 creating the graphics context can take a moment, especially on the first start after boot. It
 follows the theme from the settings (or the Windows theme).
 
-The window title shows the version in use, e.g. `RusTrace 0.6.0 – ccmexec.log`. **Help → About
+The window title starts with the file name, because Windows truncates long titles from the right
+(taskbar, Alt+Tab), and shows the folder, so equally named logs from different places can be told
+apart (#65): `ccmexec.log – C:\Windows\CCM\Logs – RusTrace 1.2.0`. Merged logs from one folder:
+`ccmexec.log + PolicyAgent.log – C:\Windows\CCM\Logs – RusTrace 1.2.0`; from different folders:
+`ccmexec.log + ccmexec.log (2 logs) – RusTrace 1.2.0`; opened as a log set: `<set name> (5 logs) –
+RusTrace 1.2.0`. The title does not follow the selected row. **Help → About
 RusTrace** shows the version, author, license, links to the project page, new versions, the
 issue tracker and the guides, the build (platform) and the settings file; "Copy version information" puts e.g.
 `RusTrace 0.6.0 (windows x86_64, release)` on the clipboard for a bug report.

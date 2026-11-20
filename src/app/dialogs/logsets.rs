@@ -398,7 +398,9 @@ impl App {
                 self.cfg.push_computer(pc);
             }
             self.cfg_dirty = true;
+            let set_name = dlg.set().map(|s| s.name(&self.lang_code));
             self.open_files(paths);
+            self.set_name = set_name;
             return;
         }
         if open && !close {

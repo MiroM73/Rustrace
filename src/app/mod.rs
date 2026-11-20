@@ -48,6 +48,7 @@ mod statusbar;
 mod strip;
 mod tabexport;
 mod table;
+mod title;
 mod toolbar;
 mod widgets;
 
@@ -289,6 +290,8 @@ pub struct App {
     own_defs: std::collections::BTreeMap<String, (PathBuf, String)>,
     focus_search: bool,
     title: String,
+    /// Name of the log set the logs were opened from (File → Open log set), for the window title.
+    set_name: Option<String>,
 
     /// Error codes found in the selected row and its status columns (entry index, codes).
     code_cache: Option<(usize, RowCodes)>,
@@ -493,6 +496,7 @@ impl App {
             own_defs: Default::default(),
             focus_search: false,
             title: String::new(),
+            set_name: None,
             code_cache: None,
             raw_cache: None,
             show_lookup: false,
@@ -636,27 +640,6 @@ impl App {
 
     fn info(&mut self, s: String) {
         self.status_info = Some((s, Instant::now()));
-    }
-
-    fn update_title(&mut self, ctx: &egui::Context) {
-        let names: Vec<String> = self
-            .paths
-            .iter()
-            .map(|p| {
-                p.file_name()
-                    .map(|f| f.to_string_lossy().into_owned())
-                    .unwrap_or_default()
-            })
-            .collect();
-        let t = if names.is_empty() {
-            base_title()
-        } else {
-            format!("{} – {}", base_title(), names.join(" + "))
-        };
-        if t != self.title {
-            ctx.send_viewport_cmd(egui::ViewportCommand::Title(t.clone()));
-            self.title = t;
-        }
     }
 }
 

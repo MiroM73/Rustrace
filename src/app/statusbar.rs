@@ -7,11 +7,21 @@ impl App {
         ui.horizontal(|ui| {
             if let Some(path) = &self.cur_path {
                 if self.is_merged() {
-                    ui.label(format!(
-                        "📚 {}",
-                        t!("status.merged", count = self.paths.len())
-                    ))
-                    .on_hover_ui(|ui| self.merged_tip(ui));
+                    // Rows of one log are selected: its full path (#65), else the number of logs.
+                    if let Some(s) = self.selection_source()
+                        && let Some(p) = self.paths.get(s)
+                    {
+                        ui.label(RichText::new("■").color(self.log_color(s)))
+                            .on_hover_ui(|ui| self.merged_tip(ui));
+                        ui.label(p.display().to_string())
+                            .on_hover_ui(|ui| self.merged_tip(ui));
+                    } else {
+                        ui.label(format!(
+                            "📚 {}",
+                            t!("status.merged", count = self.paths.len())
+                        ))
+                        .on_hover_ui(|ui| self.merged_tip(ui));
+                    }
                 } else {
                     ui.label(path.display().to_string());
                 }
