@@ -1,3 +1,4 @@
 /target
 /dist
 /testlogs
+.claude/settings.local.json
