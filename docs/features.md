@@ -357,12 +357,10 @@ and a rotating ring of dots) shows that the program is starting, until the main 
 creating the graphics context can take a moment, especially on the first start after boot. It
 follows the theme from the settings (or the Windows theme).
 
-The window title starts with the file name, because Windows truncates long titles from the right
-(taskbar, Alt+Tab), and shows the folder, so equally named logs from different places can be told
-apart (#65): `ccmexec.log – C:\Windows\CCM\Logs – RusTrace 1.2.0`. Merged logs from one folder:
-`ccmexec.log + PolicyAgent.log – C:\Windows\CCM\Logs – RusTrace 1.2.0`; from different folders:
-`ccmexec.log + ccmexec.log (2 logs) – RusTrace 1.2.0`; opened as a log set: `<set name> (5 logs) –
-RusTrace 1.2.0`. The title does not follow the selected row. **Help → About
+The window title starts with the program name and version (#65), then the **full path** of the
+log: `RusTrace 1.1.9 – F:\Logs\iis\u_ex261023.log`. With several logs open (merged view, log set)
+it lists their file names: `RusTrace 1.1.9 – ccmexec.log + PolicyAgent.log` – the full paths are in
+the tooltip of the status bar. The title does not follow the selected row. **Help → About
 RusTrace** shows the version, author, license, links to the project page, new versions, the
 issue tracker and the guides, the build (platform) and the settings file; "Copy version information" puts e.g.
 `RusTrace 0.6.0 (windows x86_64, release)` on the clipboard for a bug report.

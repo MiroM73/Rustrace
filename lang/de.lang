@@ -374,7 +374,6 @@ status.no_file = Keine Datei
 status.dropped = {count} älteste Einträge entfernt
 status.dropped.tip = Das Log hat das Limit von {limit} MB überschritten (Menü Ansicht); die ältesten Einträge wurden aus dem Speicher entfernt. Strg+F5 liest die Datei neu.
 status.parts = {count} Dateien
-title.logs = {count} Logs
 status.merged = {count} Logs zusammengeführt
 status.merged.tip = Die Zeilen sind nach Datum/Uhrzeit sortiert; eine Zeile ohne Datum/Uhrzeit bleibt hinter der Zeile davor im selben Log. Datei → Log zur Ansicht hinzufügen / Zusammengeführte Logs.
 status.rows = {count} Zeilen

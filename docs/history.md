@@ -340,13 +340,15 @@ Notes for Claude, linked from `CLAUDE.md`.
     a new *another copy of RusTrace* state; the ProgID check is only the fallback. The original
     orange state could not be reproduced live (the registry had been repaired since the report);
     covered by the unit test `decide_trusts_the_resolved_program` with the real values.
-84. #65 Window title with the folder: `ccmexec.log – C:\Windows\CCM\Logs – RusTrace 1.x` (file name
-    first, Windows truncates from the right); merged logs from one folder show the folder, from
-    several folders `a + b (2 logs)`, a log set its name and count; the title does not follow the
-    selection (owner decision A + C, 2026-11-20). In a merged view the status bar shows the full
-    path of the selected row's log instead of "N logs merged". Pure `window_title` + tests;
-    checked in the running program (single / same folder / different folders / nothing open);
-    the status bar and the log set title were not clicked through.
+84. #65 Window title with the path of the log. First version (owner decision A + C) put the file
+    name first and the folder after it; after seeing it the owner asked for the program name and
+    version first, then the **full path** of the log (the file name only as a part of the path),
+    or the file names `a.log + b.log` when several logs are open – so the folder / log set name /
+    count variants were dropped (`RusTrace 1.1.9 – F:\Logs\iis\u_ex261023.log`). The title does
+    not follow the selection. In a merged view the status bar shows the full path of the selected
+    row's log instead of "N logs merged". Pure `window_title` + test; checked in the running
+    program (single / several / none); the status bar path was not clicked through.
+
 
 ## Ideas not done yet (offered by the owner)
 - `--set "<name>"` command-line option for log sets (#27): would need the set loading, the file

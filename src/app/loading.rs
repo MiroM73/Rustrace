@@ -193,7 +193,6 @@ impl App {
         self.data_gen += 1;
         // A row asked for by the command line belongs to the logs opened from it.
         self.cli_select = None;
-        self.set_name = None;
         self.cur_path = paths.first().cloned();
         self.source = Some(LogSet::new(&paths, self.cfg.keyword_severity));
         // Recent files remember single logs.

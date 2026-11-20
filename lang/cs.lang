@@ -374,7 +374,6 @@ status.no_file = Žádný soubor
 status.dropped = Odstraněných nejstarších záznamů: {count}
 status.dropped.tip = Log překročil limit {limit} MB (menu Zobrazit); nejstarší záznamy se odstranily z paměti. Ctrl+F5 načte soubor znovu.
 status.parts = Soubory: {count}
-title.logs = logy: {count}
 status.merged = Spojené logy: {count}
 status.merged.tip = Řádky jsou seřazeny podle data a času; řádek bez data a času zůstává za řádkem před ním ve stejném logu. Soubor → Přidat log do zobrazení / Spojené logy.
 status.rows = řádků: {count}

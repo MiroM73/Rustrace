@@ -388,7 +388,6 @@ status.no_file = No file
 status.dropped = {count} oldest records removed
 status.dropped.tip = The log exceeded the limit of {limit} MB (View menu); the oldest records were removed from memory. Ctrl+F5 reads the file again.
 status.parts = {count} files
-title.logs = {count} logs
 status.merged = {count} logs merged
 status.merged.tip = Rows are ordered by date/time; a row without a date/time stays after the row before it in the same log. File → Add log to view / Merged logs.
 status.rows = {count} rows
