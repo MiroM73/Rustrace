@@ -430,6 +430,11 @@ Notes for Claude, linked from `CLAUDE.md`.
     The title does not follow the selection. In a merged view the status bar shows the full path of the selected
     row's log instead of "N logs merged". Pure `window_title` + test; checked in the running
     program (single / several / none); the status bar path was not clicked through.
+93. Release v1.2.1 (#64 default app window state, #65 window title with the path of the log). The
+    branch `issues-64-65` was started from a master that was behind origin/master (v1.2.0 was
+    already released), so master was fast-forwarded first and the branch merged (doc conflicts only).
+    `release.ps1 1.2.1 -Publish -Yes` under pwsh: tests, tag, GitHub build watched to the end,
+    published with the .exe / .zip and their .sha256; release notes set with `gh release edit`.
 
 
 ## Ideas not done yet (offered by the owner)
