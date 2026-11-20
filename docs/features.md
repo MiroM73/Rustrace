@@ -359,8 +359,10 @@ follows the theme from the settings (or the Windows theme).
 
 The window title starts with the program name and version (#65), then the **full path** of the
 log: `RusTrace 1.1.9 – F:\Logs\iis\u_ex261023.log`. With several logs open (merged view, log set)
-it lists their file names: `RusTrace 1.1.9 – ccmexec.log + PolicyAgent.log` – the full paths are in
-the tooltip of the status bar. The title does not follow the selected row. **Help → About
+it lists their file names after the number of logs: `RusTrace 1.1.9 – [2 logs] ccmexec.log +
+PolicyAgent.log`; a log set (File → Open log set) puts its name before the number:
+`RusTrace 1.1.9 – [Client install / 3 logs] ccmexec.log + ccmsetup.log + client.msi.log` – the
+full paths are in the tooltip of the status bar. The title does not follow the selected row. **Help → About
 RusTrace** shows the version, author, license, links to the project page, new versions, the
 issue tracker and the guides, the build (platform) and the settings file; "Copy version information" puts e.g.
 `RusTrace 0.6.0 (windows x86_64, release)` on the clipboard for a bug report.

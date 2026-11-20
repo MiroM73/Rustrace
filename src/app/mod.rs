@@ -290,6 +290,8 @@ pub struct App {
     own_defs: std::collections::BTreeMap<String, (PathBuf, String)>,
     focus_search: bool,
     title: String,
+    /// Name of the log set the logs were opened from (File → Open log set), for the window title.
+    set_name: Option<String>,
 
     /// Error codes found in the selected row and its status columns (entry index, codes).
     code_cache: Option<(usize, RowCodes)>,
@@ -494,6 +496,7 @@ impl App {
             own_defs: Default::default(),
             focus_search: false,
             title: String::new(),
+            set_name: None,
             code_cache: None,
             raw_cache: None,
             show_lookup: false,

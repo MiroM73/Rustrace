@@ -14,14 +14,26 @@ fn file_name(p: &Path) -> String {
 
 /// The window title: the program name and version first, then the full path of the log, or the
 /// file names of the logs when several are open (`a.log + b.log`; their paths are in the tooltip
-/// of the status bar). The title does not follow the selected row.
-pub(in crate::app) fn window_title(base: &str, paths: &[PathBuf]) -> String {
+/// of the status bar). Several logs get a bracketed prefix before the names: the name of the log
+/// set and the number of logs (`[Client install / 3 logs]`), without a set only the number
+/// (`[3 logs]`). `count_text` is the translated number of logs, e.g. "3 logs". The title does not
+/// follow the selected row.
+pub(in crate::app) fn window_title(
+    base: &str,
+    paths: &[PathBuf],
+    set_name: Option<&str>,
+    count_text: &str,
+) -> String {
     match paths {
         [] => base.to_owned(),
         [one] => format!("{base} – {}", one.display()),
         many => {
             let names: Vec<String> = many.iter().map(|p| file_name(p)).collect();
-            format!("{base} – {}", names.join(" + "))
+            let prefix = match set_name.map(str::trim).filter(|s| !s.is_empty()) {
+                Some(set) => format!("[{set} / {count_text}]"),
+                None => format!("[{count_text}]"),
+            };
+            format!("{base} – {prefix} {}", names.join(" + "))
         }
     }
 }
@@ -32,7 +44,12 @@ const MAX_SELECTION_SCAN: usize = 100_000;
 
 impl App {
     pub(super) fn update_title(&mut self, ctx: &egui::Context) {
-        let t = window_title(&base_title(), &self.paths);
+        let t = window_title(
+            &base_title(),
+            &self.paths,
+            self.set_name.as_deref(),
+            &t!("title.logs", count = self.paths.len()),
+        );
         if t != self.title {
             ctx.send_viewport_cmd(egui::ViewportCommand::Title(t.clone()));
             self.title = t;
@@ -78,27 +95,39 @@ mod tests {
     #[test]
     fn title_of_nothing_one_log_and_merged_logs() {
         let base = "RusTrace 1.1.9";
-        assert_eq!(window_title(base, &[]), base);
-        // One log: the full path.
-        assert_eq!(
-            window_title(base, &[p(r"F:\Logs\iis\u_ex261023.log")]),
-            r"RusTrace 1.1.9 – F:\Logs\iis\u_ex261023.log"
-        );
-        assert_eq!(
-            window_title(base, &[p(r"\\PC01\c$\Windows\CCM\Logs\a.log")]),
-            r"RusTrace 1.1.9 – \\PC01\c$\Windows\CCM\Logs\a.log"
-        );
-        // Several logs: the file names, whatever the folders are.
+        assert_eq!(window_title(base, &[], None, "0 logs"), base);
+        // One log: the full path (a log set with one log is shown like a single log).
         assert_eq!(
             window_title(
                 base,
-                &[
-                    p(r"C:\Windows\CCM\Logs\ccmexec.log"),
-                    p(r"\\PC01\c$\Windows\CCM\Logs\PolicyAgent.log"),
-                    p("rel/dir/c.log"),
-                ]
+                &[p(r"F:\Logs\iis\u_ex261023.log")],
+                Some("IIS"),
+                "1 logs"
             ),
-            "RusTrace 1.1.9 – ccmexec.log + PolicyAgent.log + c.log"
+            r"RusTrace 1.1.9 – F:\Logs\iis\u_ex261023.log"
+        );
+        assert_eq!(
+            window_title(base, &[p(r"\\PC01\c$\Windows\CCM\Logs\a.log")], None, ""),
+            r"RusTrace 1.1.9 – \\PC01\c$\Windows\CCM\Logs\a.log"
+        );
+        // Several logs: the number of logs and the file names, whatever the folders are.
+        let many = [
+            p(r"C:\Windows\CCM\Logs\ccmexec.log"),
+            p(r"\\PC01\c$\Windows\CCM\Logs\PolicyAgent.log"),
+            p("rel/dir/c.log"),
+        ];
+        assert_eq!(
+            window_title(base, &many, None, "3 logs"),
+            "RusTrace 1.1.9 – [3 logs] ccmexec.log + PolicyAgent.log + c.log"
+        );
+        // A log set: its name before the number.
+        assert_eq!(
+            window_title(base, &many, Some("Client install"), "3 logs"),
+            "RusTrace 1.1.9 – [Client install / 3 logs] ccmexec.log + PolicyAgent.log + c.log"
+        );
+        assert_eq!(
+            window_title(base, &many, Some("  "), "3 logs"),
+            "RusTrace 1.1.9 – [3 logs] ccmexec.log + PolicyAgent.log + c.log"
         );
     }
 }
