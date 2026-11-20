@@ -413,6 +413,24 @@ Notes for Claude, linked from `CLAUDE.md`.
     -Publish -Yes` under pwsh: tests, tag, GitHub build watched to the end (the `Select-RunId` of
     #59 found the run), published with the .exe / .zip and their .sha256; release notes (What's
     new / changed / fixed / removed) set with `gh release edit`.
+91. #64 Default app window: `.log` showed *opened by another program (RusTrace)* although RusTrace was
+    the default. On the owner's PC `UserChoice\ProgId` held a stale `AppX…` ProgID while
+    `UserChoiceLatest\ProgId` was `RusTrace.LogFile`, so judging by ProgID strings was unreliable.
+    The state is now decided by the executable Windows starts (`decide`, `ASSOCSTR_EXECUTABLE`) with
+    a new *another copy of RusTrace* state; the ProgID check is only the fallback. The original
+    orange state could not be reproduced live (the registry had been repaired since the report);
+    covered by the unit test `decide_trusts_the_resolved_program` with the real values.
+92. #65 Window title with the path of the log. First version (owner decision A + C) put the file
+    name first and the folder after it; after seeing it the owner asked for the program name and
+    version first, then the **full path** of the log (the file name only as a part of the path),
+    or the file names `a.log + b.log` when several logs are open (`RusTrace 1.1.9 –
+    F:\Logs\iis\u_ex261023.log`); the folder variant was dropped. Then the owner asked for the log
+    set name and the number of logs back, in a readable bracket before the list of names:
+    `RusTrace 1.1.9 – [Client install / 3 logs] a.log + b.log + c.log` (without a set `[3 logs]`).
+    The title does not follow the selection. In a merged view the status bar shows the full path of the selected
+    row's log instead of "N logs merged". Pure `window_title` + test; checked in the running
+    program (single / several / none); the status bar path was not clicked through.
+
 
 ## Ideas not done yet (offered by the owner)
 - `--set "<name>"` command-line option for log sets (#27): would need the set loading, the file

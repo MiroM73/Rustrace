@@ -31,6 +31,8 @@ pub enum ExtStatus {
     /// Another program (its name, or the ProgID when Windows does not know a name) – chosen by
     /// the user or the system default.
     Other(String),
+    /// Another copy of RusTrace (path of its executable), e.g. a release copy in another folder.
+    OtherCopy(String),
     /// No program is set.
     None,
 }
@@ -98,8 +100,8 @@ pub fn registration_values(root: &str, exe: &str, type_name: &str) -> Vec<RegVal
     v
 }
 
-/// Which program opens an extension: the user's choice wins; without it the default file type
-/// of the extension.
+/// Which program opens an extension, judged by the ProgID strings only: the user's choice wins;
+/// without it the default file type of the extension.
 pub fn classify(user_choice: Option<&str>, class_default: Option<&str>) -> ExtStatus {
     let is_ours = |p: &str| {
         p.eq_ignore_ascii_case(PROG_ID) || p.eq_ignore_ascii_case("Applications\\rustrace.exe")
@@ -109,6 +111,47 @@ pub fn classify(user_choice: Option<&str>, class_default: Option<&str>) -> ExtSt
         Some(p) if is_ours(p) => ExtStatus::RusTrace,
         Some(p) => ExtStatus::Other(p.to_owned()),
         None => ExtStatus::None,
+    }
+}
+
+/// A path for comparing: no quotes, `\?\` prefix or trailing spaces, `\` separators, lower case.
+fn normalize_path(p: &str) -> String {
+    let p = p.trim().trim_matches('"').trim();
+    let p = p.strip_prefix(r"\\?\").unwrap_or(p);
+    p.replace('/', "\\").to_lowercase()
+}
+
+/// True when `p` is a RusTrace executable (`rustrace.exe`, `rustrace-1.1.9.exe`, …).
+fn is_rustrace_exe(p: &str) -> bool {
+    let name = normalize_path(p);
+    let name = name.rsplit('\\').next().unwrap_or_default();
+    name.starts_with("rustrace") && name.ends_with(".exe")
+}
+
+/// Which program opens an extension. Windows' own resolution wins: `resolved_exe` is the
+/// executable the shell starts for the extension (`AssocQueryString`, follows the real user
+/// choice – the `UserChoice` / `UserChoiceLatest` keys can disagree, #64). Only when the shell
+/// gives no executable the ProgID strings are used ([`classify`]).
+pub fn decide(
+    user_choice: Option<&str>,
+    class_default: Option<&str>,
+    resolved_exe: Option<&str>,
+    current_exe: &str,
+) -> ExtStatus {
+    let by_prog_id = classify(user_choice, class_default);
+    let Some(exe) = resolved_exe.map(str::trim).filter(|e| !e.is_empty()) else {
+        return by_prog_id;
+    };
+    if normalize_path(exe) == normalize_path(current_exe) {
+        ExtStatus::RusTrace
+    } else if is_rustrace_exe(exe) {
+        ExtStatus::OtherCopy(exe.trim_matches('"').to_owned())
+    } else {
+        match by_prog_id {
+            // The ProgID says RusTrace but the shell starts something else.
+            ExtStatus::RusTrace | ExtStatus::None => ExtStatus::Other(exe.to_owned()),
+            other => other,
+        }
     }
 }
 
@@ -130,6 +173,7 @@ mod os {
     const RRF_RT_REG_SZ: u32 = 0x2;
     const ERROR_FILE_NOT_FOUND: i32 = 2;
     const SHCNE_ASSOCCHANGED: i32 = 0x0800_0000;
+    const ASSOCSTR_EXECUTABLE: i32 = 2;
     const ASSOCSTR_FRIENDLYAPPNAME: i32 = 4;
 
     #[link(name = "advapi32")]
@@ -428,22 +472,34 @@ mod os {
             .find_map(|k| get_string(HKEY_CURRENT_USER, &format!("{exts}\\{k}"), "ProgId"));
         let class = get_string(HKEY_CURRENT_USER, &format!("Software\\Classes\\{ext}"), "")
             .or_else(|| get_string(HKEY_LOCAL_MACHINE, &format!("Software\\Classes\\{ext}"), ""));
-        match classify(choice.as_deref(), class.as_deref()) {
-            ExtStatus::Other(prog) => ExtStatus::Other(friendly_app_name(ext).unwrap_or(prog)),
+        let current = std::env::current_exe()
+            .map(|p| p.to_string_lossy().into_owned())
+            .unwrap_or_default();
+        let resolved = assoc_query(ext, ASSOCSTR_EXECUTABLE);
+        match decide(
+            choice.as_deref(),
+            class.as_deref(),
+            resolved.as_deref(),
+            &current,
+        ) {
+            ExtStatus::Other(prog) => {
+                ExtStatus::Other(assoc_query(ext, ASSOCSTR_FRIENDLYAPPNAME).unwrap_or(prog))
+            }
             s => s,
         }
     }
 
-    /// Name of the program Windows opens files with the extension with ("Notepad").
-    fn friendly_app_name(ext: &str) -> Option<String> {
-        let mut buf = vec![0u16; 512];
+    /// A string about the program Windows opens files with the extension with (`what` =
+    /// `ASSOCSTR_*`): its name ("Notepad") or its executable. None when Windows has no answer.
+    fn assoc_query(ext: &str, what: i32) -> Option<String> {
+        let mut buf = vec![0u16; 1024];
         let mut size = buf.len() as u32;
         let open = wide("open");
         // SAFETY: NUL-terminated strings; `size` is the buffer length in characters.
         let hr = unsafe {
             AssocQueryStringW(
                 0,
-                ASSOCSTR_FRIENDLYAPPNAME,
+                what,
                 wide(ext).as_ptr(),
                 open.as_ptr(),
                 buf.as_mut_ptr(),
@@ -454,8 +510,8 @@ mod os {
             return None;
         }
         let len = buf.iter().position(|&c| c == 0).unwrap_or(buf.len());
-        let name = String::from_utf16_lossy(&buf[..len]);
-        (!name.trim().is_empty()).then_some(name)
+        let text = String::from_utf16_lossy(&buf[..len]);
+        (!text.trim().is_empty()).then_some(text)
     }
 
     /// State of the registration shown in the default app window.
@@ -607,5 +663,51 @@ mod tests {
         );
         assert_eq!(classify(None, None), ExtStatus::None);
         assert_eq!(classify(None, Some("")), ExtStatus::None);
+    }
+
+    #[test]
+    fn decide_trusts_the_resolved_program() {
+        let cur = r"D:\Path\RusTrace\rustrace.exe";
+        // #64: a stale AppX ProgID in `UserChoice`, but the shell starts this RusTrace.
+        assert_eq!(
+            decide(
+                Some("AppX4ztfk9wxr86nxmzzq47px0nh0e58b8fw"),
+                Some(PROG_ID),
+                Some(r#""d:/path/rustrace/RUSTRACE.exe""#),
+                cur
+            ),
+            ExtStatus::RusTrace
+        );
+        assert_eq!(
+            decide(None, None, Some(r"\\?\D:\Path\RusTrace\rustrace.exe"), cur),
+            ExtStatus::RusTrace
+        );
+        // Another copy of RusTrace.
+        let copy = r"C:\Tools\rustrace-1.1.9.exe";
+        assert_eq!(
+            decide(Some(PROG_ID), None, Some(copy), cur),
+            ExtStatus::OtherCopy(copy.into())
+        );
+        // Another program, also when the ProgID claims RusTrace or is missing.
+        let notepad = r"C:\Windows\notepad.exe";
+        assert_eq!(
+            decide(Some("txtfile"), None, Some(notepad), cur),
+            ExtStatus::Other("txtfile".into())
+        );
+        assert_eq!(
+            decide(Some(PROG_ID), None, Some(notepad), cur),
+            ExtStatus::Other(notepad.into())
+        );
+        assert_eq!(
+            decide(None, None, Some(notepad), cur),
+            ExtStatus::Other(notepad.into())
+        );
+        // The shell gives no executable: the ProgID strings decide as before.
+        assert_eq!(decide(Some(PROG_ID), None, None, cur), ExtStatus::RusTrace);
+        assert_eq!(decide(None, None, Some("  "), cur), ExtStatus::None);
+        assert_eq!(
+            decide(Some("txtfile"), None, None, cur),
+            ExtStatus::Other("txtfile".into())
+        );
     }
 }

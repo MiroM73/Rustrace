@@ -40,6 +40,7 @@ What every source file and folder of the repository contains.
   - `logdefs.rs` – log definitions, update notice, the log format menu
   - `input.rs` – keyboard shortcuts, drag & drop
   - `menu.rs`, `toolbar.rs`, `statusbar.rs` (+ tests) – menu bar, toolbar and time range row, status bar
+  - `title.rs` (+ tests) – the window title (program, version, path or names of the logs) and the log the selected rows belong to (status bar)
   - `table.rs` – the log table, row colors, highlighted text, context menu
   - `details.rs` – details pane (message / raw line), error code and status code explanation
   - `strip.rs` – the overview strip next to the scroll bar
