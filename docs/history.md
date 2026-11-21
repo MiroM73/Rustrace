@@ -466,6 +466,7 @@ Notes for Claude, linked from `CLAUDE.md`.
     (`*_win`). Verified: `cargo test`, clippy, rustfmt; an automated Ctrl+H smoke test did not show
     the window (keystroke probably not delivered), so the windows were not clicked through – default
     sizes of the formerly self-sizing windows are guesses.
+99. Release v1.4.0 (#68, #69 windows open as their own OS windows). Done at the owner's request by the owner with `release.ps1`; release notes set by Claude with `gh release edit`.
 
 ## Ideas not done yet (offered by the owner)
 - `--set "<name>"` command-line option for log sets (#27): would need the set loading, the file
