@@ -725,7 +725,7 @@ impl App {
                     );
                     self.recompile_rules();
                     self.cfg_dirty = true;
-                    self.show_rules = true;
+                    self.rules_win.open();
                 }
             }
         }

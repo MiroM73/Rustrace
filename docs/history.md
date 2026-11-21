@@ -454,6 +454,11 @@ Notes for Claude, linked from `CLAUDE.md`.
     live re-apply of an edited rule were not clicked through. No timing was measured on the 400 MB
     log (nothing runs without a severity rule).
 96. Release v1.3.0 (#50 severity set by highlight rules, #67 `--set` / `--computer`). Done at the owner's request by Claude with `release.ps1 1.3.0 -Publish -Yes` under pwsh; release notes set with `gh release edit`.
+97. #68 Highlight rules is its own OS window (new `app/native_window.rs`: `ToolWindow` / `ToolSpec`,
+    `Config::separate_windows` = *View → Open windows separately*, `Config::rules_window` geometry;
+    old config files load unchanged). Verified: `cargo test` (the geometry and open / close logic
+    of `ToolWindow`), clippy, rustfmt. The dragging to a second monitor and the restart
+    persistence were not clicked through.
 
 ## Ideas not done yet (offered by the owner)
 - `--set "<name>"` command-line option for log sets (#27): would need the set loading, the file

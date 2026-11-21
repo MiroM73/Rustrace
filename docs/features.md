@@ -163,6 +163,10 @@ The logs of one troubleshooting scenario in one step – details in [Log sets](l
   format (CMTrace, log definitions, plain text); rows no such rule matches keep the severity of the
   log. Editing a rule re-applies the severities to the open log (a very big log takes a moment).
 - order = priority (up/down arrows), on/off, live preview, invalid regex warning
+- the window is **its own OS window** (#68): drag it outside the main window or onto another
+  monitor while you watch the colors change in the log; its position and size are remembered.
+  *View → Open windows separately* (on by default) switches back to a window inside the main
+  window; Esc closes the separate window (not while a field or a popup is active)
 - the window opens wide enough for the whole table (up to the size of the main window); long names
   and patterns are shown in full in the tooltip of their field; a narrower window shows a
   horizontal scroll bar

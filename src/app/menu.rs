@@ -243,6 +243,16 @@ impl App {
                     self.cfg_dirty = true;
                 }
                 if ui
+                    .checkbox(
+                        &mut self.cfg.separate_windows,
+                        t!("menu.view.separate_windows"),
+                    )
+                    .on_hover_text(t!("menu.view.separate_windows.tip"))
+                    .changed()
+                {
+                    self.cfg_dirty = true;
+                }
+                if ui
                     .checkbox(&mut self.cfg.merge_rotated, t!("menu.view.merge_rotated"))
                     .on_hover_text(t!("menu.view.merge_rotated.tip"))
                     .changed()
@@ -270,7 +280,7 @@ impl App {
                     .clicked()
                 {
                     ui.close();
-                    self.show_rules = true;
+                    self.rules_win.open();
                 }
                 if ui.button(t!("menu.highlight.colors")).clicked() {
                     ui.close();

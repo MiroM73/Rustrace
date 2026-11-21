@@ -46,6 +46,7 @@ mod input;
 mod loading;
 mod logdefs;
 mod menu;
+mod native_window;
 mod selection;
 mod statusbar;
 mod strip;
@@ -60,6 +61,7 @@ use cli::*;
 use details::RowCodes;
 use filter::TypedSearch;
 use follow::Follow;
+use native_window::{ToolSpec, ToolWindow};
 use statusbar::*;
 use strip::*;
 use tabexport::{ColumnChoice, TableExportJob};
@@ -293,7 +295,7 @@ pub struct App {
 
     /// "Follow end" paused while a row is selected (#37); not saved.
     follow: Follow,
-    show_rules: bool,
+    rules_win: ToolWindow,
     /// The rules window was shown in the previous frame (#48: start scrolled to the left).
     rules_was_open: bool,
     /// Rules ticked for the export in the rules window (#51); `Some` while the choice is shown.
@@ -512,7 +514,7 @@ impl App {
             sev_rules: Arc::default(),
             sev_reapply: false,
             follow: Follow::default(),
-            show_rules: false,
+            rules_win: ToolWindow::new("rules_window"),
             rules_was_open: false,
             rules_export_pick: None,
             rules_msg: None,
@@ -696,7 +698,7 @@ impl eframe::App for App {
     fn ui(&mut self, ui: &mut egui::Ui, _frame: &mut eframe::Frame) {
         let ctx = ui.ctx().clone();
         self.dark = ui.visuals().dark_mode;
-        if !self.show_rules && !self.show_colors {
+        if !self.rules_win.is_open() && !self.show_colors {
             // Editors open with the colors of the theme in use.
             self.edit_dark = self.dark;
         }

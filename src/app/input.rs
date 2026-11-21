@@ -81,7 +81,7 @@ impl App {
             self.cfg_dirty = true;
         }
         if ctrl_h {
-            self.show_rules = true;
+            self.rules_win.open();
         }
         if ctrl_e {
             self.open_lookup(None);

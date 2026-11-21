@@ -631,6 +631,24 @@ links in `docs/` (`features.md`, `export.md`, `log-definitions.md`, `log-sets.md
   `docs/guides/*.md` is in the table; built-in sets' guides must be in the table. Adding a guide =
   one `GUIDES` line + `help.guide.*` keys.
 
+## Tool windows (#68)
+- `app/native_window.rs`: `ToolWindow` (open / focus / geometry the native window opened with) and
+  `ToolSpec` (title, default and minimum size); adapted from MM PortLens without its own zoom (the
+  zoom factor belongs to the context all viewports share, so the text follows the main window's
+  UI zoom). `show(ctx, native, spec, state, content)`: `native` = `Config::separate_windows &&
+  !ctx.embed_viewports()` → `ctx.show_viewport_immediate` (own OS window, program icon cached in a
+  `OnceLock`), otherwise an `egui::Window` in the main window. The builder is fixed at the first
+  frame (`opened_at`), a builder that changes between frames moves the open window. Position and
+  size are stored in `Config::rules_window` (`ToolWindowState`, logical pixels = egui points ×
+  zoom, `window_geometry`; not stored while minimized / maximized). Esc closes the native window
+  only when no widget has focus and no popup is open. `ctx.input` is never called inside another
+  `input` closure (the context is locked there).
+- The window is moved out of `App` (`mem::replace`) during `show`, because the content closure
+  borrows `self`; `Config::rules_window` is written back and `cfg_dirty` set when it changed.
+- **Convention: every new separately opened window uses `ToolWindow`** (movable outside the main
+  window). Converted so far: Highlight rules (#68); the other windows follow in #69. Short modal
+  confirmations may stay in the main window.
+
 ## Localization and settings
 - Localization: built-in en / sk / cs / de; external `<code>.lang` files load **without recompiling**
   from `lang\` next to the exe or `%APPDATA%\RusTrace\lang`; fallback to English.

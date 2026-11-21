@@ -318,7 +318,7 @@ impl App {
                 .on_hover_text(kb("Ctrl+H"))
                 .clicked()
             {
-                self.show_rules = true;
+                self.rules_win.open();
             }
         });
         if self.cfg.show_time_range {

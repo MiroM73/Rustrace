@@ -299,9 +299,20 @@ pub const SEARCH_HISTORY_MAX: usize = 30;
 /// How many remote computer names the log sets window remembers.
 pub const REMOTE_COMPUTERS_MAX: usize = 15;
 
+/// Position and size (logical pixels) of a window opened as its own OS window (#68).
+#[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
+pub struct ToolWindowState {
+    pub pos: Option<[f32; 2]>,
+    pub size: Option<[f32; 2]>,
+}
+
 #[derive(Clone, Serialize, Deserialize, Debug)]
 #[serde(default)]
 pub struct Config {
+    /// Open the tool windows as their own OS windows that can leave the main window (#68).
+    pub separate_windows: bool,
+    /// Geometry of the Highlight rules window (#68).
+    pub rules_window: ToolWindowState,
     pub rules: Vec<HighlightRule>,
     pub refresh_value: f64,
     pub refresh_unit: IntervalUnit,
@@ -421,6 +432,8 @@ pub struct Config {
 impl Default for Config {
     fn default() -> Self {
         Self {
+            separate_windows: true,
+            rules_window: ToolWindowState::default(),
             rules: Self::default_rules(),
             refresh_value: 500.0,
             refresh_unit: IntervalUnit::Ms,

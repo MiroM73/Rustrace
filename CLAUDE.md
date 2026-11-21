@@ -83,6 +83,9 @@ Feature index (file → section of `docs/architecture.md`):
   – built-in log sets (all embedded with `include_str!` and shipped next to the exe).
 
 ## Conventions
+- **A new separately opened window uses `ToolWindow`** (`src/app/native_window.rs`, #68): its own OS
+  window that can leave the main window, in-window fallback when *View → Open windows separately*
+  is off. Short modal confirmations may stay inside the main window.
 - **Every user-visible string goes through `t!("key")`** (placeholders `t!("key", name = value)`).
   A new key must be added to **all four** `lang/*.lang` files with the same placeholders –
   the test `i18n::tests::builtin_languages_are_complete` enforces this.
