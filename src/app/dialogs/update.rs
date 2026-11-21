@@ -176,6 +176,7 @@ impl App {
             search_case: self.search_case,
             filter_mode: self.filter_mode,
             show_sev: self.show_sev,
+            rules_only: self.rules_only,
             col_filters: self
                 .col_filter_text
                 .iter()
@@ -198,6 +199,7 @@ impl App {
         self.search_case = state.search_case;
         self.filter_mode = state.filter_mode;
         self.show_sev = state.show_sev;
+        self.rules_only = state.rules_only;
         self.time_from = state.time_from.clone();
         self.time_to = state.time_to.clone();
         self.apply_time_range();

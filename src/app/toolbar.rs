@@ -127,24 +127,37 @@ impl App {
 
             ui.separator();
             let mut sev_changed = false;
-            sev_changed |= ui
+            // Not used while only the rows of the highlight rules are shown (#71).
+            ui.add_enabled_ui(!self.rules_only, |ui| {
+                sev_changed |= ui
+                    .toggle_value(
+                        &mut self.show_sev[0],
+                        format!("ℹ {}", t!("severity.info.plural")),
+                    )
+                    .changed();
+                sev_changed |= ui
+                    .toggle_value(
+                        &mut self.show_sev[1],
+                        format!("⚠ {}", t!("severity.warning.plural")),
+                    )
+                    .changed();
+                sev_changed |= ui
+                    .toggle_value(
+                        &mut self.show_sev[2],
+                        format!("⛔ {}", t!("severity.error.plural")),
+                    )
+                    .changed();
+            });
+            if ui
                 .toggle_value(
-                    &mut self.show_sev[0],
-                    format!("ℹ {}", t!("severity.info.plural")),
+                    &mut self.rules_only,
+                    format!("🖍 {}", t!("toolbar.rules_only")),
                 )
-                .changed();
-            sev_changed |= ui
-                .toggle_value(
-                    &mut self.show_sev[1],
-                    format!("⚠ {}", t!("severity.warning.plural")),
-                )
-                .changed();
-            sev_changed |= ui
-                .toggle_value(
-                    &mut self.show_sev[2],
-                    format!("⛔ {}", t!("severity.error.plural")),
-                )
-                .changed();
+                .on_hover_text(t!("toolbar.rules_only.tip"))
+                .changed()
+            {
+                sev_changed = true;
+            }
             if sev_changed {
                 self.refilter_from(0);
             }

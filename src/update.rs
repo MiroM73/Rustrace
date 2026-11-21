@@ -548,6 +548,8 @@ pub struct SessionState {
     pub search_case: bool,
     pub filter_mode: bool,
     pub show_sev: [bool; 3],
+    /// "Only highlighted rows" filter (#71).
+    pub rules_only: bool,
     pub col_filters: Vec<(ColumnKind, String)>,
     pub time_from: String,
     pub time_to: String,

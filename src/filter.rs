@@ -249,6 +249,30 @@ pub struct FilterSpec {
     pub file_labels: Vec<String>,
     /// Only bookmarked entries are displayed: their (file id, line number) (#22).
     pub bookmarks: Option<Arc<HashSet<(u16, usize)>>>,
+    /// Only the entries matched by a highlight rule are displayed; the Info / Warnings / Errors
+    /// toggles are not used then (#71).
+    pub rules: Option<Arc<RuleMatcher>>,
+}
+
+/// The enabled highlight rules for the "only highlighted rows" filter (#71): an entry is
+/// matched when its message matches a rule, or - for a whole-row rule with *Also component* -
+/// another column does (the same test as the row colors and the export).
+#[derive(Default, Debug)]
+pub struct RuleMatcher {
+    /// (regex, also the other columns).
+    rules: Vec<(Regex, bool)>,
+}
+
+impl RuleMatcher {
+    pub fn new(rules: Vec<(Regex, bool)>) -> RuleMatcher {
+        RuleMatcher { rules }
+    }
+
+    pub fn matches(&self, e: &EntryRef) -> bool {
+        self.rules
+            .iter()
+            .any(|(re, other)| re.is_match(e.message) || (*other && other_columns_match(re, e)))
+    }
 }
 
 /// The search as entered: text, regular expression, case-sensitive (#33).
@@ -328,7 +352,10 @@ impl FilterSpec {
             });
         let pass_search = !self.filter_mode || self.search.is_none() || m;
         let shown = pass_search
-            && self.sev_visible(e.severity)
+            && match &self.rules {
+                Some(r) => r.matches(e),
+                None => self.sev_visible(e.severity),
+            }
             && self.in_time_range(e.timestamp())
             && self
                 .bookmarks
@@ -800,6 +827,55 @@ mod tests {
             extra: Vec::new(),
             raw: (0, 0),
         }))
+    }
+
+    #[test]
+    fn rules_filter_ignores_severity_toggles() {
+        // Rows 0, 5, 10, ... contain "error 0x80070005"; component "Agent" = rows 1, 4, 7, ...
+        let s = store(30);
+        let run = |rules: Vec<(Regex, bool)>, show_sev: [bool; 3]| {
+            let spec = FilterSpec {
+                show_sev,
+                rules: Some(Arc::new(RuleMatcher::new(rules))),
+                ..Default::default()
+            };
+            let mut out = FilterOutput::default();
+            spec.run(&s, 0..s.len(), &mut out);
+            assert_eq!(
+                spec.run_parallel(&s, &AtomicBool::new(false)),
+                Some(FilterOutput {
+                    filtered: out.filtered.clone(),
+                    is_match: out.is_match.clone(),
+                })
+            );
+            out.filtered
+        };
+        let re = |p: &str| Regex::new(p).unwrap();
+        let by_message: Vec<u32> = (0..30).filter(|i| i % 5 == 0).collect();
+        // The severity toggles do not matter, even with every one off.
+        assert_eq!(run(vec![(re("0x8007"), false)], [true; 3]), by_message);
+        assert_eq!(run(vec![(re("0x8007"), false)], [false; 3]), by_message);
+        // A rule that matches nothing hides every row; no rules at all as well.
+        assert!(run(vec![(re("zzz"), false)], [true; 3]).is_empty());
+        assert!(run(Vec::new(), [true; 3]).is_empty());
+        // Any of the rules; the component only with "also component".
+        let both: Vec<u32> = (0..30).filter(|i| i % 5 == 0 || i % 3 == 1).collect();
+        assert_eq!(
+            run(vec![(re("0x8007"), false), (re("Agent"), true)], [true; 3]),
+            both
+        );
+        assert_eq!(
+            run(vec![(re("Agent"), false)], [true; 3]),
+            Vec::<u32>::new()
+        );
+        // Without the filter the toggles decide as before.
+        let spec = FilterSpec {
+            show_sev: [false, false, true],
+            ..Default::default()
+        };
+        let mut out = FilterOutput::default();
+        spec.run(&s, 0..s.len(), &mut out);
+        assert!(out.filtered.len() < 30 && !out.filtered.is_empty());
     }
 
     #[test]

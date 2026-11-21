@@ -26,6 +26,9 @@ impl App {
             }
         }
         self.update_severity_rules();
+        if self.rules_only {
+            self.refilter_from(0);
+        }
     }
 
     /// Rebuilds the rules that set a severity (#50); when they differ from the applied ones the
@@ -243,7 +246,23 @@ impl App {
             columns: self.col_filters.clone(),
             file_labels: self.file_labels.clone(),
             bookmarks: self.bookmark_filter(),
+            rules: self.rule_filter(),
         }
+    }
+
+    /// The enabled rules for the "only highlighted rows" filter (#71); `None` = filter off.
+    fn rule_filter(&self) -> Option<Arc<RuleMatcher>> {
+        self.rules_only.then(|| {
+            Arc::new(RuleMatcher::new(
+                self.rules
+                    .iter()
+                    .map(|r| {
+                        let other = r.rule.scope == HighlightScope::Row && r.rule.match_component;
+                        (r.regex.clone(), other)
+                    })
+                    .collect(),
+            ))
+        })
     }
 
     /// Recomputes the filter from entry `start` on (earlier entries stay). A full re-filter of a

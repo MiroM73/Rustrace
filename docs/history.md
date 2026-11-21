@@ -467,6 +467,7 @@ Notes for Claude, linked from `CLAUDE.md`.
     the window (keystroke probably not delivered), so the windows were not clicked through – default
     sizes of the formerly self-sizing windows are guesses.
 99. Release v1.4.0 (#68, #69 windows open as their own OS windows). Done at the owner's request by the owner with `release.ps1`; release notes set by Claude with `gh release edit`.
+100. #71 *Only highlighted rows* filter (toolbar 🖍 Highlighted / View menu): `FilterSpec::rules` + `RuleMatcher` in `filter.rs`, replaces the severity toggles while on; kept by the update restart. Test `rules_filter_ignores_severity_toggles`. Next: rule sets (#70), then "only the active set".
 
 ## Ideas not done yet (offered by the owner)
 - `--set "<name>"` command-line option for log sets (#27): would need the set loading, the file

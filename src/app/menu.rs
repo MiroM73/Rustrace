@@ -163,6 +163,12 @@ impl App {
                 {
                     self.refilter_from(0);
                 }
+                if ui
+                    .checkbox(&mut self.rules_only, t!("toolbar.rules_only.tip"))
+                    .changed()
+                {
+                    self.refilter_from(0);
+                }
                 ui.separator();
                 self.overview_menu(ui);
                 ui.separator();

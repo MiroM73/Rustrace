@@ -359,6 +359,8 @@ toolbar.column_filters.active = Column filters ({count})
 toolbar.column_filters.tip = Shows a filter field under every column header – the fields follow the columns of the open log type. Active filters keep working while the row is hidden.
 toolbar.bookmarks_only = Bookmarked
 toolbar.bookmarks_only.tip = Show only bookmarked rows
+toolbar.rules_only = Highlighted
+toolbar.rules_only.tip = Show only rows matched by a highlight rule (the Info / Warnings / Errors buttons are not used then)
 filter.hint = filter
 filter.tip = text = contains (case-insensitive)\n=text = exactly this value\na|b = any of them (OR)\na&b = both (AND), e.g. >0&<100\n!a = not a, e.g. !Info&!Warning\n& binds before | : a&b|c = (a and b) or c\n>n  >=n  <n  <=n = numbers (e.g. >=10000)\na..b = numbers from a to b (500..599, 500.., ..10)\nA value that is not a number never matches a number condition.
 filter.clear = Clear all column filters

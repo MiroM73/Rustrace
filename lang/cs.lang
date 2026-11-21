@@ -345,6 +345,8 @@ toolbar.column_filters.active = Filtry sloupců ({count})
 toolbar.column_filters.tip = Zobrazí pole pro filtr pod záhlavím každého sloupce – pole se přizpůsobí sloupcům typu otevřeného logu. Aktivní filtry platí i při skrytém řádku.
 toolbar.bookmarks_only = Záložky
 toolbar.bookmarks_only.tip = Zobrazit pouze řádky se záložkou
+toolbar.rules_only = Zvýrazněné
+toolbar.rules_only.tip = Zobrazit pouze řádky, které odpovídají některému pravidlu zvýraznění (tlačítka Informace / Varování / Chyby se pak nepoužijí)
 filter.hint = filtr
 filter.tip = text = obsahuje (bez ohledu na velikost písmen)\n=text = přesně tato hodnota\na|b = kterákoli z nich (NEBO)\na&b = obě (A), např. >0&<100\n!a = ne a, např. !Info&!Warning\n& se váže před | : a&b|c = (a a b) nebo c\n>n  >=n  <n  <=n = čísla (např. >=10000)\na..b = čísla od a do b (500..599, 500.., ..10)\nHodnota, která není číslo, číselné podmínce nikdy nevyhovuje.
 filter.clear = Zrušit všechny filtry sloupců

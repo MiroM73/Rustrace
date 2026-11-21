@@ -257,6 +257,13 @@ The logs of one troubleshooting scenario in one step – details in [Log sets](l
   After an auto refresh only the new rows are filtered and the match count is updated, never
   recounted over the whole log
 - Info / Warnings / Errors toggles
+- **🖍 Highlighted** in the toolbar (also View → Show only rows matched by a highlight rule; #71)
+  shows only the rows that at least one enabled highlight rule matches (message text, and for a
+  whole-row rule with *Also component* the other columns too – the same rows the rules color and
+  the export treats as highlighted). The Info / Warnings / Errors toggles are greyed out and not
+  used while it is on (a rule can set the severity itself, #50); search, time range, column
+  filters and bookmarks still apply. With no enabled rule nothing is shown. Changing the rules
+  updates the view at once; the setting is kept by *Restart after update*.
 - **Column filters** (toolbar button) – a filter field under every column header; the fields
   always follow the columns of the open log type (CMTrace, DISM, CBS, IIS or your own log
   definition). All active column filters must match, together with the search filter and the

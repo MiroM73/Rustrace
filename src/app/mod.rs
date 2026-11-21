@@ -9,8 +9,8 @@ use crate::export::{self, ExportFormat, ReadableRow};
 #[cfg(windows)]
 use crate::fileassoc::{self, ExtStatus};
 use crate::filter::{
-    CellFilter, FilterOutput, FilterSpec, MatchBits, SearchCache, SearchKey, entry_matches,
-    other_columns_match,
+    CellFilter, FilterOutput, FilterSpec, MatchBits, RuleMatcher, SearchCache, SearchKey,
+    entry_matches, other_columns_match,
 };
 use crate::guides;
 use crate::httpstatus::{self, HttpStatus};
@@ -275,6 +275,8 @@ pub struct App {
     bookmark_rows: Vec<usize>,
     bookmarks_gen: u64,
     bookmarks_only: bool,
+    /// Only rows matched by a highlight rule are shown (#71).
+    rules_only: bool,
     bookmarks_win: ToolWindow,
     /// Files of the view before it was opened again; the next full read moves the bookmarks to
     /// the new file ids.
@@ -506,6 +508,7 @@ impl App {
             bookmark_rows: Vec::new(),
             bookmarks_gen: 0,
             bookmarks_only: false,
+            rules_only: false,
             bookmarks_win: ToolWindow::new("bookmarks_window"),
             bookmark_files: None,
             time_ref: None,

@@ -345,6 +345,8 @@ toolbar.column_filters.active = Spaltenfilter ({count})
 toolbar.column_filters.tip = Zeigt unter jeder Spaltenüberschrift ein Filterfeld – die Felder richten sich nach den Spalten des geöffneten Log-Typs. Aktive Filter gelten auch bei ausgeblendeter Zeile.
 toolbar.bookmarks_only = Lesezeichen
 toolbar.bookmarks_only.tip = Nur Zeilen mit Lesezeichen anzeigen
+toolbar.rules_only = Hervorgehoben
+toolbar.rules_only.tip = Nur Zeilen anzeigen, auf die eine Hervorhebungsregel passt (die Schaltflächen Infos / Warnungen / Fehler gelten dann nicht)
 filter.hint = Filter
 filter.tip = Text = enthält (Groß-/Kleinschreibung egal)\n=Text = genau dieser Wert\na|b = einer davon (ODER)\na&b = beide (UND), z. B. >0&<100\n!a = nicht a, z. B. !Info&!Warning\n& bindet vor | : a&b|c = (a und b) oder c\n>n  >=n  <n  <=n = Zahlen (z. B. >=10000)\na..b = Zahlen von a bis b (500..599, 500.., ..10)\nEin Wert, der keine Zahl ist, erfüllt eine Zahlenbedingung nie.
 filter.clear = Alle Spaltenfilter löschen
