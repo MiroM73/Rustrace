@@ -163,6 +163,18 @@ The logs of one troubleshooting scenario in one step – details in [Log sets](l
   format (CMTrace, log definitions, plain text); rows no such rule matches keep the severity of the
   log. Editing a rule re-applies the severities to the open log (a very big log takes a moment).
 - order = priority (up/down arrows), on/off, live preview, invalid regex warning
+- **Rule sets** (#70): the rules live in named sets (*Set:* choice at the top of the window; the
+  old rule list became the set *Default*). A set can be switched **Active** or off, **bound to log
+  types** (🔗 menu: the set applies only while a log with one of the ticked log definitions is
+  open – e.g. a CBS set only for `CBS.log`; *Every log* = no binding) and **created**, **renamed**,
+  **duplicated**, moved up / down (⬅ ➡ – the order is the priority) or **deleted** (the last set stays). The rules of all active sets apply, set after
+  set in the order of the *Set:* list (the first matching rule wins); the table shows the rules of
+  the set you choose, ⬆ ⬇ move rules inside it. **📚 Add built-in set** adds ready-made sets:
+  *CBS / DISM servicing* (bound to CBS and DISM logs), *MSI installation* (bound to MSI verbose
+  logs) and *SCCM client troubleshooting*. *Create a rule for the component* (right-click) adds the
+  rule to the set shown. The *🖍 Highlighted* filter (#71) and the export criterion *Highlight
+  rules* use the rules of the active sets, and so do `--export` and the Rule column of the
+  table export (the log definition of the exported file decides about bound sets)
 - the window is **its own OS window** (#68): drag it outside the main window or onto another
   monitor while you watch the colors change in the log; its position and size are remembered.
   *View → Open windows separately* (on by default) switches back to a window inside the main
@@ -173,13 +185,17 @@ The logs of one troubleshooting scenario in one step – details in [Log sets](l
 - the window opens wide enough for the whole table (up to the size of the main window); long names
   and patterns are shown in full in the tooltip of their field; a narrower window shows a
   horizontal scroll bar
-- import/export of rules as JSON (e.g. to share with colleagues):
-  - **Import…** never creates duplicates: a rule with the same name and pattern as an existing one
+- import/export of rules or a whole set (e.g. to share with colleagues; a `.rules` file = a JSON
+  object with the name, the log type binding and the rules of the set):
+  - **Import…** reads a set file (a set of the same name gets the rules, otherwise a new set is
+    created, with its binding) or a plain list of rules, e.g. the shared `.json` files of the guides
+    (added to the set shown). It never creates duplicates: a rule with the same name and pattern as an existing one
     is skipped, or updated in place when its colors or other settings differ (the existing rule
     stays on / off as you set it); the window shows "Import: N added, N updated, N already
     present (skipped)"
   - **Export…** lists the rules with a checkbox each (all ticked, *All* / *None*); **Export N
-    rules…** saves only the ticked ones, e.g. just the MSI rules of a guide
+    rules…** saves only the ticked ones of the set shown (with its name and binding), e.g. just the
+    MSI rules of a guide
 - error / warning / search match, bookmark and long-gap (Δ column) colors are configurable
   (Highlighting → Colors…)
 - right-click a row: copy, search component, create a rule for the component, explain error code

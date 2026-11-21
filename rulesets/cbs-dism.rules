@@ -1,0 +1,116 @@
+{
+  "name": "CBS / DISM servicing",
+  "logdefs": [
+    "cbs.log.def",
+    "dism.log.def"
+  ],
+  "rules": [
+    {
+      "enabled": true,
+      "name": "Failure",
+      "pattern": "\\bfail(ed|ure)\\b|\\bHRESULT = 0x8\\w{7}",
+      "is_regex": true,
+      "case_sensitive": false,
+      "scope": "Row",
+      "use_fg": true,
+      "fg": [
+        0,
+        0,
+        0,
+        255
+      ],
+      "use_bg": true,
+      "bg": [
+        255,
+        190,
+        190,
+        255
+      ],
+      "fg_dark": [
+        240,
+        240,
+        240,
+        255
+      ],
+      "bg_dark": [
+        145,
+        80,
+        80,
+        255
+      ],
+      "match_component": false,
+      "severity": "error"
+    },
+    {
+      "enabled": true,
+      "name": "Pending / rollback",
+      "pattern": "\\b(rollback|rolling back|pending|reboot required|corrupt(ed|ion)?)\\b",
+      "is_regex": true,
+      "case_sensitive": false,
+      "scope": "Row",
+      "use_fg": true,
+      "fg": [
+        0,
+        0,
+        0,
+        255
+      ],
+      "use_bg": true,
+      "bg": [
+        255,
+        235,
+        160,
+        255
+      ],
+      "fg_dark": [
+        240,
+        240,
+        240,
+        255
+      ],
+      "bg_dark": [
+        145,
+        125,
+        50,
+        255
+      ],
+      "match_component": false,
+      "severity": "warning"
+    },
+    {
+      "enabled": true,
+      "name": "Error code",
+      "pattern": "0x8[0-9A-Fa-f]{7}",
+      "is_regex": true,
+      "case_sensitive": false,
+      "scope": "Text",
+      "use_fg": true,
+      "fg": [
+        255,
+        255,
+        255,
+        255
+      ],
+      "use_bg": true,
+      "bg": [
+        60,
+        110,
+        200,
+        255
+      ],
+      "fg_dark": [
+        235,
+        240,
+        255,
+        255
+      ],
+      "bg_dark": [
+        45,
+        80,
+        160,
+        255
+      ],
+      "match_component": false
+    }
+  ]
+}

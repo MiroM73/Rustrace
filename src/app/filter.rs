@@ -7,23 +7,30 @@ impl App {
         self.rules_gen += 1;
         self.rules.clear();
         self.rule_errors.clear();
-        for r in &self.cfg.rules {
-            if r.pattern.is_empty() {
-                self.rule_errors.push(None);
-                continue;
-            }
-            match compile_pattern(&r.pattern, r.is_regex, r.case_sensitive) {
-                Ok(re) => {
-                    self.rule_errors.push(None);
-                    if r.enabled {
-                        self.rules.push(CompiledRule {
-                            regex: re,
-                            rule: r.clone(),
-                        });
-                    }
+        for set in &self.cfg.rule_sets {
+            // Every pattern is checked (the rules window shows the errors of inactive sets
+            // too), only those of the active sets are used.
+            let active = set.is_active(&self.rule_def_ids);
+            let mut errors = Vec::with_capacity(set.rules.len());
+            for r in &set.rules {
+                if r.pattern.is_empty() {
+                    errors.push(None);
+                    continue;
                 }
-                Err(e) => self.rule_errors.push(Some(e)),
+                match compile_pattern(&r.pattern, r.is_regex, r.case_sensitive) {
+                    Ok(re) => {
+                        errors.push(None);
+                        if active && r.enabled {
+                            self.rules.push(CompiledRule {
+                                regex: re,
+                                rule: r.clone(),
+                            });
+                        }
+                    }
+                    Err(e) => errors.push(Some(e)),
+                }
             }
+            self.rule_errors.push(errors);
         }
         self.update_severity_rules();
         if self.rules_only {
@@ -31,10 +38,41 @@ impl App {
         }
     }
 
+    /// The ids of the log definitions the open logs use (#70).
+    fn open_def_ids(&self) -> Vec<String> {
+        let mut ids: Vec<String> = self
+            .source_defs
+            .iter()
+            .flatten()
+            .map(|d| d.id.clone())
+            .collect();
+        ids.sort();
+        ids.dedup();
+        ids
+    }
+
+    /// After a log was read: the rule sets bound to log definitions follow the open logs (#70).
+    pub(in crate::app) fn rules_for_open_logs(&mut self) {
+        let ids = self.open_def_ids();
+        if ids == self.rule_def_ids {
+            return;
+        }
+        self.rule_def_ids = ids;
+        if self.cfg.rule_sets.iter().any(|s| !s.logdefs.is_empty()) {
+            self.recompile_rules();
+        }
+    }
+
     /// Rebuilds the rules that set a severity (#50); when they differ from the applied ones the
     /// severity of every entry is set again and the view is re-filtered.
     fn update_severity_rules(&mut self) {
-        let new = SevRules::from_config(&self.cfg.rules);
+        let active: Vec<HighlightRule> = self
+            .cfg
+            .active_rules(&self.rule_def_ids)
+            .into_iter()
+            .cloned()
+            .collect();
+        let new = SevRules::from_config(&active);
         if new == *self.sev_rules {
             return;
         }

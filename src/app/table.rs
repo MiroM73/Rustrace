@@ -713,7 +713,9 @@ impl App {
                 }
                 RowAction::RuleFromComponent(i) => {
                     let comp = self.entries.at(i).component.to_owned();
-                    self.cfg.rules.insert(
+                    // Into the set shown in the rules window (the first one at first).
+                    let set = self.rules_set.min(self.cfg.rule_sets.len() - 1);
+                    self.cfg.rule_sets[set].rules.insert(
                         0,
                         HighlightRule {
                             name: t!("rule.component_name", component = comp),

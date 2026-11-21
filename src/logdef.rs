@@ -40,7 +40,7 @@ use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
 /// Built-in definitions (file name, content).
-const BUILTIN: &[(&str, &str)] = &[
+pub(crate) const BUILTIN: &[(&str, &str)] = &[
     ("cbs.log.def", include_str!("../logdef/cbs.log.def")),
     ("dism.log.def", include_str!("../logdef/dism.log.def")),
     (

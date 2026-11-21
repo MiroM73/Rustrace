@@ -25,6 +25,7 @@ mod logset;
 mod merge;
 mod overview;
 mod parser;
+mod rulesets;
 mod setcli;
 mod sevrules;
 mod splash;

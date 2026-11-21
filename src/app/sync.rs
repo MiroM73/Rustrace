@@ -98,7 +98,7 @@ impl App {
             let code = self.cfg.language.clone();
             self.set_language(&code, false);
         }
-        if old.rules != self.cfg.rules {
+        if old.rule_sets != self.cfg.rule_sets {
             self.recompile_rules();
         }
         if old.overview != self.cfg.overview {

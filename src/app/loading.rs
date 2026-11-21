@@ -328,6 +328,7 @@ impl App {
                 }
                 self.source = Some(src);
                 self.apply_result(res, old_files.as_deref());
+                self.rules_for_open_logs();
                 // A log of a merged view that could not be read (the others are shown).
                 if !read_errors.is_empty() {
                     self.status_error = Some(t!("error.read", error = read_errors));

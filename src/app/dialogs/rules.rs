@@ -29,6 +29,26 @@ fn move_rule<T>(v: &mut Vec<T>, i: usize, d: i32) {
     }
 }
 
+/// A file name made of a set name: letters, digits, `-` and `_`, the rest becomes `-`.
+fn file_stem(name: &str) -> String {
+    let s: String = name
+        .chars()
+        .map(|c| {
+            if c.is_alphanumeric() || c == '_' {
+                c
+            } else {
+                '-'
+            }
+        })
+        .collect();
+    let s = s.trim_matches('-');
+    if s.is_empty() {
+        "rustrace-rules".into()
+    } else {
+        s.to_owned()
+    }
+}
+
 /// The rules ticked for the export, in their order (#51).
 fn picked_rules(rules: &[HighlightRule], pick: &[bool]) -> Vec<HighlightRule> {
     rules
@@ -62,6 +82,9 @@ impl App {
             |app, ui, _keep| {
                 ui.label(t!("rules.help"));
                 ui.separator();
+                changed |= app.rule_set_bar(ui);
+                ui.separator();
+                let si = app.rules_set;
                 let edit_dark = app.edit_dark;
                 ui.horizontal(|ui| {
                     theme_selector(ui, &mut app.edit_dark);
@@ -71,7 +94,12 @@ impl App {
                         .on_hover_text(t!("colors.copy_from.tip"))
                         .clicked()
                     {
-                        for r in &mut app.cfg.rules {
+                        for r in app
+                            .cfg
+                            .rule_sets
+                            .iter_mut()
+                            .flat_map(|s| s.rules.iter_mut())
+                        {
                             r.copy_colors(!edit_dark);
                         }
                         changed = true;
@@ -121,10 +149,15 @@ impl App {
                             }
                             ui.end_row();
 
-                            let n = app.cfg.rules.len();
+                            let n = app.cfg.rule_sets[si].rules.len();
                             for i in 0..n {
-                                let err = app.rule_errors.get(i).cloned().flatten();
-                                let r = &mut app.cfg.rules[i];
+                                let err = app
+                                    .rule_errors
+                                    .get(si)
+                                    .and_then(|e| e.get(i))
+                                    .cloned()
+                                    .flatten();
+                                let r = &mut app.cfg.rule_sets[si].rules[i];
                                 ui.push_id(i, |ui| {
                                     changed |= ui.checkbox(&mut r.enabled, "").changed();
                                 });
@@ -242,41 +275,20 @@ impl App {
                 if let Some((i, d)) = act {
                     // The export choice moves with its rule.
                     if let Some(p) = &mut app.rules_export_pick {
-                        p.resize(app.cfg.rules.len(), true);
+                        p.resize(app.cfg.rule_sets[si].rules.len(), true);
                         move_rule(p, i, d);
                     }
-                    move_rule(&mut app.cfg.rules, i, d);
+                    move_rule(&mut app.cfg.rule_sets[si].rules, i, d);
                     changed = true;
                 }
                 ui.separator();
                 ui.horizontal(|ui| {
                     if ui.button(format!("➕ {}", t!("rules.add"))).clicked() {
-                        app.cfg.rules.push(HighlightRule::default());
+                        app.cfg.rule_sets[si].rules.push(HighlightRule::default());
                         changed = true;
                     }
-                    if ui.button(format!("📥 {}", t!("rules.import"))).clicked()
-                        && let Some(p) = rfd::FileDialog::new()
-                            .add_filter("JSON", &["json"])
-                            .pick_file()
-                    {
-                        match std::fs::read_to_string(&p)
-                            .map_err(|e| e.to_string())
-                            .and_then(|s| {
-                                serde_json::from_str::<Vec<HighlightRule>>(&s)
-                                    .map_err(|e| e.to_string())
-                            }) {
-                            Ok(rules) => {
-                                let res = crate::config::import_rules(&mut app.cfg.rules, rules);
-                                app.rules_msg = Some(t!(
-                                    "rules.import.done",
-                                    added = res.added,
-                                    updated = res.updated,
-                                    skipped = res.skipped
-                                ));
-                                changed = true;
-                            }
-                            Err(e) => app.status_error = Some(t!("error.import", error = e)),
-                        }
+                    if ui.button(format!("📥 {}", t!("rules.import"))).clicked() {
+                        changed |= app.import_rules_file();
                     }
                     let picking = app.rules_export_pick.is_some();
                     if ui
@@ -284,12 +296,14 @@ impl App {
                         .on_hover_text(t!("rules.export.tip"))
                         .clicked()
                     {
-                        app.rules_export_pick = (!picking).then(|| vec![true; app.cfg.rules.len()]);
+                        app.rules_export_pick =
+                            (!picking).then(|| vec![true; app.cfg.rule_sets[si].rules.len()]);
                     }
                     if ui.button(t!("rules.restore_defaults")).clicked() {
-                        app.cfg.rules = Config::default_rules();
+                        app.cfg.rule_sets[si].rules = Config::default_rules();
                         if app.rules_export_pick.is_some() {
-                            app.rules_export_pick = Some(vec![true; app.cfg.rules.len()]);
+                            app.rules_export_pick =
+                                Some(vec![true; app.cfg.rule_sets[si].rules.len()]);
                         }
                         changed = true;
                     }
@@ -316,7 +330,8 @@ impl App {
         let Some(pick) = &mut self.rules_export_pick else {
             return;
         };
-        pick.resize(self.cfg.rules.len(), true);
+        let set = &self.cfg.rule_sets[self.rules_set];
+        pick.resize(set.rules.len(), true);
         ui.separator();
         ui.label(t!("rules.export.pick"));
         egui::ScrollArea::vertical()
@@ -324,7 +339,7 @@ impl App {
             .max_height(PICK_H)
             .auto_shrink([false, true])
             .show(ui, |ui| {
-                for (i, (r, p)) in self.cfg.rules.iter().zip(pick.iter_mut()).enumerate() {
+                for (i, (r, p)) in set.rules.iter().zip(pick.iter_mut()).enumerate() {
                     ui.push_id(("pick", i), |ui| {
                         let name = if r.name.is_empty() {
                             &r.pattern
@@ -356,12 +371,18 @@ impl App {
         });
         if save
             && let Some(path) = rfd::FileDialog::new()
-                .add_filter("JSON", &["json"])
-                .set_file_name("rustrace-rules.json")
+                .add_filter("Rules", &["rules", "json"])
+                .set_file_name(format!("{}.rules", file_stem(&set.name)))
                 .save_file()
         {
-            let rules = picked_rules(&self.cfg.rules, pick);
-            let json = serde_json::to_string_pretty(&rules).unwrap_or_default();
+            let rules = picked_rules(&set.rules, pick);
+            let file = crate::config::RuleSetFile {
+                name: set.name.clone(),
+                logdefs: set.logdefs.clone(),
+                rules,
+            };
+            let rules = &file.rules;
+            let json = serde_json::to_string_pretty(&file).unwrap_or_default();
             match std::fs::write(&path, json) {
                 Ok(()) => {
                     self.rules_msg = Some(t!(
@@ -400,6 +421,8 @@ mod tests {
     fn exporting_ticked_rules_only() {
         let rules = Config::default_rules();
         assert!(rules.len() >= 3);
+        assert_eq!(file_stem("CBS / DISM servicing"), "CBS---DISM-servicing");
+        assert_eq!(file_stem("///"), "rustrace-rules");
         let mut pick = vec![false; rules.len()];
         pick[0] = true;
         pick[2] = true;

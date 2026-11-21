@@ -201,7 +201,7 @@ impl HighlightRule {
     }
 
     /// Rules saved by an older version have no dark colors – use the light ones.
-    fn fill_missing_dark(&mut self) {
+    pub fn fill_missing_dark(&mut self) {
         if self.fg_dark == UNSET {
             self.fg_dark = self.fg;
         }
@@ -209,6 +209,60 @@ impl HighlightRule {
             self.bg_dark = self.bg;
         }
     }
+}
+
+/// A named set of highlight rules (#70). The rules of every active set apply, the sets in
+/// their order (the first matching rule wins).
+#[derive(Clone, PartialEq, Serialize, Deserialize, Debug)]
+#[serde(default)]
+pub struct RuleSet {
+    pub name: String,
+    /// Switched on; a bound set also needs an open log with one of its definitions.
+    pub enabled: bool,
+    /// Ids of the log definitions the set is bound to; empty = applies to every log.
+    pub logdefs: Vec<String>,
+    pub rules: Vec<HighlightRule>,
+}
+
+impl Default for RuleSet {
+    fn default() -> Self {
+        Self {
+            name: String::new(),
+            enabled: true,
+            logdefs: Vec::new(),
+            rules: Vec::new(),
+        }
+    }
+}
+
+impl RuleSet {
+    pub fn new(name: String, rules: Vec<HighlightRule>) -> Self {
+        Self {
+            name,
+            rules,
+            ..Self::default()
+        }
+    }
+
+    /// The set applies: it is switched on and either not bound, or one of the open logs uses
+    /// a log definition it is bound to (`def_ids` = ids of the definitions of the open logs).
+    pub fn is_active(&self, def_ids: &[String]) -> bool {
+        self.enabled
+            && (self.logdefs.is_empty()
+                || self
+                    .logdefs
+                    .iter()
+                    .any(|d| def_ids.iter().any(|o| o.eq_ignore_ascii_case(d))))
+    }
+}
+
+/// The file of an exported set (#70): the rules plus the name and the binding.
+#[derive(Serialize, Deserialize, Debug, PartialEq)]
+pub struct RuleSetFile {
+    pub name: String,
+    #[serde(default)]
+    pub logdefs: Vec<String>,
+    pub rules: Vec<HighlightRule>,
 }
 
 /// What importing highlight rules did (#51).
@@ -313,7 +367,18 @@ pub struct Config {
     pub separate_windows: bool,
     /// Geometry of the tool windows by their key (#68, #69).
     pub windows: std::collections::BTreeMap<String, ToolWindowState>,
+    /// Highlight rules before rule sets existed (#70): read for migration only, moved into the
+    /// first set by `normalize_rule_sets` and never written again.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub rules: Vec<HighlightRule>,
+    /// The highlight rule sets (#70); there is always at least one after loading. No serde
+    /// default of the struct: an old file without the key must not get the example set.
+    #[serde(default)]
+    pub rule_sets: Vec<RuleSet>,
+    /// `normalize_rule_sets` just created the first set from the old rules: the program gives it
+    /// the name in the chosen language once the language is set (not saved).
+    #[serde(skip)]
+    pub rule_sets_migrated: bool,
     pub refresh_value: f64,
     pub refresh_unit: IntervalUnit,
     /// true = auto refresh running, false = paused.
@@ -434,7 +499,9 @@ impl Default for Config {
         Self {
             separate_windows: true,
             windows: Default::default(),
-            rules: Self::default_rules(),
+            rules: Vec::new(),
+            rule_sets: vec![RuleSet::new(t!("rules.set.default"), Self::default_rules())],
+            rule_sets_migrated: false,
             refresh_value: 500.0,
             refresh_unit: IntervalUnit::Ms,
             auto_refresh: true,
@@ -575,6 +642,7 @@ impl Config {
         let mut cfg: Config = serde_json::from_str(text).ok()?;
         cfg.fill_missing_dark();
         cfg.migrate_update_check();
+        cfg.normalize_rule_sets();
         Some(cfg)
     }
 
@@ -592,6 +660,7 @@ impl Config {
         let mut cfg: Config = serde_json::from_value(v).ok()?;
         cfg.fill_missing_dark();
         cfg.migrate_update_check();
+        cfg.normalize_rule_sets();
         Some(cfg)
     }
 
@@ -621,9 +690,34 @@ impl Config {
 
     /// Adds dark colors to rules from older versions or imported files.
     pub fn fill_missing_dark(&mut self) {
-        for r in &mut self.rules {
+        for r in self
+            .rules
+            .iter_mut()
+            .chain(self.rule_sets.iter_mut().flat_map(|s| s.rules.iter_mut()))
+        {
             r.fill_missing_dark();
         }
+    }
+
+    /// Rules saved before rule sets (#70) become the first set; a settings file always ends up
+    /// with at least one set.
+    pub fn normalize_rule_sets(&mut self) {
+        let old = std::mem::take(&mut self.rules);
+        if self.rule_sets.is_empty() {
+            self.rule_sets
+                .push(RuleSet::new(t!("rules.set.default"), old));
+            self.rule_sets_migrated = true;
+        }
+    }
+
+    /// The rules that apply now, in priority order (#70): those of the active sets, set after
+    /// set. `def_ids` = ids of the log definitions of the open logs.
+    pub fn active_rules(&self, def_ids: &[String]) -> Vec<&HighlightRule> {
+        self.rule_sets
+            .iter()
+            .filter(|s| s.is_active(def_ids))
+            .flat_map(|s| &s.rules)
+            .collect()
     }
 
     /// Severity and search colors for the light or dark theme.
@@ -772,7 +866,7 @@ mod tests {
         let mut other = base.clone();
         other.theme = "dark".into();
         other.font_size = 10.0;
-        other.rules.clear();
+        other.rule_sets[0].rules.clear();
         let mut disk = other.to_value();
         merge_settings(&base.to_value(), &mine.to_value(), &mut disk);
         let merged = Config::from_value(disk).unwrap();
@@ -780,7 +874,7 @@ mod tests {
         assert_eq!(merged.font_size, 16.0);
         assert_eq!(merged.search_history, ["mine"]);
         assert_eq!(merged.theme, "dark");
-        assert!(merged.rules.is_empty());
+        assert!(merged.rule_sets[0].rules.is_empty());
 
         // Nothing changed here: the file is taken as it is.
         let mut disk = other.to_value();
@@ -868,11 +962,73 @@ mod tests {
     #[test]
     fn old_rules_get_dark_colors() {
         let json = r#"{"rules":[{"pattern":"x","fg":[1,2,3,255],"bg":[4,5,6,255]}]}"#;
-        let mut cfg: Config = serde_json::from_str(json).unwrap();
-        cfg.fill_missing_dark();
-        assert_eq!(cfg.rules[0].colors(true), ([1, 2, 3, 255], [4, 5, 6, 255]));
+        let cfg = Config::parse(json).unwrap();
+        assert_eq!(
+            cfg.rule_sets[0].rules[0].colors(true),
+            ([1, 2, 3, 255], [4, 5, 6, 255])
+        );
         // Missing severity colors come from the defaults.
         assert_eq!(cfg.error_bg_dark, Config::default().error_bg_dark);
+    }
+
+    /// Rules of a version without rule sets become the first set - and only those rules (#70).
+    #[test]
+    fn old_rules_become_the_first_set() {
+        let cfg = Config::parse(r#"{"rules":[{"name":"mine","pattern":"x"}]}"#).unwrap();
+        assert!(cfg.rules.is_empty());
+        assert_eq!(cfg.rule_sets.len(), 1);
+        assert_eq!(cfg.rule_sets[0].rules.len(), 1);
+        assert_eq!(cfg.rule_sets[0].rules[0].name, "mine");
+        assert!(cfg.rule_sets[0].enabled && cfg.rule_sets[0].logdefs.is_empty());
+        // A file without any rules does not get the examples.
+        let none = Config::parse("{}").unwrap();
+        assert_eq!(none.rule_sets.len(), 1);
+        assert!(none.rule_sets[0].rules.is_empty());
+        // Saved again: the legacy key is gone, and the sets survive a round trip unchanged.
+        let json = serde_json::to_string(&cfg).unwrap();
+        let value: serde_json::Value = serde_json::from_str(&json).unwrap();
+        assert!(value.get("rules").is_none());
+        let back = Config::parse(&json).unwrap();
+        assert_eq!(back.rule_sets, cfg.rule_sets);
+        // A fresh configuration has the example set.
+        let fresh = Config::default();
+        assert_eq!(fresh.rule_sets.len(), 1);
+        assert_eq!(fresh.rule_sets[0].rules, Config::default_rules());
+    }
+
+    #[test]
+    fn rule_sets_are_active_by_switch_and_binding() {
+        let rule = |n: &str| HighlightRule {
+            name: n.into(),
+            ..HighlightRule::default()
+        };
+        let set = |n: &str, on: bool, defs: &[&str]| RuleSet {
+            name: n.into(),
+            enabled: on,
+            logdefs: defs.iter().map(|d| d.to_string()).collect(),
+            rules: vec![rule(n)],
+        };
+        let cfg = Config {
+            rule_sets: vec![
+                set("all", true, &[]),
+                set("off", false, &[]),
+                set("cbs", true, &["cbs"]),
+                set("iis", true, &["IIS", "http"]),
+            ],
+            ..Config::default()
+        };
+        let names = |ids: &[&str]| -> Vec<String> {
+            let ids: Vec<String> = ids.iter().map(|s| s.to_string()).collect();
+            cfg.active_rules(&ids)
+                .iter()
+                .map(|r| r.name.clone())
+                .collect()
+        };
+        assert_eq!(names(&[]), ["all"]);
+        assert_eq!(names(&["cbs"]), ["all", "cbs"]);
+        // Ids are compared without regard to case, any of several logs counts.
+        assert_eq!(names(&["CBS", "iis"]), ["all", "cbs", "iis"]);
+        assert_eq!(names(&["other"]), ["all"]);
     }
 
     #[test]

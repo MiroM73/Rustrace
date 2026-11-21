@@ -93,7 +93,16 @@ pub fn export(
         .ok_or_else(|| t!("cli.error.export_format", file = target.display()))?;
     let (mut store, set) = read(files, cfg)?;
     // Highlight rules that set a severity (#50) count for --errors / --warnings and the Severity column.
-    crate::sevrules::SevRules::from_config(&cfg.rules).apply(&mut store, 0);
+    // The rule sets bound to the log definition of the files count like in the window (#70).
+    let def_ids: Vec<String> = set
+        .source_defs()
+        .iter()
+        .flatten()
+        .map(|d| d.id.clone())
+        .collect();
+    let active: Vec<crate::config::HighlightRule> =
+        cfg.active_rules(&def_ids).into_iter().cloned().collect();
+    crate::sevrules::SevRules::from_config(&active).apply(&mut store, 0);
     let schema = set.schema().clone();
     let date_pattern = t!("format.date");
     let bound = |text: &Option<String>, end| {
@@ -155,8 +164,7 @@ pub fn export(
             title: title(col, &schema),
         })
         .collect();
-    let rules = cfg
-        .rules
+    let rules = active
         .iter()
         .filter(|r| r.enabled)
         .filter_map(|r| {

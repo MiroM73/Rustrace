@@ -1,7 +1,7 @@
 use crate::colfilter::{ColumnFilter, DateFilter, DateLayout};
 use crate::config::{
-    Config, DeltaMode, DetailsView, HighlightRule, HighlightScope, IntervalUnit, RuleSeverity,
-    UpdateCheck,
+    Config, DeltaMode, DetailsView, HighlightRule, HighlightScope, IntervalUnit, RuleSet,
+    RuleSeverity, UpdateCheck,
 };
 use crate::errcodes::{self, CodeInfo};
 use crate::excerpt;
@@ -289,7 +289,14 @@ pub struct App {
     time_ref: Option<(i64, u16, usize)>,
 
     rules: Vec<CompiledRule>,
-    rule_errors: Vec<Option<String>>,
+    /// Compile errors of the patterns, per rule set and rule (#70).
+    rule_errors: Vec<Vec<Option<String>>>,
+    /// Ids of the log definitions of the open logs the active rule sets were chosen for (#70).
+    rule_def_ids: Vec<String>,
+    /// The rule set shown in the rules window (index into `cfg.rule_sets`, #70).
+    rules_set: usize,
+    /// The new name of the set being renamed in the rules window (#70).
+    rules_rename: Option<String>,
     /// Rules that set a severity (#50), applied to the entries.
     sev_rules: Arc<SevRules>,
     /// The entries still have to get the severity of `sev_rules`.
@@ -452,9 +459,16 @@ impl App {
     ) -> Self {
         let (mut cfg, existed) = Config::load();
         let lang_code = i18n::set_language(lang.as_deref().unwrap_or(&cfg.language));
+        if std::mem::take(&mut cfg.rule_sets_migrated) {
+            // The old rules became the first set before the language was known.
+            cfg.rule_sets[0].name = t!("rules.set.default");
+        }
         if !existed {
             // First run: example rules named in the chosen language.
-            cfg.rules = Config::default_rules();
+            cfg.rule_sets = vec![RuleSet::new(
+                t!("rules.set.default"),
+                Config::default_rules(),
+            )];
         }
         let mut app = Self {
             cfg_base: cfg.to_value(),
@@ -516,6 +530,9 @@ impl App {
             overview_dirty: 0,
             rules: Vec::new(),
             rule_errors: Vec::new(),
+            rule_def_ids: Vec::new(),
+            rules_set: 0,
+            rules_rename: None,
             sev_rules: Arc::default(),
             sev_reapply: false,
             follow: Follow::default(),

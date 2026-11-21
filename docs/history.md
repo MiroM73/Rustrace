@@ -468,6 +468,7 @@ Notes for Claude, linked from `CLAUDE.md`.
     sizes of the formerly self-sizing windows are guesses.
 99. Release v1.4.0 (#68, #69 windows open as their own OS windows). Done at the owner's request by the owner with `release.ps1`; release notes set by Claude with `gh release edit`.
 100. #71 *Only highlighted rows* filter (toolbar 🖍 Highlighted / View menu): `FilterSpec::rules` + `RuleMatcher` in `filter.rs`, replaces the severity toggles while on; kept by the update restart. Test `rules_filter_ignores_severity_toggles`. Next: rule sets (#70), then "only the active set".
+101. #70 Highlight rule sets: `Config::rule_sets` (nested, migration of the old flat list into "Default"), switch / binding to log definitions (`RuleSet::is_active`, `App::rules_for_open_logs`), new / rename / duplicate / delete, import / export of set files (`src/rulesets.rs`, `.rules`), 3 built-in sets (`rulesets/`, embedded only), rule set bar in `dialogs/ruleset.rs`. `--export` honours the binding. Not looked at by eye in the running window (only started with the migrated settings). Ideas left: select a single rule / set for the #71 filter, ship `rulesets/` next to the exe.
 
 ## Ideas not done yet (offered by the owner)
 - `--set "<name>"` command-line option for log sets (#27): would need the set loading, the file

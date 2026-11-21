@@ -1,0 +1,115 @@
+{
+  "name": "MSI installation",
+  "logdefs": [
+    "msi.log.def"
+  ],
+  "rules": [
+    {
+      "enabled": true,
+      "name": "MSI: return value 3 (failure)",
+      "pattern": "\\bReturn value 3\\b|\\bError 1603\\b|\\bInstallation failed\\b",
+      "is_regex": true,
+      "case_sensitive": false,
+      "scope": "Row",
+      "use_fg": true,
+      "fg": [
+        0,
+        0,
+        0,
+        255
+      ],
+      "use_bg": true,
+      "bg": [
+        255,
+        190,
+        190,
+        255
+      ],
+      "fg_dark": [
+        240,
+        240,
+        240,
+        255
+      ],
+      "bg_dark": [
+        145,
+        80,
+        80,
+        255
+      ],
+      "match_component": false,
+      "severity": "error"
+    },
+    {
+      "enabled": true,
+      "name": "MSI: rollback",
+      "pattern": "\\bRolling back\\b|\\bRollback\\b",
+      "is_regex": true,
+      "case_sensitive": false,
+      "scope": "Row",
+      "use_fg": true,
+      "fg": [
+        0,
+        0,
+        0,
+        255
+      ],
+      "use_bg": true,
+      "bg": [
+        255,
+        235,
+        160,
+        255
+      ],
+      "fg_dark": [
+        240,
+        240,
+        240,
+        255
+      ],
+      "bg_dark": [
+        145,
+        125,
+        50,
+        255
+      ],
+      "match_component": false,
+      "severity": "warning"
+    },
+    {
+      "enabled": true,
+      "name": "MSI: harmless note",
+      "pattern": "Note: 1: (2205|2228|2262|2318)\\b",
+      "is_regex": true,
+      "case_sensitive": false,
+      "scope": "Row",
+      "use_fg": true,
+      "fg": [
+        120,
+        120,
+        120,
+        255
+      ],
+      "use_bg": true,
+      "bg": [
+        240,
+        240,
+        240,
+        255
+      ],
+      "fg_dark": [
+        150,
+        150,
+        150,
+        255
+      ],
+      "bg_dark": [
+        40,
+        40,
+        40,
+        255
+      ],
+      "match_component": false
+    }
+  ]
+}

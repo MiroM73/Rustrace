@@ -9,5 +9,6 @@ mod help;
 pub(in crate::app) mod logsets;
 mod lookup;
 mod rules;
+mod ruleset;
 mod tabexport;
 mod update;

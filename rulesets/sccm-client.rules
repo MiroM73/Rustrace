@@ -1,0 +1,113 @@
+{
+  "name": "SCCM client troubleshooting",
+  "logdefs": [],
+  "rules": [
+    {
+      "enabled": true,
+      "name": "Failed / error",
+      "pattern": "\\b(failed|failure|unable to|error 0x\\w+)\\b",
+      "is_regex": true,
+      "case_sensitive": false,
+      "scope": "Row",
+      "use_fg": true,
+      "fg": [
+        0,
+        0,
+        0,
+        255
+      ],
+      "use_bg": true,
+      "bg": [
+        255,
+        190,
+        190,
+        255
+      ],
+      "fg_dark": [
+        240,
+        240,
+        240,
+        255
+      ],
+      "bg_dark": [
+        145,
+        80,
+        80,
+        255
+      ],
+      "match_component": false,
+      "severity": "error"
+    },
+    {
+      "enabled": true,
+      "name": "Warning words",
+      "pattern": "\\b(retry(ing)?|timed? ?out|not found|access denied)\\b",
+      "is_regex": true,
+      "case_sensitive": false,
+      "scope": "Row",
+      "use_fg": true,
+      "fg": [
+        0,
+        0,
+        0,
+        255
+      ],
+      "use_bg": true,
+      "bg": [
+        255,
+        235,
+        160,
+        255
+      ],
+      "fg_dark": [
+        240,
+        240,
+        240,
+        255
+      ],
+      "bg_dark": [
+        145,
+        125,
+        50,
+        255
+      ],
+      "match_component": false,
+      "severity": "warning"
+    },
+    {
+      "enabled": true,
+      "name": "Exit code",
+      "pattern": "exit code -?\\d+|exitcode[:=] ?-?\\d+",
+      "is_regex": true,
+      "case_sensitive": false,
+      "scope": "Text",
+      "use_fg": true,
+      "fg": [
+        0,
+        0,
+        0,
+        255
+      ],
+      "use_bg": true,
+      "bg": [
+        200,
+        170,
+        255,
+        255
+      ],
+      "fg_dark": [
+        245,
+        235,
+        255,
+        255
+      ],
+      "bg_dark": [
+        95,
+        60,
+        150,
+        255
+      ],
+      "match_component": false
+    }
+  ]
+}
