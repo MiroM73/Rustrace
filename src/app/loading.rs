@@ -250,17 +250,30 @@ impl App {
         let ctx = self.ctx.clone();
         let sev = self.sev_rules.clone();
         let thread_sev = sev.clone();
+        let sets = self.cfg.rule_sets.clone();
+        let ids_now = self.rule_def_ids.clone();
         let spawned = std::thread::Builder::new()
             .name("rustrace-reader".into())
             .spawn(move || {
                 let mut res = src.poll(&prog);
+                let mut applied = None;
                 if let Ok(r) = &mut res {
-                    thread_sev.apply_to_result(r);
+                    let mut sev = thread_sev;
+                    // A rule set bound to the log definition of this log becomes (in)active:
+                    // apply the rules that now count right here, on the reader thread.
+                    if !matches!(r, ReadResult::Unchanged) {
+                        let ids = crate::config::def_ids(&src.source_defs());
+                        if let Some(new) = SevRules::for_new_defs(&sets, &ids_now, &ids) {
+                            sev = Arc::new(new);
+                            applied = Some((ids, sev.clone()));
+                        }
+                    }
+                    sev.apply_to_result(r);
                 }
                 // Nothing new: no extra frame, the next scheduled refresh picks the result up.
                 let changed = !matches!(res, Ok(ReadResult::Unchanged));
                 // If the UI no longer waits for the result (other file, cancelled), send fails – that's fine.
-                let _ = tx.send((src, res));
+                let _ = tx.send((src, res, applied));
                 if changed {
                     ctx.request_repaint();
                 }
@@ -294,9 +307,19 @@ impl App {
         let Some(l) = &self.loading else { return };
         let started = l.started;
         match l.rx.try_recv() {
-            Ok((src, mut res)) => {
+            Ok((src, mut res, applied)) => {
+                // The thread applied the rules of the rule sets bound to the log definitions:
+                // they are the current ones now (equal to what a recompile builds, so the
+                // severities are not set again).
+                let mut used = l.sev.clone();
+                if let Some((ids, sev)) = applied {
+                    used = sev.clone();
+                    self.rule_def_ids = ids;
+                    self.sev_rules = sev;
+                    self.recompile_rules();
+                }
                 // The rules changed while the thread was reading: apply the current ones.
-                if !Arc::ptr_eq(&l.sev, &self.sev_rules)
+                if !Arc::ptr_eq(&used, &self.sev_rules)
                     && let Ok(r) = &mut res
                 {
                     self.sev_rules.apply_to_result(r);

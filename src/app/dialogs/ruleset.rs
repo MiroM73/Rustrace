@@ -166,38 +166,43 @@ impl App {
                 ids.push((id.clone(), id.clone()));
             }
         }
-        ui.menu_button(format!("🔗 {label}"), |ui| {
-            ui.label(t!("rules.set.bind.help"));
-            let defs = &mut self.cfg.rule_sets[si].logdefs;
-            if ui
-                .add_enabled(
-                    !defs.is_empty(),
-                    egui::Button::new(t!("rules.set.bind.clear")),
-                )
-                .clicked()
-            {
-                defs.clear();
-                changed = true;
-            }
-            ui.separator();
-            egui::ScrollArea::vertical()
-                .max_height(300.0)
-                .show(ui, |ui| {
-                    for (id, text) in &ids {
-                        let pos = defs.iter().position(|d| d.eq_ignore_ascii_case(id));
-                        let mut on = pos.is_some();
-                        if ui.checkbox(&mut on, text.as_str()).changed() {
-                            match pos {
-                                Some(p) => {
-                                    defs.remove(p);
+        // Ticking a log type must not close the menu: several can be chosen in a row.
+        let keep_open = egui::containers::menu::MenuConfig::new()
+            .close_behavior(egui::PopupCloseBehavior::CloseOnClickOutside);
+        egui::containers::menu::MenuButton::new(format!("🔗 {label}"))
+            .config(keep_open)
+            .ui(ui, |ui| {
+                ui.label(t!("rules.set.bind.help"));
+                let defs = &mut self.cfg.rule_sets[si].logdefs;
+                if ui
+                    .add_enabled(
+                        !defs.is_empty(),
+                        egui::Button::new(t!("rules.set.bind.clear")),
+                    )
+                    .clicked()
+                {
+                    defs.clear();
+                    changed = true;
+                }
+                ui.separator();
+                egui::ScrollArea::vertical()
+                    .max_height(300.0)
+                    .show(ui, |ui| {
+                        for (id, text) in &ids {
+                            let pos = defs.iter().position(|d| d.eq_ignore_ascii_case(id));
+                            let mut on = pos.is_some();
+                            if ui.checkbox(&mut on, text.as_str()).changed() {
+                                match pos {
+                                    Some(p) => {
+                                        defs.remove(p);
+                                    }
+                                    None => defs.push(id.clone()),
                                 }
-                                None => defs.push(id.clone()),
+                                changed = true;
                             }
-                            changed = true;
                         }
-                    }
-                });
-        });
+                    });
+            });
         changed
     }
 

@@ -126,7 +126,7 @@ struct Span {
 
 /// File reading in progress in a background thread.
 struct Loading {
-    rx: mpsc::Receiver<(LogSet, std::io::Result<ReadResult>)>,
+    rx: mpsc::Receiver<ReadDone>,
     progress: Arc<Progress>,
     started: Instant,
     /// The log is read from the beginning (first load or full reload), not a refresh read.
@@ -134,6 +134,15 @@ struct Loading {
     /// The severity rules the thread applies to what it reads (#50).
     sev: Arc<SevRules>,
 }
+
+/// What the reader thread hands back: the source, the result and - when the log definitions of
+/// the log changed the rule sets that apply (#70) - the ids and the severity rules it used
+/// (the thread knows the definitions only after reading, and applies the right rules itself).
+type ReadDone = (
+    LogSet,
+    std::io::Result<ReadResult>,
+    Option<(Vec<String>, Arc<SevRules>)>,
+);
 
 /// Full re-filter of a big log in a background thread (#16).
 struct FilterJob {

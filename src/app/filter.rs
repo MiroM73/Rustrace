@@ -38,22 +38,9 @@ impl App {
         }
     }
 
-    /// The ids of the log definitions the open logs use (#70).
-    fn open_def_ids(&self) -> Vec<String> {
-        let mut ids: Vec<String> = self
-            .source_defs
-            .iter()
-            .flatten()
-            .map(|d| d.id.clone())
-            .collect();
-        ids.sort();
-        ids.dedup();
-        ids
-    }
-
     /// After a log was read: the rule sets bound to log definitions follow the open logs (#70).
     pub(in crate::app) fn rules_for_open_logs(&mut self) {
-        let ids = self.open_def_ids();
+        let ids = crate::config::def_ids(&self.source_defs);
         if ids == self.rule_def_ids {
             return;
         }

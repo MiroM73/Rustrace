@@ -256,6 +256,22 @@ impl RuleSet {
     }
 }
 
+/// The rules of the active sets (`Config::active_rules`), also for a copy of the sets in a thread.
+pub fn active_rules_of<'a>(sets: &'a [RuleSet], def_ids: &[String]) -> Vec<&'a HighlightRule> {
+    sets.iter()
+        .filter(|s| s.is_active(def_ids))
+        .flat_map(|s| &s.rules)
+        .collect()
+}
+
+/// The sorted, distinct ids of the log definitions in use (`None` = the built-in parser).
+pub fn def_ids(defs: &[Option<std::sync::Arc<crate::logdef::LogDef>>]) -> Vec<String> {
+    let mut ids: Vec<String> = defs.iter().flatten().map(|d| d.id.clone()).collect();
+    ids.sort();
+    ids.dedup();
+    ids
+}
+
 /// The file of an exported set (#70): the rules plus the name and the binding.
 #[derive(Serialize, Deserialize, Debug, PartialEq)]
 pub struct RuleSetFile {
@@ -653,7 +669,15 @@ impl Config {
 
     /// The settings as JSON – the form in which instances compare and merge them.
     pub fn to_value(&self) -> serde_json::Value {
-        serde_json::to_value(self).unwrap_or_default()
+        let mut v = serde_json::to_value(self).unwrap_or_default();
+        // Versions before rule sets (#70) read only `rules` and, when they save the file, drop
+        // `rule_sets`: give them the rules that apply to every log, so they do not fall back to
+        // the example rules. Newer versions ignore the key while `rule_sets` is there.
+        if let Some(o) = v.as_object_mut() {
+            let legacy = serde_json::to_value(self.active_rules(&[])).unwrap_or_default();
+            o.insert("rules".into(), legacy);
+        }
+        v
     }
 
     pub fn from_value(v: serde_json::Value) -> Option<Self> {
@@ -713,11 +737,7 @@ impl Config {
     /// The rules that apply now, in priority order (#70): those of the active sets, set after
     /// set. `def_ids` = ids of the log definitions of the open logs.
     pub fn active_rules(&self, def_ids: &[String]) -> Vec<&HighlightRule> {
-        self.rule_sets
-            .iter()
-            .filter(|s| s.is_active(def_ids))
-            .flat_map(|s| &s.rules)
-            .collect()
+        active_rules_of(&self.rule_sets, def_ids)
     }
 
     /// Severity and search colors for the light or dark theme.
@@ -994,6 +1014,50 @@ mod tests {
         let fresh = Config::default();
         assert_eq!(fresh.rule_sets.len(), 1);
         assert_eq!(fresh.rule_sets[0].rules, Config::default_rules());
+    }
+
+    /// The saved file also carries `rules` for older versions; it never wins over `rule_sets`.
+    #[test]
+    fn saved_settings_keep_a_legacy_rules_key() {
+        let rule = |n: &str| HighlightRule {
+            name: n.into(),
+            ..HighlightRule::default()
+        };
+        let cfg = Config {
+            rule_sets: vec![
+                RuleSet::new("A".into(), vec![rule("a1"), rule("a2")]),
+                RuleSet {
+                    name: "bound".into(),
+                    logdefs: vec!["cbs.log.def".into()],
+                    rules: vec![rule("b")],
+                    ..RuleSet::default()
+                },
+                RuleSet {
+                    name: "off".into(),
+                    enabled: false,
+                    rules: vec![rule("c")],
+                    ..RuleSet::default()
+                },
+            ],
+            ..Config::default()
+        };
+        let value = cfg.to_value();
+        let names: Vec<&str> = value["rules"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .map(|r| r["name"].as_str().unwrap())
+            .collect();
+        // What an older version should apply: the active, unbound sets.
+        assert_eq!(names, ["a1", "a2"]);
+        // The sets are what is read back; the legacy key is dropped.
+        let back = Config::from_value(value).unwrap();
+        assert_eq!(back.rule_sets, cfg.rule_sets);
+        assert!(back.rules.is_empty());
+        // A file an older version wrote (only `rules`) is migrated into one set.
+        let old = Config::parse(r#"{"rules":[{"name":"x","pattern":"y"}]}"#).unwrap();
+        assert_eq!(old.rule_sets.len(), 1);
+        assert_eq!(old.rule_sets[0].rules[0].name, "x");
     }
 
     #[test]

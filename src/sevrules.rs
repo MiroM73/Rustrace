@@ -9,7 +9,7 @@
 
 use regex::Regex;
 
-use crate::config::{HighlightRule, HighlightScope, RuleSeverity};
+use crate::config::{HighlightRule, HighlightScope, RuleSet, RuleSeverity, active_rules_of};
 use crate::filter::other_columns_match;
 use crate::merge::ReadResult;
 use crate::parser::Severity;
@@ -68,6 +68,16 @@ impl SevRules {
         out
     }
 
+    /// The rules after the log definitions in use changed from `old` to `new` (#70): `None` when
+    /// they did not, or no set is bound to a definition (so nothing can change).
+    pub fn for_new_defs(sets: &[RuleSet], old: &[String], new: &[String]) -> Option<SevRules> {
+        if old == new || sets.iter().all(|s| s.logdefs.is_empty()) {
+            return None;
+        }
+        let rules: Vec<HighlightRule> = active_rules_of(sets, new).into_iter().cloned().collect();
+        Some(SevRules::from_config(&rules))
+    }
+
     pub fn is_empty(&self) -> bool {
         self.rules.is_empty()
     }
@@ -119,6 +129,27 @@ impl SevRules {
 mod tests {
     use super::*;
     use crate::parser::LogEntry;
+
+    #[test]
+    fn bound_sets_follow_the_definitions_of_the_log() {
+        let set = |defs: &[&str]| RuleSet {
+            name: "s".into(),
+            logdefs: defs.iter().map(|d| d.to_string()).collect(),
+            rules: vec![rule("boom", Some(RuleSeverity::Error))],
+            ..RuleSet::default()
+        };
+        let ids = |v: &[&str]| -> Vec<String> { v.iter().map(|s| s.to_string()).collect() };
+        // Nothing bound: the definitions do not matter.
+        assert!(SevRules::for_new_defs(&[set(&[])], &ids(&[]), &ids(&["cbs.log.def"])).is_none());
+        let bound = [set(&["cbs.log.def"])];
+        // Same definitions: nothing to change.
+        assert!(SevRules::for_new_defs(&bound, &ids(&["a"]), &ids(&["a"])).is_none());
+        // The bound definition appears / disappears.
+        let on = SevRules::for_new_defs(&bound, &ids(&[]), &ids(&["cbs.log.def"])).unwrap();
+        assert!(!on.is_empty());
+        let off = SevRules::for_new_defs(&bound, &ids(&["cbs.log.def"]), &ids(&["x"])).unwrap();
+        assert!(off.is_empty());
+    }
 
     fn store(lines: &[(&str, Severity)]) -> LogStore {
         let mut s = LogStore::new();

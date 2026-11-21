@@ -327,6 +327,51 @@ pub fn export(
 mod tests {
     use super::*;
 
+    /// What opening a log costs when a bound rule set with severity rules becomes active after
+    /// the read (#70): `RUSTRACE_BENCH_FILE=<log> cargo test --release bench_bound_set -- --ignored
+    /// --nocapture`.
+    #[test]
+    #[ignore]
+    fn bench_bound_set() {
+        let path = std::env::var("RUSTRACE_BENCH_FILE").expect("RUSTRACE_BENCH_FILE");
+        let cfg = Config::default();
+        let t = std::time::Instant::now();
+        let (mut store, set) = read(&[PathBuf::from(path)], &cfg).unwrap();
+        println!(
+            "read:             {:>8.0?}  ({} entries)",
+            t.elapsed(),
+            store.len()
+        );
+        let ids: Vec<String> = set
+            .source_defs()
+            .iter()
+            .flatten()
+            .map(|d| d.id.clone())
+            .collect();
+        println!("definition ids: {ids:?}");
+        for f in crate::rulesets::builtin_sets() {
+            let rules = f.rules.clone();
+            let t = std::time::Instant::now();
+            let sev = crate::sevrules::SevRules::from_config(&rules);
+            sev.apply(&mut store, 0);
+            println!("apply {:<28} {:>8.0?}", f.name, t.elapsed());
+        }
+        // The filter pass that follows (what a re-filter of this log costs).
+        let spec = FilterSpec {
+            show_sev: [true; 3],
+            ..Default::default()
+        };
+        let t = std::time::Instant::now();
+        let out = spec
+            .run_parallel(&store, &std::sync::atomic::AtomicBool::new(false))
+            .unwrap();
+        println!(
+            "filter (parallel): {:>7.0?}  ({} rows)",
+            t.elapsed(),
+            out.filtered.len()
+        );
+    }
+
     /// A CMTrace log exported with `--errors` as CSV and as JSON Lines.
     #[test]
     fn export_from_the_command_line() {
