@@ -459,6 +459,13 @@ Notes for Claude, linked from `CLAUDE.md`.
     old config files load unchanged). Verified: `cargo test` (the geometry and open / close logic
     of `ToolWindow`), clippy, rustfmt. The dragging to a second monitor and the restart
     persistence were not clicked through.
+98. #69 All the other windows use `ToolWindow` too (Colors, Bookmarks, Export, Table export, Log sets,
+    Error code lookup, Keyboard shortcuts, About, File association, Update, Log definition update
+    notice). New helper `App::show_tool`; `Config::rules_window` became `Config::windows` (map by
+    window key; the #68 field was never released). `show_*` flags became `ToolWindow` fields
+    (`*_win`). Verified: `cargo test`, clippy, rustfmt; an automated Ctrl+H smoke test did not show
+    the window (keystroke probably not delivered), so the windows were not clicked through – default
+    sizes of the formerly self-sizing windows are guesses.
 
 ## Ideas not done yet (offered by the owner)
 - `--set "<name>"` command-line option for log sets (#27): would need the set loading, the file

@@ -147,7 +147,7 @@ impl App {
             self.cfg.table_export.scope = s;
             self.cfg_dirty = true;
         }
-        self.show_table_export = true;
+        self.table_export_win.open();
     }
 
     pub(in crate::app) fn table_export_running(&self) -> bool {

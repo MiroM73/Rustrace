@@ -4,27 +4,27 @@ use crate::app::*;
 
 impl App {
     pub(in crate::app) fn bookmarks_window(&mut self, ctx: &egui::Context) {
-        if !self.show_bookmarks {
-            return;
-        }
-        let mut open = true;
         let mut jump = None;
         let mut remove = None;
         let mut notes: Vec<(usize, String)> = Vec::new();
         let mut clear = false;
         let multi = self.files.len() > 1;
-        egui::Window::new(format!("🔖 {}", t!("bookmarks.title")))
-            .id(egui::Id::unique("bookmarks_window"))
-            .open(&mut open)
-            .default_width(760.0)
-            .default_height(320.0)
-            .show(ctx, |ui| {
-                if self.bookmark_rows.is_empty() {
+        let spec = ToolSpec::new(
+            format!("🔖 {}", t!("bookmarks.title")),
+            [760.0, 320.0],
+            [420.0, 160.0],
+        );
+        self.show_tool(
+            ctx,
+            |a| &mut a.bookmarks_win,
+            spec,
+            |app, ui, _keep| {
+                if app.bookmark_rows.is_empty() {
                     ui.weak(t!("bookmarks.empty", key = kb("Ctrl+F2")));
                     return;
                 }
                 ui.horizontal(|ui| {
-                    ui.label(t!("bookmarks.count", count = self.bookmark_rows.len()));
+                    ui.label(t!("bookmarks.count", count = app.bookmark_rows.len()));
                     ui.weak(t!("bookmarks.hint"));
                     ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
                         if ui.button(format!("🗑 {}", t!("bookmarks.clear"))).clicked() {
@@ -47,8 +47,8 @@ impl App {
                                 ui.strong(t!("bookmarks.note"));
                                 ui.strong(t!("column.message"));
                                 ui.end_row();
-                                for &i in &self.bookmark_rows {
-                                    let e = self.entries.at(i);
+                                for &i in &app.bookmark_rows {
+                                    let e = app.entries.at(i);
                                     if ui
                                         .small_button("✖")
                                         .on_hover_text(t!("bookmarks.remove"))
@@ -57,7 +57,7 @@ impl App {
                                         remove = Some(i);
                                     }
                                     let line = if multi {
-                                        format!("{}:{}", self.file_label(e.file), e.line_no)
+                                        format!("{}:{}", app.file_label(e.file), e.line_no)
                                     } else {
                                         e.line_no.to_string()
                                     };
@@ -71,8 +71,8 @@ impl App {
                                         ui.add(label).double_clicked()
                                     };
                                     let mut go = click(ui, line, false);
-                                    go |= click(ui, self.display_dt(&e.datetime()), false);
-                                    let mut note = self
+                                    go |= click(ui, app.display_dt(&e.datetime()), false);
+                                    let mut note = app
                                         .bookmarks
                                         .get(&(e.file, e.line_no))
                                         .cloned()
@@ -96,7 +96,8 @@ impl App {
                                 }
                             });
                     });
-            });
+            },
+        );
         for (i, n) in notes {
             self.set_bookmark_note(i, n);
         }
@@ -109,6 +110,5 @@ impl App {
         if let Some(i) = jump {
             self.jump_to_entry(i);
         }
-        self.show_bookmarks = open;
     }
 }

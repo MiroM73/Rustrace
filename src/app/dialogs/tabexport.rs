@@ -5,36 +5,36 @@ use crate::tabexport::{Col, Scope, TableFormat, csv::CsvEncoding};
 
 impl App {
     pub(in crate::app) fn table_export_window(&mut self, ctx: &egui::Context) {
-        if !self.show_table_export {
-            return;
-        }
-        let mut open = true;
         let mut start = false;
         let mut changed = false;
-        egui::Window::new(format!("📊 {}", t!("tabexport.title")))
-            .id(egui::Id::unique("table_export_window"))
-            .open(&mut open)
-            .resizable(false)
-            .default_width(560.0)
-            .show(ctx, |ui| {
-                changed |= self.table_export_presets_ui(ui);
+        let spec = ToolSpec::new(
+            format!("📊 {}", t!("tabexport.title")),
+            [600.0, 700.0],
+            [420.0, 300.0],
+        );
+        self.show_tool(
+            ctx,
+            |a| &mut a.table_export_win,
+            spec,
+            |app, ui, _keep| {
+                changed |= app.table_export_presets_ui(ui);
                 ui.separator();
-                changed |= self.table_export_scope_ui(ui);
+                changed |= app.table_export_scope_ui(ui);
                 ui.separator();
-                changed |= self.table_export_columns_ui(ui);
+                changed |= app.table_export_columns_ui(ui);
                 ui.separator();
-                changed |= self.table_export_format_ui(ui);
+                changed |= app.table_export_format_ui(ui);
                 ui.separator();
-                let scope = self.cfg.table_export.scope;
-                let rows = self.table_export_count(scope);
-                let cols = self
+                let scope = app.cfg.table_export.scope;
+                let rows = app.table_export_count(scope);
+                let cols = app
                     .table_export_columns()
                     .iter()
                     .filter(|(_, on)| *on)
                     .count();
                 ui.horizontal(|ui| {
-                    let reading = self.loading.as_ref().is_some_and(|l| l.full);
-                    let busy = self.table_export_running() || reading;
+                    let reading = app.loading.as_ref().is_some_and(|l| l.full);
+                    let busy = app.table_export_running() || reading;
                     if ui
                         .add_enabled(
                             rows > 0 && cols > 0 && !busy,
@@ -44,8 +44,8 @@ impl App {
                     {
                         start = true;
                     }
-                    if self.table_export_running() {
-                        self.table_export_progress(ui, 260.0);
+                    if app.table_export_running() {
+                        app.table_export_progress(ui, 260.0);
                     } else if reading {
                         ui.spinner();
                         ui.label(t!("export.reading"));
@@ -59,32 +59,32 @@ impl App {
                 });
                 changed |= ui
                     .checkbox(
-                        &mut self.cfg.table_export.open_after,
+                        &mut app.cfg.table_export.open_after,
                         t!("tabexport.open_after"),
                     )
                     .changed();
-                if let Some(last) = self.table_export_last.clone() {
+                if let Some(last) = app.table_export_last.clone() {
                     ui.horizontal_wrapped(|ui| {
                         ui.weak(t!("tabexport.last", path = last.display()));
                         if ui.small_button(t!("tabexport.last.open")).clicked() {
-                            self.open_exported(&last, false);
+                            app.open_exported(&last, false);
                         }
                         if ui.small_button(t!("tabexport.last.folder")).clicked() {
-                            self.open_exported(&last, true);
+                            app.open_exported(&last, true);
                         }
                         if ui.small_button(t!("tabexport.last.copy")).clicked() {
                             ui.ctx().copy_text(last.display().to_string());
                         }
                     });
                 }
-            });
+            },
+        );
         if changed {
             self.cfg_dirty = true;
         }
         if start {
             self.start_table_export();
         }
-        self.show_table_export = open;
     }
 
     /// Saved settings: choose one, save the current ones under a name, delete one.
@@ -205,7 +205,7 @@ impl App {
                         .on_hover_text(t!("tabexport.scope.highlighted.settings.tip"))
                         .clicked()
                 {
-                    self.show_export = true;
+                    self.export_win.open();
                 }
             });
         }

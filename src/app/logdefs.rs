@@ -36,7 +36,11 @@ impl App {
             &self.predefined_defs,
             &self.own_defs,
         );
-        self.show_def_updates = !self.def_updates.is_empty();
+        if self.def_updates.is_empty() {
+            self.def_updates_win.close();
+        } else {
+            self.def_updates_win.open();
+        }
     }
 
     /// The user has read the notice: the current predefined definitions become the known ones.
@@ -44,27 +48,30 @@ impl App {
         self.cfg.known_logdefs = self.predefined_defs.clone();
         self.cfg_dirty = true;
         self.def_updates.clear();
-        self.show_def_updates = false;
+        self.def_updates_win.close();
     }
 
     /// Window with the new / changed / removed predefined log definitions.
     pub(in crate::app) fn def_updates_window(&mut self, ctx: &egui::Context) {
-        if !self.show_def_updates {
+        if !self.def_updates_win.is_open() {
             return;
         }
-        let mut open = true;
         let (mut ack, mut close, mut open_folder) = (false, false, false);
-        egui::Window::new(format!("🆕 {}", t!("defupd.title")))
-            .id(egui::Id::unique("defupd_window"))
-            .open(&mut open)
-            .default_width(860.0)
-            .resizable(true)
-            .show(ctx, |ui| {
+        let spec = ToolSpec::new(
+            format!("🆕 {}", t!("defupd.title")),
+            [900.0, 640.0],
+            [560.0, 300.0],
+        );
+        self.show_tool(
+            ctx,
+            |a| &mut a.def_updates_win,
+            spec,
+            |app, ui, _keep| {
                 ui.label(t!("defupd.intro"));
                 egui::ScrollArea::vertical()
                     .max_height(520.0)
                     .show(ui, |ui| {
-                        for u in &self.def_updates {
+                        for u in &app.def_updates {
                             ui.separator();
                             let head = match u.kind {
                                 logdef::UpdateKind::New => {
@@ -161,7 +168,8 @@ impl App {
                         open_folder = true;
                     }
                 });
-            });
+            },
+        );
         if open_folder && let Some(dir) = logdef::user_def_dir() {
             let res = std::fs::create_dir_all(&dir).and_then(|_| open::that_detached(&dir));
             if let Err(e) = res {
@@ -170,8 +178,8 @@ impl App {
         }
         if ack {
             self.acknowledge_def_updates();
-        } else if close || !open {
-            self.show_def_updates = false;
+        } else if close {
+            self.def_updates_win.close();
         }
     }
 
@@ -358,7 +366,7 @@ impl App {
             )
             .clicked()
         {
-            self.show_def_updates = true;
+            self.def_updates_win.open();
             ui.close();
         }
         ui.separator();

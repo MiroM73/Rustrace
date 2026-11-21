@@ -167,6 +167,9 @@ The logs of one troubleshooting scenario in one step – details in [Log sets](l
   monitor while you watch the colors change in the log; its position and size are remembered.
   *View → Open windows separately* (on by default) switches back to a window inside the main
   window; Esc closes the separate window (not while a field or a popup is active)
+- all the other windows (Colors, Bookmarks, Export, Table export, Log sets, Error code lookup,
+  Keyboard shortcuts, About, Default app, Updates, new log definitions) behave the same (#69), with
+  the same setting
 - the window opens wide enough for the whole table (up to the size of the main window); long names
   and patterns are shown in full in the tooltip of their field; a narrower window shows a
   horizontal scroll bar

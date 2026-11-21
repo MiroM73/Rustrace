@@ -17,6 +17,27 @@ pub(in crate::app) struct ToolSpec {
     /// Inner size of the first window (logical pixels) and its minimum.
     pub default_size: [f32; 2],
     pub min_size: [f32; 2],
+    /// The content scrolls when the window is smaller than it (false: the content has its own
+    /// scroll areas and uses the whole height).
+    pub scroll: bool,
+}
+
+impl ToolSpec {
+    /// A window whose content scrolls.
+    pub(in crate::app) fn new(title: String, default_size: [f32; 2], min_size: [f32; 2]) -> Self {
+        Self {
+            title,
+            default_size,
+            min_size,
+            scroll: true,
+        }
+    }
+
+    /// The content manages its own scroll areas.
+    pub(in crate::app) fn no_scroll(mut self) -> Self {
+        self.scroll = false;
+        self
+    }
 }
 
 /// One tool window: open or not, and the geometry its native window opened with.
@@ -26,6 +47,8 @@ pub(in crate::app) struct ToolWindow {
     open: bool,
     /// Bring the window to the front in the next frame.
     focus: bool,
+    /// The window cannot be closed (× / Esc are ignored), e.g. while an update is installed.
+    pub(in crate::app) locked: bool,
     /// Position and size the native window was opened with. Fixed at its first frame: a builder
     /// that changes between frames moves the open window.
     opened_at: Option<(Option<[f32; 2]>, [f32; 2])>,
@@ -50,6 +73,7 @@ impl ToolWindow {
             key,
             open: false,
             focus: false,
+            locked: false,
             opened_at: None,
         }
     }
@@ -91,7 +115,7 @@ impl ToolWindow {
             self.opened_at = None;
             self.show_embedded(ctx, spec, content)
         };
-        if close {
+        if close && !self.locked {
             self.close();
         }
         *state != before
@@ -125,11 +149,13 @@ impl ToolWindow {
             ctx.send_viewport_cmd_to(viewport, egui::ViewportCommand::Focus);
         }
         let mut content = Some(content);
+        let scroll = spec.scroll;
+        let locked = self.locked;
         ctx.show_viewport_immediate(viewport, builder, |ui, _class| {
             let ctx = ui.ctx().clone();
             egui::CentralPanel::default().show(ui, |ui| {
                 if let Some(c) = content.take() {
-                    c(ui);
+                    scrolled(ui, scroll, c);
                 }
             });
             // Not inside `input`: the context is locked there.
@@ -149,6 +175,9 @@ impl ToolWindow {
             // Esc belongs to an active field or an open popup (color picker, combo box).
             let esc =
                 esc && ctx.memory(|m| m.focused().is_none()) && !egui::Popup::is_any_open(&ctx);
+            if close_requested && locked {
+                ctx.send_viewport_cmd(egui::ViewportCommand::CancelClose);
+            }
             close_requested || esc
         })
     }
@@ -172,8 +201,55 @@ impl ToolWindow {
             .resizable(true)
             .default_size(spec.default_size)
             .min_size(spec.min_size)
-            .show(ctx, content);
+            .show(ctx, |ui| scrolled(ui, spec.scroll, content));
         !open
+    }
+}
+
+/// Runs `content`, in a scroll area when `scroll`.
+fn scrolled(ui: &mut egui::Ui, scroll: bool, content: impl FnOnce(&mut egui::Ui)) {
+    if scroll {
+        egui::ScrollArea::both()
+            .auto_shrink([false, false])
+            .show(ui, content);
+    } else {
+        content(ui);
+    }
+}
+
+impl App {
+    /// Shows the tool window `win` (a field of `App`) when it is open. `content` gets the app,
+    /// the `Ui` and a flag it clears to close the window (the × button and Esc close it as well).
+    /// The window is taken out of `App` while it is drawn, because `content` borrows the app.
+    /// Returns whether the window is still open. Position and size are kept in `Config::windows`.
+    pub(in crate::app) fn show_tool(
+        &mut self,
+        ctx: &egui::Context,
+        win: impl Fn(&mut App) -> &mut ToolWindow,
+        spec: ToolSpec,
+        content: impl FnOnce(&mut App, &mut egui::Ui, &mut bool),
+    ) -> bool {
+        if !win(self).is_open() {
+            return false;
+        }
+        let key = win(self).key;
+        let native = self.cfg.separate_windows && !ctx.embed_viewports();
+        let mut w = std::mem::replace(win(self), ToolWindow::new(key));
+        let mut state = self.cfg.windows.get(key).cloned().unwrap_or_default();
+        let mut keep = true;
+        let moved = w.show(ctx, native, &spec, &mut state, |ui| {
+            content(self, ui, &mut keep)
+        });
+        if !keep {
+            w.close();
+        }
+        let open = w.is_open();
+        *win(self) = w;
+        if moved {
+            self.cfg.windows.insert(key.to_owned(), state);
+            self.cfg_dirty = true;
+        }
+        open
     }
 }
 

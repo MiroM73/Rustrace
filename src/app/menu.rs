@@ -104,7 +104,7 @@ impl App {
                     .clicked()
                 {
                     ui.close();
-                    self.show_export = true;
+                    self.export_win.open();
                 }
                 if ui
                     .add_enabled(
@@ -155,7 +155,7 @@ impl App {
                     .clicked()
                 {
                     ui.close();
-                    self.show_bookmarks = true;
+                    self.bookmarks_win.open();
                 }
                 if ui
                     .checkbox(&mut self.bookmarks_only, t!("toolbar.bookmarks_only.tip"))
@@ -284,7 +284,7 @@ impl App {
                 }
                 if ui.button(t!("menu.highlight.colors")).clicked() {
                     ui.close();
-                    self.show_colors = true;
+                    self.colors_win.open();
                 }
             });
             ui.menu_button(t!("menu.tools"), |ui| {
@@ -299,7 +299,7 @@ impl App {
             ui.menu_button(t!("menu.help"), |ui| {
                 if ui.button(t!("menu.help.shortcuts")).clicked() {
                     ui.close();
-                    self.show_help = true;
+                    self.help_win.open();
                 }
                 ui.menu_button(format!("📖 {}", t!("menu.help.guides")), |ui| {
                     for (key, file) in guides::GUIDES {
@@ -329,20 +329,21 @@ impl App {
                 {
                     ui.close();
                     self.assoc = Some(fileassoc::info());
+                    self.assoc_win.open();
                 }
                 if ui
                     .button(format!("⬆ {}", t!("menu.help.updates")))
                     .clicked()
                 {
                     ui.close();
-                    self.show_update = true;
+                    self.update_win.open();
                     if !matches!(self.update, UpdateState::Installing { .. }) {
                         self.start_update_check(false);
                     }
                 }
                 if ui.button(format!("ℹ {}", t!("menu.help.about"))).clicked() {
                     ui.close();
-                    self.show_about = true;
+                    self.about_win.open();
                 }
                 ui.separator();
                 if let Some(p) = Config::path() {

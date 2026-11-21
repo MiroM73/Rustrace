@@ -639,15 +639,26 @@ links in `docs/` (`features.md`, `export.md`, `log-definitions.md`, `log-sets.md
   !ctx.embed_viewports()` → `ctx.show_viewport_immediate` (own OS window, program icon cached in a
   `OnceLock`), otherwise an `egui::Window` in the main window. The builder is fixed at the first
   frame (`opened_at`), a builder that changes between frames moves the open window. Position and
-  size are stored in `Config::rules_window` (`ToolWindowState`, logical pixels = egui points ×
+  size are stored in `Config::windows` (a map by window key of `ToolWindowState`, logical pixels = egui points ×
   zoom, `window_geometry`; not stored while minimized / maximized). Esc closes the native window
   only when no widget has focus and no popup is open. `ctx.input` is never called inside another
   `input` closure (the context is locked there).
-- The window is moved out of `App` (`mem::replace`) during `show`, because the content closure
-  borrows `self`; `Config::rules_window` is written back and `cfg_dirty` set when it changed.
+- `App::show_tool(ctx, |a| &mut a.xxx_win, spec, |app, ui, keep| ..)` is what the windows call:
+  the `ToolWindow` is moved out of `App` (`mem::replace`) while it is drawn, because the content
+  closure borrows the app (it gets `app` as a parameter instead of `self`); the geometry is read
+  from / written to `Config::windows[key]` and `cfg_dirty` set when it changed; clearing `keep`
+  closes the window; the return value says whether it is still open. `ToolSpec::new` windows
+  scroll when smaller than their content, `.no_scroll()` for content with its own scroll areas
+  (Highlight rules). `ToolWindow::locked` ignores × / Esc (the Update window while an update is
+  installed; a native window gets `CancelClose`).
+- Windows with their own `Option` state (`log_sets` + `log_sets_win`, `assoc` + `assoc_win`) open
+  the `ToolWindow` where the state is created and close it when the state is dropped.
 - **Convention: every new separately opened window uses `ToolWindow`** (movable outside the main
-  window). Converted so far: Highlight rules (#68); the other windows follow in #69. Short modal
-  confirmations may stay in the main window.
+  window). All windows are converted (#68 Highlight rules, #69 the rest: Colors, Bookmarks, Export with
+  context, Table export, Log sets, Error code lookup, Keyboard shortcuts, About, File association,
+  Update, Log definition update notice); none of them is a short modal confirmation, so none stayed
+  in the main window. The windows that used to size themselves to their content (Colors, Keyboard
+  shortcuts, About, Export, Table export, File association, Update) now have a default size.
 
 ## Localization and settings
 - Localization: built-in en / sk / cs / de; external `<code>.lang` files load **without recompiling**

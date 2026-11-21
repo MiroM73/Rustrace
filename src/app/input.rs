@@ -37,7 +37,7 @@ impl App {
         let export_key =
             ctx.input_mut(|i| i.consume_key(Modifiers::COMMAND | Modifiers::SHIFT, Key::S));
         if export_key && self.cur_path.is_some() {
-            self.show_export = true;
+            self.export_win.open();
         }
         // Before Ctrl+E (the lookup): `consume_key` ignores an extra Shift (#46).
         let table_export_key =

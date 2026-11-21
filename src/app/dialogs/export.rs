@@ -118,88 +118,88 @@ impl App {
     }
 
     pub(in crate::app) fn export_window(&mut self, ctx: &egui::Context) {
-        if !self.show_export {
+        if !self.export_win.is_open() {
             return;
         }
-        let mut open = true;
         let mut start = false;
         let mut changed = false;
-        egui::Window::new(format!("📤 {}", t!("export.title")))
-            .id(egui::Id::unique("export_window"))
-            .open(&mut open)
-            .resizable(false)
-            .default_width(520.0)
-            .show(ctx, |ui| {
+        let spec = ToolSpec::new(
+            format!("📤 {}", t!("export.title")),
+            [560.0, 640.0],
+            [400.0, 300.0],
+        );
+        let open = self.show_tool(
+            ctx,
+            |a| &mut a.export_win,
+            spec,
+            |app, ui, _keep| {
                 egui::Grid::new("export_grid")
                     .spacing([12.0, 6.0])
                     .show(ui, |ui| {
                         ui.label(t!("export.before"));
                         changed |= ui
                             .add(
-                                egui::DragValue::new(&mut self.cfg.export_before)
-                                    .range(0..=100_000),
+                                egui::DragValue::new(&mut app.cfg.export_before).range(0..=100_000),
                             )
                             .changed();
                         ui.end_row();
                         ui.label(t!("export.after"));
                         changed |= ui
-                            .add(
-                                egui::DragValue::new(&mut self.cfg.export_after).range(0..=100_000),
-                            )
+                            .add(egui::DragValue::new(&mut app.cfg.export_after).range(0..=100_000))
                             .changed();
                         ui.end_row();
                     });
                 ui.separator();
                 ui.label(t!("export.include"));
-                let (visible, total) = (self.filtered.len(), self.entries.len());
+                let (visible, total) = (app.filtered.len(), app.entries.len());
                 // Selected rows (row context menu → Export selected rows…).
-                let selected = self.sel.count();
+                let selected = app.sel.count();
                 if selected == 0 {
-                    self.export_selected = false;
+                    app.export_selected = false;
                 }
                 ui.add_enabled(
                     selected > 0,
                     egui::Checkbox::new(
-                        &mut self.export_selected,
+                        &mut app.export_selected,
                         t!("export.selected_only", count = selected),
                     ),
                 )
                 .on_hover_text(t!("export.selected_only.tip"));
-                let fixed = self.export_selected;
+                let fixed = app.export_selected;
                 changed |= ui
                     .add_enabled(
                         !fixed,
                         egui::Checkbox::new(
-                            &mut self.cfg.export_visible_only,
+                            &mut app.cfg.export_visible_only,
                             t!("export.visible_only", visible = visible, total = total),
                         ),
                     )
                     .on_hover_text(t!("export.visible_only.tip"))
                     .changed();
                 // The criteria are not used while every visible row counts as highlighted.
-                ui.add_enabled_ui(!self.cfg.export_visible_only && !fixed, |ui| {
+                ui.add_enabled_ui(!app.cfg.export_visible_only && !fixed, |ui| {
                     changed |= ui
-                        .checkbox(&mut self.cfg.export_rules, t!("export.inc.rules"))
+                        .checkbox(&mut app.cfg.export_rules, t!("export.inc.rules"))
                         .changed();
                     changed |= ui
-                        .checkbox(&mut self.cfg.export_errors, t!("export.inc.errors"))
+                        .checkbox(&mut app.cfg.export_errors, t!("export.inc.errors"))
                         .changed();
                     changed |= ui
-                        .checkbox(&mut self.cfg.export_warnings, t!("export.inc.warnings"))
+                        .checkbox(&mut app.cfg.export_warnings, t!("export.inc.warnings"))
                         .changed();
                     changed |= ui
                         .add_enabled(
-                            self.search_re.is_some(),
+                            app.search_re.is_some(),
                             egui::Checkbox::new(
-                                &mut self.cfg.export_search,
+                                &mut app.cfg.export_search,
                                 t!("export.inc.search"),
                             ),
                         )
                         .changed();
                     changed |= ui
                         .checkbox(
-                            &mut self.cfg.export_bookmarks,
-                            t!("export.inc.bookmarks", count = self.bookmark_rows.len()),
+                            &mut app.cfg.export_bookmarks,
+                            t!("export.inc.bookmarks", count = app.bookmark_rows.len()),
                         )
                         .changed();
                 });
@@ -207,46 +207,46 @@ impl App {
                 ui.label(t!("export.format"));
                 changed |= ui
                     .radio_value(
-                        &mut self.cfg.export_format,
+                        &mut app.cfg.export_format,
                         ExportFormat::Original,
                         t!("export.format.original"),
                     )
                     .changed();
                 changed |= ui
                     .radio_value(
-                        &mut self.cfg.export_format,
+                        &mut app.cfg.export_format,
                         ExportFormat::Readable,
                         t!("export.format.readable"),
                     )
                     .changed();
                 changed |= ui
-                    .checkbox(&mut self.cfg.export_separators, t!("export.separators"))
+                    .checkbox(&mut app.cfg.export_separators, t!("export.separators"))
                     .changed();
                 ui.separator();
 
                 // --- Only records from a date/time on ---
-                let latest = self.latest_ts();
-                let example = self.input_dt(latest.as_deref().unwrap_or("2026-10-23 08:00:00.000"));
+                let latest = app.latest_ts();
+                let example = app.input_dt(latest.as_deref().unwrap_or("2026-10-23 08:00:00.000"));
                 ui.horizontal(|ui| {
                     changed |= ui
-                        .checkbox(&mut self.cfg.export_since_enabled, t!("export.since"))
+                        .checkbox(&mut app.cfg.export_since_enabled, t!("export.since"))
                         .changed();
                     changed |= ui
                         .add_enabled(
-                            self.cfg.export_since_enabled,
-                            egui::TextEdit::singleline(&mut self.cfg.export_since)
+                            app.cfg.export_since_enabled,
+                            egui::TextEdit::singleline(&mut app.cfg.export_since)
                                 .hint_text(t!("export.since.hint", example = example))
                                 .desired_width(190.0)
                                 .font(TextStyle::Monospace),
                         )
                         .changed();
                 });
-                if self.cfg.export_since_enabled {
+                if app.cfg.export_since_enabled {
                     let mut preset: Option<String> = None;
                     ui.horizontal_wrapped(|ui| {
-                        let sel_ts = self
+                        let sel_ts = app
                             .selected
-                            .and_then(|i| self.entries.get(i))
+                            .and_then(|i| app.entries.get(i))
                             .and_then(|e| e.timestamp())
                             .map(ms_to_iso);
                         if ui
@@ -275,18 +275,16 @@ impl App {
                         }
                     });
                     if let Some(iso) = preset {
-                        self.cfg.export_since = self.input_dt(&iso);
+                        app.cfg.export_since = app.input_dt(&iso);
                         changed = true;
                     }
                     if latest.is_none() {
                         ui.colored_label(ORANGE, t!("export.since.no_time"));
                     } else {
-                        match export::parse_datetime_input(
-                            &self.cfg.export_since,
-                            &self.date_format,
-                        ) {
+                        match export::parse_datetime_input(&app.cfg.export_since, &app.date_format)
+                        {
                             Some(iso) => {
-                                ui.weak(t!("export.since.parsed", time = self.input_dt(&iso)));
+                                ui.weak(t!("export.since.parsed", time = app.input_dt(&iso)));
                             }
                             None => {
                                 ui.colored_label(
@@ -301,12 +299,12 @@ impl App {
                 // --- Only the last N blocks ---
                 ui.horizontal(|ui| {
                     changed |= ui
-                        .checkbox(&mut self.cfg.export_last_enabled, t!("export.last"))
+                        .checkbox(&mut app.cfg.export_last_enabled, t!("export.last"))
                         .changed();
                     changed |= ui
                         .add_enabled(
-                            self.cfg.export_last_enabled,
-                            egui::DragValue::new(&mut self.cfg.export_last_blocks)
+                            app.cfg.export_last_enabled,
+                            egui::DragValue::new(&mut app.cfg.export_last_blocks)
                                 .range(1..=100_000),
                         )
                         .changed();
@@ -316,7 +314,7 @@ impl App {
                 ui.weak(t!("export.note"));
                 ui.add_space(4.0);
 
-                let plan = self.export_plan();
+                let plan = app.export_plan();
                 let since_invalid = plan.since_invalid;
                 let hits = plan.hits.len();
                 let blocks = plan.blocks;
@@ -331,8 +329,8 @@ impl App {
                 ui.horizontal(|ui| {
                     // A refresh read (almost always pending with auto refresh on) does not
                     // block the export: it works on the entries already in memory (#38).
-                    let reading = self.loading.as_ref().is_some_and(|l| l.full);
-                    let busy = self.export_job.is_some() || reading;
+                    let reading = app.loading.as_ref().is_some_and(|l| l.full);
+                    let busy = app.export_job.is_some() || reading;
                     if ui
                         .add_enabled(
                             rows > 0 && !busy,
@@ -342,7 +340,7 @@ impl App {
                     {
                         start = true;
                     }
-                    if self.export_job.is_some() {
+                    if app.export_job.is_some() {
                         ui.spinner();
                         ui.label(t!("export.running"));
                     } else if reading {
@@ -354,14 +352,14 @@ impl App {
                         ui.weak(t!("export.nothing"));
                     }
                 });
-            });
+            },
+        );
         if changed {
             self.cfg_dirty = true;
         }
         if start {
             self.start_export();
         }
-        self.show_export = open;
         if !open {
             // Ctrl+Shift+S opens the export with the criteria again.
             self.export_selected = false;

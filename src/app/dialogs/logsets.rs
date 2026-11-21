@@ -136,6 +136,7 @@ impl App {
         };
         self.start_set_check(&mut dlg);
         self.log_sets = Some(dlg);
+        self.log_sets_win.open();
     }
 
     /// Resolves the files of the chosen set for the chosen computer and checks them in a
@@ -221,21 +222,25 @@ impl App {
 
     pub(in crate::app) fn log_sets_window(&mut self, ctx: &egui::Context) {
         let Some(mut dlg) = self.log_sets.take() else {
+            self.log_sets_win.close();
             return;
         };
         dlg.poll_check(ctx);
-        let mut open = true;
         let (mut chosen, mut recheck, mut open_logs, mut close, mut own_folder) =
             (None, false, false, false, false);
         let mut guide: Option<String> = None;
         let lang = self.lang_code.clone();
         let recent = self.cfg.remote_computers.clone();
-        egui::Window::new(format!("📑 {}", t!("logset.title")))
-            .id(egui::Id::unique("logset_window"))
-            .open(&mut open)
-            .default_width(820.0)
-            .resizable(true)
-            .show(ctx, |ui| {
+        let spec = ToolSpec::new(
+            format!("📑 {}", t!("logset.title")),
+            [860.0, 520.0],
+            [560.0, 300.0],
+        );
+        let open = self.show_tool(
+            ctx,
+            |a| &mut a.log_sets_win,
+            spec,
+            |app, ui, _keep| {
                 ui.horizontal(|ui| {
                     ui.label(t!("logset.set"));
                     let label = |s: &LogSetDef| {
@@ -291,7 +296,7 @@ impl App {
                     };
                     ui.colored_label(ORANGE, text);
                 } else {
-                    self.set_rows(ui, &mut dlg);
+                    app.set_rows(ui, &mut dlg);
                 }
                 ui.separator();
                 let count = dlg
@@ -348,7 +353,8 @@ impl App {
                         ui.label(RichText::new(e).small().color(RED));
                     }
                 }
-            });
+            },
+        );
 
         if let Some(link) = guide {
             self.open_link(&link);
@@ -391,10 +397,13 @@ impl App {
             let set_name = dlg.set().map(|s| s.name(&self.lang_code));
             self.open_files(paths);
             self.set_name = set_name;
+            self.log_sets_win.close();
             return;
         }
         if open && !close {
             self.log_sets = Some(dlg);
+        } else {
+            self.log_sets_win.close();
         }
     }
 

@@ -12,11 +12,12 @@ impl App {
     }
 
     pub(in crate::app) fn help_window(&mut self, ctx: &egui::Context) {
-        egui::Window::new(t!("help.title"))
-            .id(egui::Id::unique("help_window"))
-            .open(&mut self.show_help)
-            .resizable(false)
-            .show(ctx, |ui| {
+        let spec = ToolSpec::new(t!("help.title"), [520.0, 620.0], [360.0, 240.0]);
+        self.show_tool(
+            ctx,
+            |a| &mut a.help_win,
+            spec,
+            |_app, ui, _keep| {
                 egui::Grid::new("keys").spacing([20.0, 4.0]).show(ui, |ui| {
                     for (k, d) in [
                         ("Ctrl+O", "help.open"),
@@ -56,18 +57,18 @@ impl App {
                 });
                 ui.separator();
                 ui.label(t!("help.open_hint"));
-            });
+            },
+        );
     }
 
     pub(in crate::app) fn about_window(&mut self, ctx: &egui::Context) {
         let mut copy = false;
-        egui::Window::new(t!("about.title"))
-            .id(egui::Id::unique("about_window"))
-            .default_width(480.0)
-            .open(&mut self.show_about)
-            .resizable(false)
-            .collapsible(false)
-            .show(ctx, |ui| {
+        let spec = ToolSpec::new(t!("about.title"), [560.0, 460.0], [380.0, 300.0]);
+        self.show_tool(
+            ctx,
+            |a| &mut a.about_win,
+            spec,
+            |_app, ui, _keep| {
                 ui.vertical_centered(|ui| {
                     ui.heading(RichText::new("RusTrace").size(26.0).strong());
                     ui.label(t!("about.version", version = VERSION));
@@ -124,7 +125,8 @@ impl App {
                         copy = true;
                     }
                 });
-            });
+            },
+        );
         if copy {
             self.info(t!("about.copied"));
         }

@@ -128,14 +128,14 @@ impl App {
                 format!("0x{v:08X}")
             };
         }
-        self.show_lookup = true;
+        self.lookup_win.open();
         self.lookup_focus = true;
     }
 
     /// Opens the error code lookup with a text, e.g. "HTTP 404.3".
     pub(in crate::app) fn open_lookup_text(&mut self, text: String) {
         self.lookup_input = text;
-        self.show_lookup = true;
+        self.lookup_win.open();
         self.lookup_focus = true;
     }
 

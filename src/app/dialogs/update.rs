@@ -49,7 +49,7 @@ impl App {
                         if silent && !(newer && u.latest.version != self.cfg.update_skipped) {
                             UpdateState::Idle
                         } else {
-                            self.show_update = true;
+                            self.update_win.open();
                             UpdateState::Checked(u)
                         }
                     }
@@ -244,23 +244,23 @@ impl App {
 
     /// Help → Check for updates.
     pub(in crate::app) fn update_window(&mut self, ctx: &egui::Context) {
-        if !self.show_update {
+        if !self.update_win.is_open() {
             return;
         }
         let installing = matches!(self.update, UpdateState::Installing { .. });
-        let mut open = true;
         let mut action = None;
         let mut auto_changed = false;
-        egui::Window::new(t!("update.title"))
-            .id(egui::Id::unique("update_window"))
-            .open(&mut open)
-            .resizable(false)
-            .collapsible(false)
-            .default_width(520.0)
-            .show(ctx, |ui| {
+        // The window stays open while the update is being installed.
+        self.update_win.locked = installing;
+        let spec = ToolSpec::new(t!("update.title"), [600.0, 520.0], [420.0, 260.0]);
+        self.show_tool(
+            ctx,
+            |a| &mut a.update_win,
+            spec,
+            |app, ui, _keep| {
                 ui.label(t!("update.current", version = update::current_version()));
                 ui.add_space(6.0);
-                match &self.update {
+                match &app.update {
                     UpdateState::Idle => {}
                     UpdateState::Checking { .. } => {
                         ui.horizontal(|ui| {
@@ -376,7 +376,7 @@ impl App {
                 ui.add_space(6.0);
                 ui.horizontal(|ui| {
                     let busy = matches!(
-                        self.update,
+                        app.update,
                         UpdateState::Checking { .. } | UpdateState::Installing { .. }
                     );
                     if ui
@@ -394,16 +394,15 @@ impl App {
                     ui.label(t!("update.when"));
                     for when in UpdateCheck::ALL {
                         auto_changed |= ui
-                            .radio_value(&mut self.cfg.update_when, when, when.label())
+                            .radio_value(&mut app.cfg.update_when, when, when.label())
                             .changed();
                     }
                 });
-            });
+            },
+        );
         if auto_changed {
             self.cfg_dirty = true;
         }
-        // The window stays open while the update is being installed.
-        self.show_update = open || installing;
         match action {
             Some(UpdateAction::Install(r)) => self.start_install(r),
             Some(UpdateAction::Check) => self.start_update_check(false),
@@ -411,9 +410,9 @@ impl App {
                 self.cfg.update_skipped = v;
                 self.cfg_dirty = true;
                 self.update_available = None;
-                self.show_update = false;
+                self.update_win.close();
             }
-            Some(UpdateAction::Close) => self.show_update = false,
+            Some(UpdateAction::Close) => self.update_win.close(),
             None => {}
         }
     }

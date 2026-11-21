@@ -5,19 +5,18 @@ use crate::app::*;
 impl App {
     /// Help → Set as default app: registers RusTrace for .log / .lo_ files (per user).
     pub(in crate::app) fn assoc_window(&mut self, ctx: &egui::Context) {
-        let Some(info) = &self.assoc else {
+        let Some(info) = self.assoc.take() else {
+            self.assoc_win.close();
             return;
         };
-        let mut open = true;
         let mut action = None;
         let mut settings_err = None;
-        egui::Window::new(t!("assoc.title"))
-            .id(egui::Id::unique("assoc_window"))
-            .open(&mut open)
-            .resizable(false)
-            .collapsible(false)
-            .default_width(520.0)
-            .show(ctx, |ui| {
+        let spec = ToolSpec::new(t!("assoc.title"), [560.0, 320.0], [400.0, 220.0]);
+        let open = self.show_tool(
+            ctx,
+            |a| &mut a.assoc_win,
+            spec,
+            |_app, ui, _keep| {
                 ui.add(egui::Label::new(t!("assoc.intro")).wrap());
                 ui.add_space(6.0);
                 egui::Grid::new("assoc_grid")
@@ -78,7 +77,8 @@ impl App {
                 }
                 ui.add_space(4.0);
                 ui.weak(t!("assoc.move_hint"));
-            });
+            },
+        );
         match action {
             Some(true) => {
                 let res = fileassoc::register(&t!("assoc.type_name"));
@@ -104,7 +104,10 @@ impl App {
         } else if action.is_some() {
             Some(fileassoc::info())
         } else {
-            self.assoc.take()
+            Some(info)
         };
+        if self.assoc.is_none() {
+            self.assoc_win.close();
+        }
     }
 }

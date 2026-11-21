@@ -113,7 +113,7 @@ impl App {
                         .on_hover_text(t!("status.bookmarks.tip", count = self.bookmark_rows.len()))
                         .clicked()
                     {
-                        self.show_bookmarks = true;
+                        self.bookmarks_win.open();
                     }
                     ui.separator();
                 }
@@ -159,7 +159,7 @@ impl App {
                     .on_hover_text(t!("update.available", version = version))
                     .clicked()
                 {
-                    self.show_update = true;
+                    self.update_win.open();
                     if matches!(self.update, UpdateState::Idle | UpdateState::Failed(_)) {
                         self.update = UpdateState::Checked(u.clone());
                     }

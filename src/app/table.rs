@@ -698,7 +698,7 @@ impl App {
                 RowAction::CopyOriginal => self.copy_original(),
                 RowAction::ExportSelected => {
                     self.export_selected = true;
-                    self.show_export = true;
+                    self.export_win.open();
                 }
                 RowAction::ExportSelectedTable => {
                     self.open_table_export(Some(crate::tabexport::Scope::Selected))

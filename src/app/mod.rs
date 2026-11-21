@@ -275,7 +275,7 @@ pub struct App {
     bookmark_rows: Vec<usize>,
     bookmarks_gen: u64,
     bookmarks_only: bool,
-    show_bookmarks: bool,
+    bookmarks_win: ToolWindow,
     /// Files of the view before it was opened again; the next full read moves the bookmarks to
     /// the new file ids.
     bookmark_files: Option<Vec<SourceFile>>,
@@ -302,15 +302,16 @@ pub struct App {
     rules_export_pick: Option<Vec<bool>>,
     /// Result of the last import / export, shown at the bottom of the rules window (#51).
     rules_msg: Option<String>,
-    show_colors: bool,
-    show_help: bool,
-    show_about: bool,
+    colors_win: ToolWindow,
+    help_win: ToolWindow,
+    about_win: ToolWindow,
     /// Default app window (Windows); the state is read when the window opens.
     #[cfg(windows)]
     assoc: Option<fileassoc::Info>,
+    assoc_win: ToolWindow,
     /// New / changed predefined log definitions since the version the user has seen.
     def_updates: Vec<logdef::DefUpdate>,
-    show_def_updates: bool,
+    def_updates_win: ToolWindow,
     /// Texts of the predefined and own definitions (for the notice above).
     predefined_defs: std::collections::BTreeMap<String, String>,
     own_defs: std::collections::BTreeMap<String, (PathBuf, String)>,
@@ -324,7 +325,7 @@ pub struct App {
     /// Raw line(s) of the selected row read from the file: (entry, data generation, text or
     /// why it is not available).
     raw_cache: Option<(usize, u64, Result<Arc<str>, String>)>,
-    show_lookup: bool,
+    lookup_win: ToolWindow,
     lookup_input: String,
     lookup_focus: bool,
     /// Lookup input → (error code, HTTP status) – see `httpstatus::lookup_input`.
@@ -346,7 +347,7 @@ pub struct App {
     data_gen: u64,
     rules_gen: u64,
     search_gen: u64,
-    show_export: bool,
+    export_win: ToolWindow,
     /// The export uses the selected rows as the highlighted rows (row context menu).
     export_selected: bool,
     /// Cached highlighted entry indexes for the export: (key, hits).
@@ -354,7 +355,7 @@ pub struct App {
     /// Export running in a background thread; the result is a status message.
     export_job: Option<mpsc::Receiver<Result<String, String>>>,
     /// Table export (#32): window, column choice of the open log type, running export.
-    show_table_export: bool,
+    table_export_win: ToolWindow,
     table_export_cols: Option<ColumnChoice>,
     table_export_job: Option<TableExportJob>,
     /// The file of the last table export (open / show in folder / copy path).
@@ -395,7 +396,7 @@ pub struct App {
     /// Frames drawn so far (up to 2): the start-up splash closes once the window shows.
     frames: u8,
     update: UpdateState,
-    show_update: bool,
+    update_win: ToolWindow,
     /// The releases newer than this program, when there are any (status bar button).
     update_available: Option<Updates>,
     /// Selection and column filters of the previous version, applied after the first read.
@@ -404,6 +405,7 @@ pub struct App {
     cli_select: Option<CliSelect>,
     /// File → Open log set window (#27), `None` = closed.
     log_sets: Option<dialogs::logsets::LogSetDialog>,
+    log_sets_win: ToolWindow,
 }
 
 /// Limits of Ctrl + mouse wheel zoom.
@@ -504,7 +506,7 @@ impl App {
             bookmark_rows: Vec::new(),
             bookmarks_gen: 0,
             bookmarks_only: false,
-            show_bookmarks: false,
+            bookmarks_win: ToolWindow::new("bookmarks_window"),
             bookmark_files: None,
             time_ref: None,
             overview: Default::default(),
@@ -518,13 +520,14 @@ impl App {
             rules_was_open: false,
             rules_export_pick: None,
             rules_msg: None,
-            show_colors: false,
-            show_help: false,
-            show_about: false,
+            colors_win: ToolWindow::new("colors_window"),
+            help_win: ToolWindow::new("help_window"),
+            about_win: ToolWindow::new("about_window"),
             #[cfg(windows)]
             assoc: None,
+            assoc_win: ToolWindow::new("assoc_window"),
             def_updates: Vec::new(),
-            show_def_updates: false,
+            def_updates_win: ToolWindow::new("defupd_window"),
             predefined_defs: Default::default(),
             own_defs: Default::default(),
             focus_search: false,
@@ -532,7 +535,7 @@ impl App {
             set_name: None,
             code_cache: None,
             raw_cache: None,
-            show_lookup: false,
+            lookup_win: ToolWindow::new("lookup_window"),
             lookup_input: String::new(),
             lookup_focus: false,
             lookup_cache: None,
@@ -545,11 +548,11 @@ impl App {
             data_gen: 0,
             rules_gen: 0,
             search_gen: 0,
-            show_export: false,
+            export_win: ToolWindow::new("export_window"),
             export_selected: false,
             export_hits: None,
             export_job: None,
-            show_table_export: false,
+            table_export_win: ToolWindow::new("table_export_window"),
             table_export_cols: None,
             table_export_job: None,
             table_export_last: None,
@@ -574,11 +577,12 @@ impl App {
             table_width: 0.0,
             frames: 0,
             update: UpdateState::Idle,
-            show_update: false,
+            update_win: ToolWindow::new("update_window"),
             update_available: None,
             pending_restore: None,
             cli_select: None,
             log_sets: None,
+            log_sets_win: ToolWindow::new("logsets_window"),
         };
         app.load_defs();
         app.check_def_updates();
@@ -698,7 +702,7 @@ impl eframe::App for App {
     fn ui(&mut self, ui: &mut egui::Ui, _frame: &mut eframe::Frame) {
         let ctx = ui.ctx().clone();
         self.dark = ui.visuals().dark_mode;
-        if !self.rules_win.is_open() && !self.show_colors {
+        if !self.rules_win.is_open() && !self.colors_win.is_open() {
             // Editors open with the colors of the theme in use.
             self.edit_dark = self.dark;
         }

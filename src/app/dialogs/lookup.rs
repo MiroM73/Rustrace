@@ -4,50 +4,53 @@ use crate::app::*;
 
 impl App {
     pub(in crate::app) fn lookup_window(&mut self, ctx: &egui::Context) {
-        let mut open = self.show_lookup;
-        egui::Window::new(format!("🔎 {}", t!("lookup.title")))
-            .id(egui::Id::unique("lookup_window"))
-            .open(&mut open)
-            .resizable(true)
-            .default_width(560.0)
-            .show(ctx, |ui| {
+        let spec = ToolSpec::new(
+            format!("🔎 {}", t!("lookup.title")),
+            [560.0, 420.0],
+            [380.0, 200.0],
+        );
+        self.show_tool(
+            ctx,
+            |a| &mut a.lookup_win,
+            spec,
+            |app, ui, _keep| {
                 ui.horizontal(|ui| {
                     ui.label(t!("lookup.code"));
                     let r = ui.add(
-                        egui::TextEdit::singleline(&mut self.lookup_input)
+                        egui::TextEdit::singleline(&mut app.lookup_input)
                             .hint_text("0x80070005, -2147024891, 1603, 404.3, HTTP 500 …")
                             .desired_width(280.0)
                             .font(TextStyle::Monospace),
                     );
-                    if self.lookup_focus {
+                    if app.lookup_focus {
                         r.request_focus();
-                        self.lookup_focus = false;
+                        app.lookup_focus = false;
                     }
-                    if !self.lookup_input.is_empty() && ui.small_button("✖").clicked() {
-                        self.lookup_input.clear();
+                    if !app.lookup_input.is_empty() && ui.small_button("✖").clicked() {
+                        app.lookup_input.clear();
                     }
                 });
                 ui.separator();
 
-                let input = self.lookup_input.trim().to_owned();
+                let input = app.lookup_input.trim().to_owned();
                 if input.is_empty() {
                     ui.weak(t!("lookup.hint"));
                     return;
                 }
-                if self
+                if app
                     .lookup_cache
                     .as_ref()
                     .is_none_or(|(k, _, _)| *k != input)
                 {
                     // `404.3` / `HTTP 500` = HTTP only, plain `404` = both (#28).
                     let (http, code) = httpstatus::lookup_input(&input);
-                    self.lookup_cache = Some((
+                    app.lookup_cache = Some((
                         input.clone(),
                         code.map(errcodes::lookup),
                         http.map(|q| httpstatus::describe(q.status, q.substatus)),
                     ));
                 }
-                let Some((_, code, http)) = &self.lookup_cache else {
+                let Some((_, code, http)) = &app.lookup_cache else {
                     return;
                 };
                 match (code, http) {
@@ -64,8 +67,8 @@ impl App {
                         }
                     }
                 }
-            });
-        self.show_lookup = open;
+            },
+        );
     }
 }
 
