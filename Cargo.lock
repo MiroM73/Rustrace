@@ -3124,6 +3124,7 @@ dependencies = [
  "memchr",
  "memmap2",
  "open",
+ "raw-window-handle",
  "regex",
  "rfd",
  "serde",

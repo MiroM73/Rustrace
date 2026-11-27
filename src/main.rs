@@ -33,6 +33,8 @@ mod store;
 mod tabexport;
 mod timefmt;
 mod update;
+#[cfg(any(windows, test))]
+mod winfit;
 
 use std::cell::Cell;
 use std::panic::AssertUnwindSafe;
@@ -131,6 +133,17 @@ fn run(renderer: eframe::Renderer, startup: Startup, created: &Cell<bool>) -> ef
         options,
         Box::new(move |cc| {
             created.set(true);
+            // The window is not shown yet. A maximized one (restored after an update) is
+            // maximized only when shown and must not be resized before that (#74).
+            #[cfg(windows)]
+            if !startup
+                .restore
+                .as_ref()
+                .and_then(|s| s.window.as_ref())
+                .is_some_and(|w| w.maximized)
+            {
+                winfit::fit_to_work_area(cc);
+            }
             Ok(Box::new(app::App::new(
                 cc,
                 startup.paths,

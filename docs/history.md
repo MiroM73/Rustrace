@@ -475,12 +475,17 @@ Notes for Claude, linked from `CLAUDE.md`.
     and tests on Windows; in WSL Ubuntu with a temporary Rust 1.100.0 (the version of the failing
     CI run) Linux clippy and tests (170 passed, 6 ignored). The GitHub workflow itself runs after
     the push.
-104. #74 View menu cut off on a small display (*Log format* and *Language* unreachable): the
-    contents of File, View, Help and their submenus now scroll when they do not fit the window
-    (`scrolled_menu` in `app/menu.rs`); the owner chose scrolling over restructuring the menu.
-    Verified in the release build with windows 1000×520 and 1000×300 (View scrolled to the end,
-    Log format scrolled, Language, Recent files and Guides open, a reopened menu starts at the top)
-    and 1200×900 (no scroll bar, as before).
+104. #74 View menu cut off on a small display (*Log format* and *Language* unreachable). Two
+    causes, two commits; the owner chose both solutions. (a) A window lower than a menu: the
+    contents of File, View, Help and their submenus scroll when they do not fit
+    (`scrolled_menu` in `app/menu.rs`; chosen over restructuring the menu). (b) The case of the
+    issue screenshot: the window opened reaching under the taskbar, where the menu still "fits" the
+    window – the new `src/winfit.rs` places the window above the taskbar at start-up. Verified in
+    the release build on 2560×1440 at 100 %: menus in windows 1000×520 / 1000×300 / 1200×900;
+    window placement for a normal start and for `--restore` states under the taskbar, larger than
+    the screen, off the right edge, fitting, snapped left and maximized (the 1 px window border
+    may still touch the taskbar), and the issue's case through the start-up path: the View menu is
+    complete above the taskbar. Not tried on a really scaled display (125 / 150 %).
 
 ## Ideas not done yet (offered by the owner)
 - `--set "<name>"` command-line option for log sets (#27): would need the set loading, the file

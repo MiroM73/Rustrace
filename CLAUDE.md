@@ -64,8 +64,9 @@ Feature index (file → section of `docs/architecture.md`):
 ## Code layout
 - `src/main.rs` – window start-up, command line (parsed by `src/cli.rs`), renderer choice,
   start-up splash.
-- `src/splash.rs`, `src/icon.rs`, `build.rs`, `src/fileassoc.rs` – Windows-specific parts
-  (details: `docs/architecture.md` → Windows modules).
+- `src/splash.rs`, `src/icon.rs`, `build.rs`, `src/fileassoc.rs`, `src/winfit.rs` (window above
+  the taskbar at start-up) – Windows-specific parts (details: `docs/architecture.md` → Windows
+  modules).
 - `src/app/` – the whole UI (`App`), split by area (#19): `mod.rs` holds the `App` struct, its
   helper types/consts, `App::new` and the frame loop; every other file is an `impl App` block for
   one area. Conventions: each submodule starts with `use crate::app::*;` (gets the parent's
@@ -103,7 +104,7 @@ Feature index (file → section of `docs/architecture.md`):
   `egui::MenuBar::new().ui(..)`, `ui.close()`, `egui::Id::unique(..)` (not `Id::new`).
 
 ## Commands
-- `cargo build --release` → `target\release\rustrace.exe`; `cargo test` (182 tests; what they
+- `cargo build --release` → `target\release\rustrace.exe`; `cargo test` (186 tests; what they
   cover: `docs/architecture.md` → Tests and benchmarks).
 - `cargo fmt` + `cargo clippy --all-targets --locked -- -D warnings` – the code is rustfmt-clean and
   clippy-clean; CI (`.github/workflows/ci.yml`) fails otherwise. Formatting-only commits go into

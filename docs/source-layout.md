@@ -58,6 +58,7 @@ What every source file and folder of the repository contains.
   installation over the running program, state for the restart (+ tests)
 - `src/http.rs` – HTTPS download via WinHTTP (system proxy and certificates)
 - `src/splash.rs` – start-up window with a rotating ring of dots (Windows, Win32 / GDI)
+- `src/winfit.rs` – the main window is placed above the taskbar at start-up (Windows, + tests)
 - `src/icon.rs` – the program icon drawn in code (window, start-up window, `.ico` for `build.rs`)
 - `build.rs` – embeds the icon and the version information into `rustrace.exe` (Windows)
 - `lang/*.lang` – built-in translations

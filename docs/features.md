@@ -402,6 +402,11 @@ and a rotating ring of dots) shows that the program is starting, until the main 
 creating the graphics context can take a moment, especially on the first start after boot. It
 follows the theme from the settings (or the Windows theme).
 
+The main window always opens **above the taskbar** (Windows): when it would not fit on the screen –
+a small display or a large display scaling – it is moved and, if needed, made smaller. This also
+applies to the window restored after an update (a window stretched over two screens goes to one of
+them); a maximized window stays maximized. Moving or resizing the window later is not restricted.
+
 The window title starts with the program name and version (#65), then the **full path** of the
 log: `RusTrace 1.1.9 – F:\Logs\iis\u_ex261023.log`. With several logs open (merged view, log set)
 it lists their file names after the number of logs: `RusTrace 1.1.9 – [2 logs] ccmexec.log +

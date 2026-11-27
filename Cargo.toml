@@ -24,6 +24,10 @@ flate2 = "1"
 crc32fast = "1"
 memchr = "2"
 
+[target.'cfg(windows)'.dependencies]
+# The handle of the main window, to keep it above the taskbar (already used by eframe).
+raw-window-handle = "0.6"
+
 [profile.release]
 opt-level = 3
 lto = "thin"
