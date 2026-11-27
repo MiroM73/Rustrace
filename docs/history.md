@@ -470,6 +470,11 @@ Notes for Claude, linked from `CLAUDE.md`.
 100. #71 *Only highlighted rows* filter (toolbar 🖍 Highlighted / View menu): `FilterSpec::rules` + `RuleMatcher` in `filter.rs`, replaces the severity toggles while on; kept by the update restart. Test `rules_filter_ignores_severity_toggles`. Next: rule sets (#70), then "only the active set".
 101. #70 Highlight rule sets: `Config::rule_sets` (nested, migration of the old flat list into "Default"), switch / binding to log definitions (`RuleSet::is_active`, `App::rules_for_open_logs`), new / rename / duplicate / delete, import / export of set files (`src/rulesets.rs`, `.rules`), 3 built-in sets (`rulesets/`, embedded only), rule set bar in `dialogs/ruleset.rs`. `--export` honours the binding. Not looked at by eye in the running window (only started with the migrated settings). Follow-up (owner's GUI check): the 🔗 binding menu stays open while ticking (`CloseOnClickOutside`); `to_value` also writes the legacy `rules` key for older versions; the severity rules of a newly bound set are applied on the reader thread (measured 0.2 s / 965 k entries, 0.4 s / 1.9 M; was a UI-thread pass + filter restart). Ideas left: select a single rule / set for the #71 filter, ship `rulesets/` next to the exe.
 102. Release v1.5.0 (#70 highlight rule sets, #71 only highlighted rows). Published by Claude at the owner's request with `release.ps1 1.5.0 -Publish -Yes`; release notes set with `gh release edit`.
+103. #80 Linux CI repaired: since #69 the `App::assoc_win` field was unused outside Windows and
+    clippy failed with `dead_code`; it is now `#[cfg(windows)]` like `App::assoc`. Verified: clippy
+    and tests on Windows; in WSL Ubuntu with a temporary Rust 1.100.0 (the version of the failing
+    CI run) Linux clippy and tests (170 passed, 6 ignored). The GitHub workflow itself runs after
+    the push.
 
 ## Ideas not done yet (offered by the owner)
 - `--set "<name>"` command-line option for log sets (#27): would need the set loading, the file

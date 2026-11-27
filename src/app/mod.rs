@@ -326,6 +326,7 @@ pub struct App {
     /// Default app window (Windows); the state is read when the window opens.
     #[cfg(windows)]
     assoc: Option<fileassoc::Info>,
+    #[cfg(windows)]
     assoc_win: ToolWindow,
     /// New / changed predefined log definitions since the version the user has seen.
     def_updates: Vec<logdef::DefUpdate>,
@@ -554,6 +555,7 @@ impl App {
             about_win: ToolWindow::new("about_window"),
             #[cfg(windows)]
             assoc: None,
+            #[cfg(windows)]
             assoc_win: ToolWindow::new("assoc_window"),
             def_updates: Vec::new(),
             def_updates_win: ToolWindow::new("defupd_window"),
