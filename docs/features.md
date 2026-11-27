@@ -17,7 +17,8 @@ Everything RusTrace can do, area by area.
   plain text + a CMTrace log). CMTrace logs and log definitions always keep their columns
 - **any other layout described by a log definition** – built in: **IIS web logs** (W3C),
   **Exchange Transport Connectivity logs**, **dism.log**, **CBS.log**, **Windows Installer verbose
-  logs**, Windows Update **ReportingEvents.log**; your own in `logdef\*.def` (see [Log definitions](log-definitions.md))
+  logs**, Windows Update **ReportingEvents.log** and the log of **Get-WindowsUpdateLog**,
+  **Zscaler Client Connector tunnel logs**; your own in `logdef\*.def` (see [Log definitions](log-definitions.md))
 - encodings UTF-8, UTF-16 LE/BE (by BOM), ANSI (Windows-1250)
 
 ## Several logs in one view, sorted by time

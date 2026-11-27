@@ -20,11 +20,13 @@ Server Transport Connectivity logs `CONNECTLOG*.LOG`, comma-separated W3C-like f
 line, so the rows are placed at their real time in a merged view; columns MSI context `s` / `c`,
 process:thread, message; errors are only the real failures – `Return value 3`, `Error 1722.`,
 `returned actual error code 1603`, `@@ERR:`, *Installation failed*, `error status: 1603` – not the
-harmless `Note: 1: 2205 2:  3: Error` lines or `error status: 0`; `Return value 2` = warning) and
+harmless `Note: 1: 2205 2:  3: Error` lines or `error status: 0`; `Return value 2` = warning),
 `reportingevents.log.def` (Windows Update `C:\Windows\SoftwareDistribution\ReportingEvents.log`:
 columns Date / time, Status, Event, Category, HRESULT, Message, Application, Update ID, then the
 event instance ID, namespace, source, revision and correlation vector; status *Failure* = error, a
-cancelled download = warning; the HRESULT, e.g. `80073d02`, is explained like an error code).
+cancelled download = warning; the HRESULT, e.g. `80073d02`, is explained like an error code),
+`wu.log.def` (see [Windows Update log](#windows-update-log-get-windowsupdatelog)) and
+`zsatunnel.log.def` (see [Zscaler Client Connector](#zscaler-client-connector-tunnel-log)).
 
 **Choosing the format** – View → Log format:
 - **Automatic** (default for every opened file): a definition whose `files` patterns match the file
@@ -102,3 +104,31 @@ title.severity = Level
 Columns not used by a role (e.g. IIS `sc-status`, `c-ip`, DISM `function`) are **extra columns**:
 they are shown in the table and the details pane, searched by the search box and by highlight rules
 with "Also component", and appended to the readable export.
+
+## Windows Update log (Get-WindowsUpdateLog)
+
+Windows 10 and later write the Windows Update log as binary traces; the PowerShell command
+`Get-WindowsUpdateLog` merges them into a text file (by default `WindowsUpdate.log` on the
+desktop, `-LogPath` chooses another one). `wu.log.def` is used for `wu.log`,
+`WindowsUpdate*.log` and any file with such lines.
+
+- Columns: Date / Time, PID, TID, Component, Message.
+- The date is recognized with `.`, `. `, `/` or `-` between its parts – it depends on the regional
+  settings of the computer that created the file.
+- The log has no severity column. A message starting with `*FAILED*` is an **error**; a failure
+  code given as `hr = 0x8…`, `error code = 0x8…` or `failed, 0x8…`, or the word *warning*, is a
+  **warning**. The words *error* and *failed* alone do not count – normal lines such as
+  `… and error 0` or `failed = 0` contain them.
+- The code of `*FAILED* [80240013]` is explained in the details pane like an error code.
+
+The file `C:\Windows\WindowsUpdate.log` of Windows 10 and later only says to run the command;
+its lines (and the tab-separated logs of Windows 7) are shown as plain rows.
+
+## Zscaler Client Connector tunnel log
+
+`zsatunnel.log.def` is used for `ZSATunnel*.log` (e.g. `ZSATunnel_2026-10-06-09-05-49.886487.log`;
+unpack zipped older logs first). Columns: Date / time, UTC offset, Level, Process ID, Thread ID,
+Message. The time is shown as written (the UTC offset is not converted). `ERR` and `FTL` are errors,
+`WAR` / `WRN` warnings; lines without a time belong to the entry above them. Other logs of the
+client with the same layout (e.g. `ZSAService`, `ZSAUpm`) are recognized by their content and shown
+with the same definition. Zscaler itself writes some harmless events as `ERR`.

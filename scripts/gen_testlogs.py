@@ -209,6 +209,89 @@ def exchange_connect_lines(r, count, start=DAY):
         yield f"{when:%Y-%m-%dT%H:%M:%S}.{when.microsecond // 1000:03d}Z,{session},SMTP,{host},{d},{desc}"
 
 
+def guid(r):
+    return "%08X-%04X-%04X-%04X-%012X" % (r.getrandbits(32), r.getrandbits(16), r.getrandbits(16),
+                                          r.getrandbits(16), r.getrandbits(48))
+
+
+def wu_lines(r, count, date_format="%Y. %m. %d", start=DAY):
+    """Log of Get-WindowsUpdateLog; the date separator follows the regional settings."""
+    when = start + dt.timedelta(hours=8)
+    pids = [(r.randint(500, 40000), [r.randint(500, 40000) for _ in range(4)]) for _ in range(5)]
+    for _ in range(count):
+        when += dt.timedelta(microseconds=r.randint(10, 900000))
+        pid, tids = r.choice(pids)
+        k = r.random()
+        comp = r.choice(["Agent", "Agent", "DownloadManager", "Misc", "ComApi", "SLS", "Handler",
+                         "IdleTimer", "ProtocolTalker", "Deployment", "Shared", "DataStore", "Reporter"])
+        code = r.choice(["80070032", "80240013", "8024000C", "80072EE2", "8024402C", "80070005"])
+        if k < 0.04:
+            msg = r.choice([f"*FAILED* [{code}] Method failed [CAgentServiceManager::DelayedInit:2678]",
+                            f"*FAILED* [{code}] m_services.Add()",
+                            f"*FAILED* [{code}] LoadHistoryEventFromRegistry completed"])
+        elif k < 0.05:
+            comp, msg = "DownloadManager", (f"DO job {{{guid(r)}}} 403'd, updateId = {guid(r)}.1, "
+                                            "hr = 0x80190193, BG_ERROR_CONTEXT = 5")
+        elif k < 0.06:
+            comp, msg = "Handler", ("ResetPendingBlocks: Directory C:\\WINDOWS\\SoftwareDistribution\\Download\\"
+                                    f"{r.getrandbits(64):016x} failed, 0x80070002 ")
+        elif k < 0.15:
+            comp, msg = "Agent", (f"Deploy call {guid(r)} : Callback to client with code "
+                                  "Call progress and error 0 ")
+        elif k < 0.17:
+            comp, msg = "ComApi", ("Download call complete (succeeded = 1, succeeded with errors = 0, "
+                                   "failed = 0, cancelled = 0, unaccounted = 0)")
+        elif k < 0.19:
+            comp, msg = "ComApi", (f"* START *   Search ClientId = <<PROCESS>>: taskhostw.exe, "
+                                   f"ServiceId = {guid(r)}, Flags: 0 (cV = {r.getrandbits(64):016x}.1.0.0)")
+        elif k < 0.21:
+            comp, msg = "Shared", r.choice(["Network state: Connected", "Power status changed",
+                                            "UpdateNetworkState Ipv4, cNetworkInterfaces = 1."])
+        else:
+            msg = f"{words(r, 1).capitalize()} {words(r, r.randint(3, 10))}"
+        yield (f"{when.strftime(date_format)} {when:%H:%M:%S}.{when.microsecond:06d}{r.randint(0, 9)} "
+               f"{pid:<5} {r.choice(tids):<5} {comp:<15} {msg}")
+
+
+def zsa_lines(r, count, start=DAY):
+    """Zscaler Client Connector tunnel log (synthetic, modelled on published example lines)."""
+    when = start + dt.timedelta(hours=8)
+    pid = r.randint(4000, 30000)
+    tids = [r.randint(4000, 40000) for _ in range(8)]
+    for _ in range(count):
+        when += dt.timedelta(microseconds=r.randint(10, 1500000))
+        k = r.random()
+        ip = f"165.225.{r.randint(0, 255)}.{r.randint(1, 254)}"
+        n = r.randint(1, 900)
+        if k < 0.03:
+            level, msg = "ERR", r.choice(["ZPD: Failed to download UPM policy.",
+                                          "ZUIfaceChangeMonitor::getAdapterDetails: Failed to get interface info",
+                                          "readFromServer failed (Connection reset by peer)",
+                                          "Server Read Failed!",
+                                          "Default Interface Gateway is: 10.0.0.1"])
+        elif k < 0.07:
+            level, msg = "WAR", f"ZPHM: ID={n}, Source port not available"
+        elif k < 0.08:
+            level, msg = "ERR", ("Tunnel state change: TUNNEL_FORWARDING -> "
+                                 + r.choice(["ADAPTER_DOWN_ERROR", "SERVER_DOWN_ERROR", "FIREWALL_BLOCK_ERROR"]))
+        elif k < 0.10:
+            # a record spread over several lines
+            level, msg = "DBG", (f"ZPHM: onProxyHealthResult:\n    IP: [{ip}] Port: [443]\n"
+                                 f"    millis: {r.randint(20, 900)}")
+        elif k < 0.35:
+            level, msg = "DBG", r.choice([f"ZPHM: ID={n}, removeBypassAndCloseSocket", f"ZPHM: ID={n}, Destroy",
+                                          f"ZPHM: ID={n}, Skipping Bind in non tunnel mode.",
+                                          "Both client and server sockets are closed",
+                                          "getFilter: got no filters"])
+        else:
+            level, msg = "INF", r.choice(["ZPHM Good health", f"ZPHM: ID={n}, HTTP Response code=200",
+                                          f"ZPHM: onProxyHealthResult: [IP: [{ip}] Port: [443]] = millis:{n}",
+                                          "getSmeProxyState: TUNNEL_FORWARDING", "Pac parse success!",
+                                          "serviceControllerHandler: service status: 13",
+                                          "Sending NXDOMAIN for name: wpad."])
+        yield f"{when:%Y-%m-%d %H:%M:%S}.{when.microsecond:06d}(+0100)[{pid}:{r.choice(tids)}] {level} {msg}"
+
+
 # ----------------------------------------------------------------------
 
 def small(r):
@@ -253,6 +336,11 @@ def small(r):
     write(ROOT / "iis" / "webserver-access.txt", iis_lines(r, 300))  # detected by content, not by name
     write(ROOT / "exchange" / "CONNECTLOG2026102300-1.LOG", exchange_connect_lines(r, 2000))
     write(ROOT / "exchange" / "transport-connectivity.txt", exchange_connect_lines(r, 300))  # by content
+    # Windows Update (Get-WindowsUpdateLog) and Zscaler Client Connector
+    write(ROOT / "windowsupdate" / "wu.log", wu_lines(r, 3000))
+    write(ROOT / "windowsupdate" / "wu-slash-dates.txt", wu_lines(r, 300, "%Y/%m/%d"))  # by content
+    write(ROOT / "zscaler" / "ZSATunnel_2026-10-23-08-00-00.000000.log", zsa_lines(r, 3000))
+    write(ROOT / "zscaler" / "tunnel-export.txt", zsa_lines(r, 300))  # by content
     # Rotation: service.log + older parts (by modification time)
     rot = ROOT / "rotation"
     parts = [("service-20261023-080000.log", 180), ("service-20261023-090000.log", 120),
@@ -289,6 +377,14 @@ iis/u_ex261023.log                IIS W3C, a second #Fields header with fewer co
 iis/webserver-access.txt          IIS W3C detected by content (the name matches no definition)
 exchange/CONNECTLOG2026102300-1.LOG  Exchange Transport Connectivity log (comma-separated W3C, quoted values)
 exchange/transport-connectivity.txt  the same format detected by content
+windowsupdate/wu.log              Windows Update log definition (Get-WindowsUpdateLog layout, "2026. 10. 23"
+                                  dates, *FAILED* errors, HRESULT warnings, normal "error 0" lines)
+windowsupdate/wu-slash-dates.txt  the same with "2026/10/23" dates, detected by content
+windowsupdate/WindowsUpdate.log   NOT made by the script: a real log of a PC, if you create it with
+                                  Get-WindowsUpdateLog -LogPath testlogs\\windowsupdate\\WindowsUpdate.log
+zscaler/ZSATunnel_*.log           Zscaler Client Connector tunnel log definition (synthetic, modelled on
+                                  published example lines; continuation lines)
+zscaler/tunnel-export.txt         the same format detected by content
 rotation/service.log              active log; service.lo_ and service-20261023-0X0000.log are older parts
                                   (merged when service.log is opened; modification times set in order)
 big/big_cmtrace_400mb.log         400 MB CMTrace (memory / speed measurements)

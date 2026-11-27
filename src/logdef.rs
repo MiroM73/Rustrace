@@ -53,6 +53,11 @@ pub(crate) const BUILTIN: &[(&str, &str)] = &[
         "reportingevents.log.def",
         include_str!("../logdef/reportingevents.log.def"),
     ),
+    ("wu.log.def", include_str!("../logdef/wu.log.def")),
+    (
+        "zsatunnel.log.def",
+        include_str!("../logdef/zsatunnel.log.def"),
+    ),
 ];
 
 /// Date/time formats tried when `datetime.format` does not match.
@@ -1273,7 +1278,9 @@ mod tests {
                 "exchconnect.log.def",
                 "iisweb.log.def",
                 "msi.log.def",
-                "reportingevents.log.def"
+                "reportingevents.log.def",
+                "wu.log.def",
+                "zsatunnel.log.def"
             ]
         );
     }
@@ -1388,6 +1395,103 @@ mod tests {
             "DISM.EXE: <----- Starting Dism.exe session ----->"
         );
         assert_eq!(e[2].thread, "");
+    }
+
+    /// Column headers of a schema (`None` = the translated standard header).
+    fn titles(s: &Schema) -> Vec<&str> {
+        s.columns
+            .iter()
+            .map(|c| c.title.as_deref().unwrap_or(""))
+            .collect()
+    }
+
+    /// Log written by Get-WindowsUpdateLog (#81): 7-digit fractions, the date separator of the
+    /// regional settings, the severity only in the message.
+    #[test]
+    fn windows_update_log() {
+        let def = builtin("wu.log.def");
+        let lines = [
+            "2026. 11. 21 20:52:33.2639936 1876  5504  Shared          InitializeSus",
+            "2026. 11. 21 20:52:33.3234685 1876  7064  Agent           *FAILED* [80240013] m_services.Add()",
+            "2026.11.21 20:52:34.0000000 4788  20928 Agent           Deploy call E7DA7F00-D9A2-4AFC-B7EC-65D88520A68A : Callback to client with code Call progress and error 0 ",
+            "2026/11/21 20:52:35.1000000 4788  20928 ComApi          Install call complete (succeeded = 1, succeeded with errors = 0, failed = 0, cancelled = 0, unaccounted = 0)",
+            "2026-1-5 07:00:00.5000000 36436 9372  DownloadManager DO job {5325921D-3D01-4439-8F43-880AD2A82D42} 403'd, hr = 0x80190193, BG_ERROR_CONTEXT = 5",
+            "2026. 11. 21 20:52:36.0000000 36436 9372  Handler         ResetPendingBlocks: Directory C:/x failed, 0x80070002 ",
+            "2026. 11. 21 20:52:37.0000000 36436 9372  Deployment      callback code = Update success, error code = 0x00000000",
+            "  continuation line",
+        ];
+        assert!(def.detects(&lines[..1]));
+        assert!(def.detects(&lines[3..4]));
+        assert!(def.matches_file("wu.log"));
+        assert!(def.matches_file("WindowsUpdate.log"));
+        assert!(def.matches_file("WindowsUpdate.20261121.log"));
+        assert!(!def.matches_file("WUAHandler.log"));
+        assert!(!def.matches_file("wuauclt.log"));
+        assert!(!def.detects(&["2026-10-23 10:12:33, Info                  CBS    Starting."]));
+        let (e, s) = parse_lines(def, &lines);
+        assert_eq!(e.len(), 7);
+        assert_eq!(e[0].datetime, "2026-11-21 20:52:33.263");
+        assert_eq!(e[2].datetime, "2026-11-21 20:52:34.000");
+        assert_eq!(e[3].datetime, "2026-11-21 20:52:35.100");
+        assert_eq!(e[4].datetime, "2026-01-05 07:00:00.500");
+        assert_eq!(e[0].component, "Shared");
+        assert_eq!(e[0].thread, "5504");
+        assert_eq!(extra(&e[0], &s, "pid"), "1876");
+        assert_eq!(e[0].message, "InitializeSus");
+        assert_eq!(e[1].message, "*FAILED* [80240013] m_services.Add()");
+        assert_eq!(extra(&e[1], &s, "hresult"), "80240013");
+        assert_eq!(extra(&e[0], &s, "hresult"), "");
+        let severity: Vec<Severity> = e.iter().map(|e| e.severity).collect();
+        use Severity::{Error, Info, Warning};
+        assert_eq!(severity, [Info, Error, Info, Info, Warning, Warning, Info]);
+        assert!(e[6].message.ends_with("0x00000000\n  continuation line"));
+        assert_eq!(
+            titles(&s),
+            ["Date / Time", "PID", "TID", "Component", "Message"]
+        );
+        assert_eq!(s.status.resolve(&s.extra_names).hresult, Some(1));
+    }
+
+    /// Zscaler Client Connector tunnel log (#72): process and thread id in separate columns.
+    #[test]
+    fn zscaler_tunnel_log() {
+        let def = builtin("zsatunnel.log.def");
+        let lines = [
+            "2026-10-23 08:56:25.771190(+0100)[20002:30012] ERR ZPD: Failed to download UPM policy.",
+            "2026-10-23 08:56:26.002114(+0100)[20002:30012] INF ZPHM Good health",
+            "    continuation line",
+            "2026-10-23 08:56:27.500000(-0500)[20002:30013] WAR ZPHM: ID=7, Source port not available",
+            "2026-10-23 08:56:28.000000(+0000)[20002:30013] DBG",
+            "2026-10-23 08:56:29.000000(+0000)[20002:30013] FTL stopped",
+        ];
+        assert!(def.detects(&lines[..1]));
+        assert!(def.matches_file("ZSATunnel_2026-10-06-09-05-49.886487.log"));
+        assert!(def.matches_file("zsatunnel.log"));
+        assert!(!def.matches_file("ZSAService.log"));
+        let (e, s) = parse_lines(def, &lines);
+        assert_eq!(e.len(), 5);
+        // The time as written, the UTC offset in its own column.
+        assert_eq!(e[0].datetime, "2026-10-23 08:56:25.771");
+        assert_eq!(extra(&e[0], &s, "utc_offset"), "+0100");
+        assert_eq!(extra(&e[0], &s, "process"), "20002");
+        assert_eq!(e[0].thread, "30012");
+        assert_eq!(e[0].message, "ZPD: Failed to download UPM policy.");
+        assert_eq!(e[1].message, "ZPHM Good health\n    continuation line");
+        assert_eq!(e[3].message, "");
+        let severity: Vec<Severity> = e.iter().map(|e| e.severity).collect();
+        use Severity::{Error, Info, Warning};
+        assert_eq!(severity, [Error, Info, Warning, Info, Error]);
+        assert_eq!(
+            titles(&s),
+            [
+                "Date / time",
+                "UTC offset",
+                "Level",
+                "Process ID",
+                "Thread ID",
+                "Message"
+            ]
+        );
     }
 
     #[test]
@@ -1881,7 +1985,9 @@ mod tests {
                 ("dism.log.def", 0),
                 ("exchconnect.log.def", 0),
                 ("msi.log.def", 0),
-                ("reportingevents.log.def", 0)
+                ("reportingevents.log.def", 0),
+                ("wu.log.def", 0),
+                ("zsatunnel.log.def", 0)
             ]
         );
         assert!(set.defs[0].is_own() && !set.defs[0].same_as(&set.defs[3]));
@@ -1903,7 +2009,9 @@ mod tests {
                 "DISM log",
                 "Exchange Transport Connectivity log",
                 "Windows Installer log (MSI)",
-                "Windows Update ReportingEvents log"
+                "Windows Update ReportingEvents log",
+                "Windows Update log (Get-WindowsUpdateLog)",
+                "Zscaler Client Connector Tunnel log"
             ]
         );
         // The texts for the notice are there whatever the filter is.
@@ -1917,7 +2025,9 @@ mod tests {
                 "exchconnect.log.def",
                 "iisweb.log.def",
                 "msi.log.def",
-                "reportingevents.log.def"
+                "reportingevents.log.def",
+                "wu.log.def",
+                "zsatunnel.log.def"
             ]
         );
         assert_eq!(

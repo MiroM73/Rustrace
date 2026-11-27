@@ -1,0 +1,37 @@
+# RusTrace log definition – Windows Update log written by the PowerShell command
+# Get-WindowsUpdateLog (merged from the traces in C:\Windows\Logs\WindowsUpdate)
+#
+# Example lines:
+#   2026. 11. 21 20:52:33.2639936 1876  5504  Shared          InitializeSus
+#   2026/11/21 20:52:33.3234685 1876  7064  Agent           *FAILED* [80240013] m_services.Add()
+#
+# Fields: date/time with 7 digits of a second, process id, thread id, component, message.
+# The date separator depends on the regional settings of the computer that created the file
+# ("2026. 11. 21", "2026.11.21", "2026/11/21", "2026-11-21").
+# The log has no severity column, the message decides: "*FAILED*" at its start = error; a
+# failure HRESULT given as "hr = 0x8…", "error code = 0x8…" or "failed, 0x8…", or the word
+# WARNING = warning. (The words "error" and "failed" alone are common in normal lines,
+# e.g. "… and error 0" or "failed = 0".) The code of "*FAILED* [80240013]" is explained in
+# the details pane.
+
+name = Windows Update log (Get-WindowsUpdateLog)
+files = wu.log; windowsupdate*.log
+detect = ^\d{4}[./-] ?\d{1,2}[./-] ?\d{1,2} \d{2}:\d{2}:\d{2}\.\d{7}\s+\d+\s+\d+\s+\S+\s
+
+pattern = ^(?P<datetime>\d{4}[./-] ?\d{1,2}[./-] ?\d{1,2}\s+\d{2}:\d{2}:\d{2}\.\d+)\s+(?P<pid>\d+)\s+(?P<thread>\d+)\s+(?P<component>\S+)(?:\s+(?P<message>(?:\*FAILED\* \[(?P<hresult>[0-9A-Fa-f]{8})\])?.*))?$
+datetime.format = %Y. %m. %d %H:%M:%S%.f | %Y.%m.%d %H:%M:%S%.f | %Y/%m/%d %H:%M:%S%.f | %Y-%m-%d %H:%M:%S%.f
+unmatched = append
+
+role.severity = message
+severity.error = ^(\*FAILED\*|FATAL\b)
+severity.warning = \bWARN(ING)?\b|(\bhr|\berror code)\s*[=:]\s*0x8[0-9a-f]{7}\b|\bfailed, 0x8[0-9a-f]{7}\b
+
+hresult = hresult
+
+columns = datetime pid thread component message
+title.datetime = Date / Time
+title.pid = PID
+title.thread = TID
+title.component = Component
+title.hresult = HRESULT
+title.message = Message

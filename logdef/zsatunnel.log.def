@@ -1,0 +1,30 @@
+# RusTrace log definition – Zscaler Client Connector tunnel log (ZSATunnel_<date>.log)
+#
+# Example lines:
+#   2026-10-23 08:56:25.771190(+0100)[20002:30012] ERR ZPD: Failed to download UPM policy.
+#   2026-10-23 08:56:26.002114(+0100)[20002:30012] INF ZPHM Good health
+#
+# Fields: local time with microseconds, its UTC offset, [process id:thread id], level
+# (DBG, INF, WAR / WRN, ERR, FTL), message. The time is shown as written (the offset is not
+# converted). Lines that do not start like this belong to the entry above them.
+# Other logs of the client with the same layout (e.g. ZSAService, ZSAUpm) are recognized by
+# their content too.
+
+name = Zscaler Client Connector Tunnel log
+files = ZSATunnel*.log
+detect = ^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}\.\d{6}\([+-]\d{4}\)\[\d+:\d+\]\s+(DBG|INF|WAR|WRN|ERR|FTL)\b
+
+pattern = ^(?P<datetime>\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}\.\d{6})\((?P<utc_offset>[+-]\d{4})\)\[(?P<process>\d+):(?P<thread>\d+)\]\s+(?P<severity>[A-Z]+)(?:\s+(?P<message>.*))?$
+datetime.format = %Y-%m-%d %H:%M:%S%.f
+unmatched = append
+
+severity.error = ^(ERR|FTL|ERROR|FATAL|CRITICAL)$
+severity.warning = ^(WAR|WRN|WARN|WARNING)$
+
+columns = datetime utc_offset severity process thread message
+title.datetime = Date / time
+title.utc_offset = UTC offset
+title.severity = Level
+title.process = Process ID
+title.thread = Thread ID
+title.message = Message

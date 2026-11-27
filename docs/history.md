@@ -486,6 +486,21 @@ Notes for Claude, linked from `CLAUDE.md`.
     the screen, off the right edge, fitting, snapped left and maximized (the 1 px window border
     may still touch the taskbar), and the issue's case through the start-up path: the View menu is
     complete above the taskbar. Not tried on a really scaled display (125 / 150 %).
+105. #81 Built-in `wu.log.def` for the text log of `Get-WindowsUpdateLog`, from the definition in
+    the issue with changes found on a real log (47 364 lines, created from this PC's traces): no
+    `wu*.log` pattern (it takes ConfigMgr's `WUAHandler.log`); severity only from `*FAILED*` and
+    failure HRESULTs (the issue's `error` / `failed` words also match about a thousand normal
+    lines such as "… and error 0"); the date accepts the separators of other regional settings;
+    the bare code of `*FAILED* [8…]` is explained (`hresult`); the TID group is named `thread`, so
+    its header is "TID". Verified: unit test `windows_update_log`; release build `--export` on
+    the real log: all 47 364 rows, 2879 errors (= the `*FAILED*` lines), 29 warnings.
+106. #72 Built-in `zsatunnel.log.def` (Zscaler Client Connector), from the definition in the issue:
+    process and thread id in two columns (`role.thread = process thread` would have merged them),
+    no `*.log.*` pattern (older logs are zipped). The layout agrees with example lines published
+    for other logs of the client; no vendor sample of a tunnel log was found, so the test logs are
+    synthetic. Verified: unit test `zscaler_tunnel_log`, release build `--export` on the generated
+    logs. `gen_testlogs.py` writes `windowsupdate/` and `zscaler/` for #81 / #72. Neither
+    definition was looked at in the running window.
 
 ## Ideas not done yet (offered by the owner)
 - `--set "<name>"` command-line option for log sets (#27): would need the set loading, the file
