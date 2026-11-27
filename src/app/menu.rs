@@ -2,279 +2,323 @@
 
 use crate::app::*;
 
+/// The smallest height a scrolled menu is squeezed to, however small the window is.
+const MIN_MENU_HEIGHT: f32 = 60.0;
+
+/// The contents of a menu in a vertical scroll area, so every item can be reached when the menu
+/// is taller than the window (#74). `top` is the highest position the menu can start at: the
+/// bottom of the menu bar for its menus, the top of the window for a submenu (egui moves a
+/// submenu up as far as it needs).
+fn scrolled_menu(ui: &mut egui::Ui, top: f32, contents: impl FnOnce(&mut egui::Ui)) {
+    let frame = egui::Frame::menu(ui.style()).total_margin().sum().y;
+    let height = (ui.ctx().content_rect().bottom() - top - frame).max(MIN_MENU_HEIGHT);
+    // A solid bar, so it is visible that there is more below.
+    ui.spacing_mut().scroll = egui::style::ScrollStyle::solid();
+    let mut area = egui::ScrollArea::vertical()
+        .max_height(height)
+        // Without this a menu could not grow over the height egui offers a new popup.
+        .min_scrolled_height(height);
+    // The first frame of a menu that has just opened: start at its top again.
+    if ui.is_sizing_pass() {
+        area = area.vertical_scroll_offset(0.0);
+    }
+    let out = area.show(ui, contents);
+    // egui sizes a new menu before it knows that a bar is needed, which would then take its
+    // width from the items and wrap them: make the menu wider by the bar instead.
+    if out.content_size.y > out.inner_rect.height() {
+        ui.expand_to_include_x(out.inner_rect.right() + ui.spacing().scroll.allocated_width());
+    }
+}
+
+/// [`scrolled_menu`] for a submenu.
+fn scrolled_submenu(ui: &mut egui::Ui, contents: impl FnOnce(&mut egui::Ui)) {
+    let top = ui.ctx().content_rect().top();
+    scrolled_menu(ui, top, contents);
+}
+
 impl App {
     pub(in crate::app) fn menu_bar(&mut self, ui: &mut egui::Ui) {
         egui::MenuBar::new().ui(ui, |ui| {
+            // Where the menus of the bar open: right under their buttons.
+            let below_bar = ui.cursor().top() + ui.spacing().interact_size.y;
             ui.menu_button(t!("menu.file"), |ui| {
-                if ui
-                    .button(format!("📂 {}   {}", t!("menu.file.open"), kb("Ctrl+O")))
-                    .clicked()
-                {
-                    ui.close();
-                    self.open_dialog();
-                }
-                if ui
-                    .add_enabled(
-                        self.cur_path.is_some(),
-                        egui::Button::new(format!("➕ {}", t!("menu.file.add"))),
-                    )
-                    .on_hover_text(t!("menu.file.add.tip"))
-                    .clicked()
-                {
-                    ui.close();
-                    self.add_dialog();
-                }
-                if ui
-                    .button(format!("📑 {}", t!("menu.file.logset")))
-                    .on_hover_text(t!("menu.file.logset.tip"))
-                    .clicked()
-                {
-                    ui.close();
-                    self.open_log_sets();
-                }
-                if self.is_merged() {
-                    ui.menu_button(format!("📚 {}", t!("menu.file.merged")), |ui| {
-                        let mut remove = None;
-                        for (i, p) in self.paths.iter().enumerate() {
-                            ui.horizontal(|ui| {
-                                if ui
-                                    .small_button("✖")
-                                    .on_hover_text(t!("menu.file.merged.remove"))
-                                    .clicked()
-                                {
-                                    remove = Some(i);
-                                }
-                                ui.label(RichText::new("■").color(self.log_color(i)));
-                                ui.label(p.display().to_string());
-                            });
-                        }
-                        if let Some(i) = remove {
-                            ui.close();
-                            self.remove_log(i);
-                        }
-                    });
-                }
-                ui.menu_button(t!("menu.file.recent"), |ui| {
-                    if self.cfg.recent_files.is_empty() {
-                        ui.weak(t!("menu.file.recent.none"));
-                    }
-                    let mut chosen = None;
-                    for p in &self.cfg.recent_files {
-                        if ui.button(p).clicked() {
-                            chosen = Some(p.clone());
-                        }
-                    }
-                    if let Some(p) = chosen {
+                scrolled_menu(ui, below_bar, |ui| {
+                    if ui
+                        .button(format!("📂 {}   {}", t!("menu.file.open"), kb("Ctrl+O")))
+                        .clicked()
+                    {
                         ui.close();
-                        self.open_file(&p);
+                        self.open_dialog();
                     }
-                    if !self.cfg.recent_files.is_empty() {
-                        ui.separator();
-                        if ui.button(t!("menu.file.recent.clear")).clicked() {
-                            self.cfg.recent_files.clear();
-                            self.cfg_dirty = true;
-                        }
+                    if ui
+                        .add_enabled(
+                            self.cur_path.is_some(),
+                            egui::Button::new(format!("➕ {}", t!("menu.file.add"))),
+                        )
+                        .on_hover_text(t!("menu.file.add.tip"))
+                        .clicked()
+                    {
+                        ui.close();
+                        self.add_dialog();
                     }
-                });
-                ui.separator();
-                if ui
-                    .button(format!("🔄 {}   F5", t!("menu.file.refresh")))
-                    .clicked()
-                {
-                    ui.close();
-                    self.refresh();
-                }
-                if ui
-                    .button(format!("{}   {}", t!("menu.file.reload"), kb("Ctrl+F5")))
-                    .clicked()
-                {
-                    ui.close();
-                    self.reload_full();
-                }
-                ui.separator();
-                if ui
-                    .add_enabled(
-                        self.cur_path.is_some(),
-                        egui::Button::new(format!(
-                            "📤 {}   {}",
-                            t!("menu.file.export"),
-                            kb("Ctrl+Shift+S")
-                        )),
-                    )
-                    .clicked()
-                {
-                    ui.close();
-                    self.export_win.open();
-                }
-                if ui
-                    .add_enabled(
-                        self.cur_path.is_some(),
-                        egui::Button::new(format!(
-                            "📊 {}   {}",
-                            t!("menu.file.export_table"),
-                            kb("Ctrl+Shift+E")
-                        )),
-                    )
-                    .clicked()
-                {
-                    ui.close();
-                    self.open_table_export(None);
-                }
-                ui.separator();
-                if ui.button(t!("menu.file.exit")).clicked() {
-                    ui.ctx().send_viewport_cmd(egui::ViewportCommand::Close);
-                }
+                    if ui
+                        .button(format!("📑 {}", t!("menu.file.logset")))
+                        .on_hover_text(t!("menu.file.logset.tip"))
+                        .clicked()
+                    {
+                        ui.close();
+                        self.open_log_sets();
+                    }
+                    if self.is_merged() {
+                        ui.menu_button(format!("📚 {}", t!("menu.file.merged")), |ui| {
+                            scrolled_submenu(ui, |ui| {
+                                let mut remove = None;
+                                for (i, p) in self.paths.iter().enumerate() {
+                                    ui.horizontal(|ui| {
+                                        if ui
+                                            .small_button("✖")
+                                            .on_hover_text(t!("menu.file.merged.remove"))
+                                            .clicked()
+                                        {
+                                            remove = Some(i);
+                                        }
+                                        ui.label(RichText::new("■").color(self.log_color(i)));
+                                        ui.label(p.display().to_string());
+                                    });
+                                }
+                                if let Some(i) = remove {
+                                    ui.close();
+                                    self.remove_log(i);
+                                }
+                            })
+                        });
+                    }
+                    ui.menu_button(t!("menu.file.recent"), |ui| {
+                        scrolled_submenu(ui, |ui| {
+                            if self.cfg.recent_files.is_empty() {
+                                ui.weak(t!("menu.file.recent.none"));
+                            }
+                            let mut chosen = None;
+                            for p in &self.cfg.recent_files {
+                                if ui.button(p).clicked() {
+                                    chosen = Some(p.clone());
+                                }
+                            }
+                            if let Some(p) = chosen {
+                                ui.close();
+                                self.open_file(&p);
+                            }
+                            if !self.cfg.recent_files.is_empty() {
+                                ui.separator();
+                                if ui.button(t!("menu.file.recent.clear")).clicked() {
+                                    self.cfg.recent_files.clear();
+                                    self.cfg_dirty = true;
+                                }
+                            }
+                        })
+                    });
+                    ui.separator();
+                    if ui
+                        .button(format!("🔄 {}   F5", t!("menu.file.refresh")))
+                        .clicked()
+                    {
+                        ui.close();
+                        self.refresh();
+                    }
+                    if ui
+                        .button(format!("{}   {}", t!("menu.file.reload"), kb("Ctrl+F5")))
+                        .clicked()
+                    {
+                        ui.close();
+                        self.reload_full();
+                    }
+                    ui.separator();
+                    if ui
+                        .add_enabled(
+                            self.cur_path.is_some(),
+                            egui::Button::new(format!(
+                                "📤 {}   {}",
+                                t!("menu.file.export"),
+                                kb("Ctrl+Shift+S")
+                            )),
+                        )
+                        .clicked()
+                    {
+                        ui.close();
+                        self.export_win.open();
+                    }
+                    if ui
+                        .add_enabled(
+                            self.cur_path.is_some(),
+                            egui::Button::new(format!(
+                                "📊 {}   {}",
+                                t!("menu.file.export_table"),
+                                kb("Ctrl+Shift+E")
+                            )),
+                        )
+                        .clicked()
+                    {
+                        ui.close();
+                        self.open_table_export(None);
+                    }
+                    ui.separator();
+                    if ui.button(t!("menu.file.exit")).clicked() {
+                        ui.ctx().send_viewport_cmd(egui::ViewportCommand::Close);
+                    }
+                })
             });
             ui.menu_button(t!("menu.view"), |ui| {
-                if ui
-                    .checkbox(&mut self.cfg.show_details, t!("menu.view.details"))
-                    .changed()
-                {
-                    self.cfg_dirty = true;
-                }
-                ui.horizontal(|ui| {
-                    ui.add_space(24.0);
-                    ui.label(t!("menu.view.details_shows"));
-                    for (v, key) in [
-                        (DetailsView::Message, "details.view.message"),
-                        (DetailsView::Raw, "details.view.raw"),
-                    ] {
-                        if ui.radio(self.cfg.details_view == v, t!(key)).clicked() {
-                            self.cfg.details_view = v;
-                            self.cfg_dirty = true;
-                        }
-                    }
-                });
-                let label = self.follow_label("menu.view.follow");
-                if ui.checkbox(&mut self.cfg.auto_scroll, label).changed() {
-                    self.follow_setting_changed();
-                }
-                ui.separator();
-                if ui
-                    .button(format!("🔖 {}", t!("menu.view.bookmarks")))
-                    .clicked()
-                {
-                    ui.close();
-                    self.bookmarks_win.open();
-                }
-                if ui
-                    .checkbox(&mut self.bookmarks_only, t!("toolbar.bookmarks_only.tip"))
-                    .changed()
-                {
-                    self.refilter_from(0);
-                }
-                if ui
-                    .checkbox(&mut self.rules_only, t!("toolbar.rules_only.tip"))
-                    .changed()
-                {
-                    self.refilter_from(0);
-                }
-                ui.separator();
-                self.overview_menu(ui);
-                ui.separator();
-                self.delta_menu(ui);
-                ui.separator();
-                ui.label(t!("menu.view.theme"));
-                let mut theme_changed = false;
-                for (id, key) in [
-                    ("system", "menu.view.theme.system"),
-                    ("light", "menu.view.theme.light"),
-                    ("dark", "menu.view.theme.dark"),
-                ] {
-                    if ui.radio(self.cfg.theme == id, t!(key)).clicked() {
-                        self.cfg.theme = id.to_owned();
-                        theme_changed = true;
-                    }
-                }
-                if theme_changed {
-                    self.apply_theme(ui.ctx());
-                    self.cfg_dirty = true;
-                }
-                ui.separator();
-                ui.horizontal(|ui| {
-                    ui.label(t!("menu.view.font_size"));
+                scrolled_menu(ui, below_bar, |ui| {
                     if ui
-                        .add(
-                            egui::Slider::new(&mut self.cfg.font_size, FONT_SIZE_RANGE)
-                                .step_by(0.5)
-                                .fixed_decimals(1),
-                        )
+                        .checkbox(&mut self.cfg.show_details, t!("menu.view.details"))
                         .changed()
                     {
                         self.cfg_dirty = true;
                     }
-                });
-                ui.horizontal(|ui| {
-                    let mut changed = ui
-                        .checkbox(&mut self.cfg.temp_file_enabled, t!("menu.view.temp_file"))
-                        .on_hover_text(t!("menu.view.temp_file.tip"))
-                        .changed();
-                    changed |= ui
-                        .add_enabled(
-                            self.cfg.temp_file_enabled,
-                            egui::DragValue::new(&mut self.cfg.temp_file_threshold_mb)
-                                .range(0..=100_000)
-                                .suffix(" MB"),
-                        )
-                        .on_hover_text(t!("menu.view.temp_file.tip"))
-                        .changed();
-                    if changed {
+                    ui.horizontal(|ui| {
+                        ui.add_space(24.0);
+                        ui.label(t!("menu.view.details_shows"));
+                        for (v, key) in [
+                            (DetailsView::Message, "details.view.message"),
+                            (DetailsView::Raw, "details.view.raw"),
+                        ] {
+                            if ui.radio(self.cfg.details_view == v, t!(key)).clicked() {
+                                self.cfg.details_view = v;
+                                self.cfg_dirty = true;
+                            }
+                        }
+                    });
+                    let label = self.follow_label("menu.view.follow");
+                    if ui.checkbox(&mut self.cfg.auto_scroll, label).changed() {
+                        self.follow_setting_changed();
+                    }
+                    ui.separator();
+                    if ui
+                        .button(format!("🔖 {}", t!("menu.view.bookmarks")))
+                        .clicked()
+                    {
+                        ui.close();
+                        self.bookmarks_win.open();
+                    }
+                    if ui
+                        .checkbox(&mut self.bookmarks_only, t!("toolbar.bookmarks_only.tip"))
+                        .changed()
+                    {
+                        self.refilter_from(0);
+                    }
+                    if ui
+                        .checkbox(&mut self.rules_only, t!("toolbar.rules_only.tip"))
+                        .changed()
+                    {
+                        self.refilter_from(0);
+                    }
+                    ui.separator();
+                    self.overview_menu(ui);
+                    ui.separator();
+                    self.delta_menu(ui);
+                    ui.separator();
+                    ui.label(t!("menu.view.theme"));
+                    let mut theme_changed = false;
+                    for (id, key) in [
+                        ("system", "menu.view.theme.system"),
+                        ("light", "menu.view.theme.light"),
+                        ("dark", "menu.view.theme.dark"),
+                    ] {
+                        if ui.radio(self.cfg.theme == id, t!(key)).clicked() {
+                            self.cfg.theme = id.to_owned();
+                            theme_changed = true;
+                        }
+                    }
+                    if theme_changed {
+                        self.apply_theme(ui.ctx());
                         self.cfg_dirty = true;
                     }
-                });
-                ui.horizontal(|ui| {
-                    let mut changed = ui
-                        .checkbox(&mut self.cfg.max_log_enabled, t!("menu.view.max_log"))
-                        .on_hover_text(t!("menu.view.max_log.tip"))
-                        .changed();
-                    changed |= ui
-                        .add_enabled(
-                            self.cfg.max_log_enabled,
-                            egui::DragValue::new(&mut self.cfg.max_log_mb)
-                                .range(10..=1_000_000)
-                                .suffix(" MB"),
-                        )
-                        .on_hover_text(t!("menu.view.max_log.tip"))
-                        .changed();
-                    if changed {
+                    ui.separator();
+                    ui.horizontal(|ui| {
+                        ui.label(t!("menu.view.font_size"));
+                        if ui
+                            .add(
+                                egui::Slider::new(&mut self.cfg.font_size, FONT_SIZE_RANGE)
+                                    .step_by(0.5)
+                                    .fixed_decimals(1),
+                            )
+                            .changed()
+                        {
+                            self.cfg_dirty = true;
+                        }
+                    });
+                    ui.horizontal(|ui| {
+                        let mut changed = ui
+                            .checkbox(&mut self.cfg.temp_file_enabled, t!("menu.view.temp_file"))
+                            .on_hover_text(t!("menu.view.temp_file.tip"))
+                            .changed();
+                        changed |= ui
+                            .add_enabled(
+                                self.cfg.temp_file_enabled,
+                                egui::DragValue::new(&mut self.cfg.temp_file_threshold_mb)
+                                    .range(0..=100_000)
+                                    .suffix(" MB"),
+                            )
+                            .on_hover_text(t!("menu.view.temp_file.tip"))
+                            .changed();
+                        if changed {
+                            self.cfg_dirty = true;
+                        }
+                    });
+                    ui.horizontal(|ui| {
+                        let mut changed = ui
+                            .checkbox(&mut self.cfg.max_log_enabled, t!("menu.view.max_log"))
+                            .on_hover_text(t!("menu.view.max_log.tip"))
+                            .changed();
+                        changed |= ui
+                            .add_enabled(
+                                self.cfg.max_log_enabled,
+                                egui::DragValue::new(&mut self.cfg.max_log_mb)
+                                    .range(10..=1_000_000)
+                                    .suffix(" MB"),
+                            )
+                            .on_hover_text(t!("menu.view.max_log.tip"))
+                            .changed();
+                        if changed {
+                            self.cfg_dirty = true;
+                            self.enforce_memory_limits();
+                        }
+                    });
+                    if ui
+                        .checkbox(&mut self.cfg.color_files, t!("menu.view.color_files"))
+                        .on_hover_text(t!("menu.view.color_files.tip"))
+                        .changed()
+                    {
                         self.cfg_dirty = true;
-                        self.enforce_memory_limits();
                     }
-                });
-                if ui
-                    .checkbox(&mut self.cfg.color_files, t!("menu.view.color_files"))
-                    .on_hover_text(t!("menu.view.color_files.tip"))
-                    .changed()
-                {
-                    self.cfg_dirty = true;
-                }
-                if ui
-                    .checkbox(
-                        &mut self.cfg.separate_windows,
-                        t!("menu.view.separate_windows"),
-                    )
-                    .on_hover_text(t!("menu.view.separate_windows.tip"))
-                    .changed()
-                {
-                    self.cfg_dirty = true;
-                }
-                if ui
-                    .checkbox(&mut self.cfg.merge_rotated, t!("menu.view.merge_rotated"))
-                    .on_hover_text(t!("menu.view.merge_rotated.tip"))
-                    .changed()
-                {
-                    self.cfg_dirty = true;
-                    if self.cur_path.is_some() {
-                        self.reload_full();
+                    if ui
+                        .checkbox(
+                            &mut self.cfg.separate_windows,
+                            t!("menu.view.separate_windows"),
+                        )
+                        .on_hover_text(t!("menu.view.separate_windows.tip"))
+                        .changed()
+                    {
+                        self.cfg_dirty = true;
                     }
-                }
-                ui.separator();
-                ui.menu_button(format!("📐 {}", t!("menu.view.format")), |ui| {
-                    self.format_menu(ui);
-                });
-                ui.menu_button(format!("🌐 {}", t!("menu.view.language")), |ui| {
-                    self.language_menu(ui);
-                });
+                    if ui
+                        .checkbox(&mut self.cfg.merge_rotated, t!("menu.view.merge_rotated"))
+                        .on_hover_text(t!("menu.view.merge_rotated.tip"))
+                        .changed()
+                    {
+                        self.cfg_dirty = true;
+                        if self.cur_path.is_some() {
+                            self.reload_full();
+                        }
+                    }
+                    ui.separator();
+                    ui.menu_button(format!("📐 {}", t!("menu.view.format")), |ui| {
+                        scrolled_submenu(ui, |ui| self.format_menu(ui));
+                    });
+                    ui.menu_button(format!("🌐 {}", t!("menu.view.language")), |ui| {
+                        scrolled_submenu(ui, |ui| self.language_menu(ui));
+                    });
+                })
             });
             ui.menu_button(t!("menu.highlight"), |ui| {
                 if ui
@@ -303,58 +347,62 @@ impl App {
                 }
             });
             ui.menu_button(t!("menu.help"), |ui| {
-                if ui.button(t!("menu.help.shortcuts")).clicked() {
-                    ui.close();
-                    self.help_win.open();
-                }
-                ui.menu_button(format!("📖 {}", t!("menu.help.guides")), |ui| {
-                    for (key, file) in guides::GUIDES {
-                        if ui
-                            .button(t!(key))
-                            .on_hover_text(t!("menu.help.guides.tip"))
-                            .clicked()
-                        {
-                            ui.close();
-                            self.open_link(&guides::url(REPOSITORY, file));
-                        }
+                scrolled_menu(ui, below_bar, |ui| {
+                    if ui.button(t!("menu.help.shortcuts")).clicked() {
+                        ui.close();
+                        self.help_win.open();
                     }
-                    ui.separator();
+                    ui.menu_button(format!("📖 {}", t!("menu.help.guides")), |ui| {
+                        scrolled_submenu(ui, |ui| {
+                            for (key, file) in guides::GUIDES {
+                                if ui
+                                    .button(t!(key))
+                                    .on_hover_text(t!("menu.help.guides.tip"))
+                                    .clicked()
+                                {
+                                    ui.close();
+                                    self.open_link(&guides::url(REPOSITORY, file));
+                                }
+                            }
+                            ui.separator();
+                            if ui
+                                .button(t!("menu.help.guides.all"))
+                                .on_hover_text(t!("menu.help.guides.tip"))
+                                .clicked()
+                            {
+                                ui.close();
+                                self.open_link(&guides::url(REPOSITORY, guides::INDEX));
+                            }
+                        })
+                    });
+                    #[cfg(windows)]
                     if ui
-                        .button(t!("menu.help.guides.all"))
-                        .on_hover_text(t!("menu.help.guides.tip"))
+                        .button(format!("🔗 {}", t!("menu.help.default_app")))
                         .clicked()
                     {
                         ui.close();
-                        self.open_link(&guides::url(REPOSITORY, guides::INDEX));
+                        self.assoc = Some(fileassoc::info());
+                        self.assoc_win.open();
                     }
-                });
-                #[cfg(windows)]
-                if ui
-                    .button(format!("🔗 {}", t!("menu.help.default_app")))
-                    .clicked()
-                {
-                    ui.close();
-                    self.assoc = Some(fileassoc::info());
-                    self.assoc_win.open();
-                }
-                if ui
-                    .button(format!("⬆ {}", t!("menu.help.updates")))
-                    .clicked()
-                {
-                    ui.close();
-                    self.update_win.open();
-                    if !matches!(self.update, UpdateState::Installing { .. }) {
-                        self.start_update_check(false);
+                    if ui
+                        .button(format!("⬆ {}", t!("menu.help.updates")))
+                        .clicked()
+                    {
+                        ui.close();
+                        self.update_win.open();
+                        if !matches!(self.update, UpdateState::Installing { .. }) {
+                            self.start_update_check(false);
+                        }
                     }
-                }
-                if ui.button(format!("ℹ {}", t!("menu.help.about"))).clicked() {
-                    ui.close();
-                    self.about_win.open();
-                }
-                ui.separator();
-                if let Some(p) = Config::path() {
-                    ui.weak(t!("menu.help.settings_file", path = p.display()));
-                }
+                    if ui.button(format!("ℹ {}", t!("menu.help.about"))).clicked() {
+                        ui.close();
+                        self.about_win.open();
+                    }
+                    ui.separator();
+                    if let Some(p) = Config::path() {
+                        ui.weak(t!("menu.help.settings_file", path = p.display()));
+                    }
+                })
             });
         });
     }

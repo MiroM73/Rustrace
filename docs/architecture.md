@@ -307,6 +307,14 @@ links in `docs/` (`features.md`, `export.md`, `log-definitions.md`, `log-sets.md
   (no cost on big logs). `batch::export` applies the config's rules before filtering. Rule window:
   *Severity* combo after *Also component*; keys `rules.col.severity`, `rules.sev.*`. A rule's
   severity applies whatever its scope (row / text).
+- Menus taller than the window (#74, `app/menu.rs`): the contents of File, View and Help and of
+  their submenus go through `scrolled_menu` / `scrolled_submenu` – a vertical `ScrollArea` with a
+  solid bar. A menu of the bar gets the height below the bar, a submenu the window height (egui
+  moves it up), at least `MIN_MENU_HEIGHT`. `min_scrolled_height` is needed, otherwise a menu stays
+  at the height egui offers a new popup; after the area the menu is widened by the bar (egui sizes
+  the popup before it knows about it, the items would wrap); on the sizing pass (menu just opened)
+  the scroll offset is reset to the top. A new long menu in the bar has to use the same helpers.
+  Highlighting and Tools (one or two items) are not wrapped.
 - Themes: system / light / dark (View menu + quick toggle button in the toolbar).
 - Zoom: Ctrl + mouse wheel over the log text (table, details message) → `cfg.font_size` (6–48);
   elsewhere → whole-UI `zoom_factor` (0.5–3.0, saved as `cfg.ui_zoom`, also Ctrl+plus/minus/0).

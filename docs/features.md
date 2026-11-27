@@ -216,6 +216,8 @@ The logs of one troubleshooting scenario in one step – details in [Log sets](l
 - **Ctrl + mouse wheel anywhere else** (menu, toolbar, status bar, …) zooms the whole user
   interface (50 – 300 %); Ctrl+plus / Ctrl+minus / Ctrl+0 zoom the whole window from the keyboard
 - both the log font size and the window zoom are remembered
+- a menu that does not fit into the window (small display, low window, large zoom) gets a scroll
+  bar, so all its items stay reachable (scroll with the mouse wheel)
 
 ## Error codes
 

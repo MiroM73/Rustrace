@@ -475,6 +475,12 @@ Notes for Claude, linked from `CLAUDE.md`.
     and tests on Windows; in WSL Ubuntu with a temporary Rust 1.100.0 (the version of the failing
     CI run) Linux clippy and tests (170 passed, 6 ignored). The GitHub workflow itself runs after
     the push.
+104. #74 View menu cut off on a small display (*Log format* and *Language* unreachable): the
+    contents of File, View, Help and their submenus now scroll when they do not fit the window
+    (`scrolled_menu` in `app/menu.rs`); the owner chose scrolling over restructuring the menu.
+    Verified in the release build with windows 1000×520 and 1000×300 (View scrolled to the end,
+    Log format scrolled, Language, Recent files and Guides open, a reopened menu starts at the top)
+    and 1200×900 (no scroll bar, as before).
 
 ## Ideas not done yet (offered by the owner)
 - `--set "<name>"` command-line option for log sets (#27): would need the set loading, the file
