@@ -4,7 +4,7 @@
 
 use crate::app::*;
 use crate::logset::{self, LogSetDef};
-use crate::logsetsave::{self, Changes, Collision};
+use crate::logsetsave::{self, Changes};
 
 /// State of the open "Save as log set" window.
 pub(in crate::app) struct SaveSetDialog {
@@ -16,7 +16,7 @@ pub(in crate::app) struct SaveSetDialog {
     /// The opened logs when the window was opened, and the `file` lines made of them.
     paths: Vec<PathBuf>,
     lines: Vec<String>,
-    /// The loaded sets and the file names of the user's folder, to see collisions.
+    /// The loaded sets (is the name taken?) and the file names of the user's folder.
     sets: Vec<LogSetDef>,
     files: Vec<String>,
     dir: Option<PathBuf>,
@@ -25,13 +25,9 @@ pub(in crate::app) struct SaveSetDialog {
 }
 
 impl SaveSetDialog {
-    fn collision(&self) -> Option<Collision> {
-        logsetsave::collision(
-            &self.sets,
-            self.dir.as_deref()?,
-            &self.files,
-            self.name.trim(),
-        )
+    /// The own set of the entered name, which saving would overwrite.
+    fn existing(&self) -> Option<PathBuf> {
+        logsetsave::same_name(&self.sets, self.name.trim())
     }
 
     /// Reads the sets and the folder again.
@@ -94,19 +90,19 @@ impl App {
     /// what the window showed as existing.
     fn save_log_set(&mut self, dlg: &mut SaveSetDialog, overwrite: bool) -> bool {
         dlg.error = None;
-        let shown = dlg.collision();
+        let shown = dlg.existing();
         dlg.rescan();
-        let collision = dlg.collision();
+        let existing = dlg.existing();
         // The folder changed in the meantime: show it before anything is replaced.
-        if collision.is_some() && (!overwrite || collision != shown) {
+        if existing.is_some() && (!overwrite || existing != shown) {
             return false;
         }
         let Some(dir) = dlg.dir.clone() else {
             return false;
         };
         let name = dlg.name.trim().to_owned();
-        let keep = collision.as_ref().is_some_and(|c| c.same_name);
-        let path = collision.map_or_else(|| dir.join(logsetsave::file_name(&name)), |c| c.path);
+        let keep = existing.is_some();
+        let path = existing.unwrap_or_else(|| logsetsave::new_path(&dir, &dlg.files, &name));
         let description = dlg.description.trim();
         // An empty field removes the description only when it showed this set's one.
         let description = match &dlg.prefilled {
@@ -191,30 +187,30 @@ impl App {
                 if let Some(dir) = &dlg.dir {
                     ui.weak(t!("logset.save.folder", path = dir.display()));
                 }
-                let collision = dlg.collision();
-                if let Some(c) = &collision {
-                    ui.colored_label(ORANGE, t!("logset.save.exists", file = c.path.display()));
+                let existing = dlg.existing();
+                if let Some(file) = &existing {
+                    ui.colored_label(ORANGE, t!("logset.save.exists", file = file.display()));
                 }
                 if let Some(e) = &dlg.error {
                     ui.colored_label(RED, e);
                 }
                 let ok = !dlg.name.trim().is_empty() && dlg.dir.is_some();
                 ui.horizontal(|ui| {
-                    let text = if collision.is_some() {
+                    let text = if existing.is_some() {
                         format!("💾 {}", t!("logset.save.overwrite"))
                     } else {
                         format!("💾 {}", t!("logset.save.button"))
                     };
                     if ui.add_enabled(ok, egui::Button::new(text)).clicked() {
                         save = true;
-                        overwrite = collision.is_some();
+                        overwrite = existing.is_some();
                     }
                     if ui.button(t!("progress.cancel")).clicked() {
                         close = true;
                     }
                 });
                 // Enter never overwrites.
-                save |= ok && enter && collision.is_none();
+                save |= ok && enter && existing.is_none();
             },
         );
         if save && self.save_log_set(&mut dlg, overwrite) {

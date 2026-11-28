@@ -140,9 +140,10 @@ links in `docs/` (`features.md`, `export.md`, `log-definitions.md`, `log-sets.md
   `%SYSTEMDRIVE%` – `resolve` already sends drive letters to the admin share); paths on the admin
   shares of **one** computer, with no local path among them → variables (also via
   `\\pc\c$\Windows`) or `D:\…`; mixed computers keep the remote paths; duplicate lines dropped.
-  `collision` = an own set with that name in any language (`LogSetDef::has_name` → its file is
-  updated, `keep`), else a file in the user's folder with the slug name `file_name(name)`
-  (replaced as a whole); predefined sets never collide. The window shows *Overwrite*; Enter
+  `same_name` = an own set with that name in any language (`LogSetDef::has_name` → its file is
+  updated, `keep`); predefined sets never collide. Otherwise `new_path` takes the slug file name
+  `file_name(name)`, numbered when taken, so a new set never replaces a file.
+  The window shows *Overwrite*; Enter
   never overwrites, and a folder that changed since the window showed it is shown first.
   `update_text` edits a set file line by line: comments, `guide`, unknown keys, order and line
   endings stay; a name / description goes into the key the UI language **shows** (`name.sk` when

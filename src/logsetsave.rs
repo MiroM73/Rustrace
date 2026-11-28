@@ -181,39 +181,28 @@ pub fn file_name(name: &str) -> String {
     format!("{stem}.set")
 }
 
-/// What saving under a name would replace.
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub struct Collision {
-    /// The file that would be overwritten.
-    pub path: PathBuf,
-    /// An own set of this name exists: its file is updated (guides, comments and translations
-    /// stay). Otherwise only the file name is taken and the file is replaced.
-    pub same_name: bool,
+/// The file of the own set that has `name` already – what saving under that name would
+/// overwrite. Predefined sets do not count.
+pub fn same_name(sets: &[LogSetDef], name: &str) -> Option<PathBuf> {
+    sets.iter()
+        .filter(|s| s.is_own() && s.has_name(name))
+        .find_map(|s| s.path.clone())
 }
 
-/// Whether a set called `name` collides with an own set of that name, or with a file of the
-/// user's folder `dir` (`files` = the file names in it). Predefined sets do not count.
-pub fn collision(
-    sets: &[LogSetDef],
-    dir: &Path,
-    files: &[String],
-    name: &str,
-) -> Option<Collision> {
-    let own = sets.iter().filter(|s| s.is_own() && s.has_name(name));
-    if let Some(path) = own.filter_map(|s| s.path.clone()).next() {
-        return Some(Collision {
-            path,
-            same_name: true,
-        });
+/// The file for a new set `name` in the user's folder `dir` (`files` = the names in it): the
+/// file name made of the name, numbered (`name (2).set`) when another file has it – no file is
+/// replaced.
+pub fn new_path(dir: &Path, files: &[String], name: &str) -> PathBuf {
+    let wanted = file_name(name);
+    let stem = wanted.strip_suffix(".set").unwrap_or(&wanted);
+    let taken = |n: &str| files.iter().any(|f| f.to_lowercase() == n.to_lowercase());
+    let mut candidate = wanted.clone();
+    let mut number = 2;
+    while taken(&candidate) {
+        candidate = format!("{stem} ({number}).set");
+        number += 1;
     }
-    let wanted = file_name(name).to_lowercase();
-    files
-        .iter()
-        .find(|f| f.to_lowercase() == wanted)
-        .map(|f| Collision {
-            path: dir.join(f),
-            same_name: false,
-        })
+    dir.join(candidate)
 }
 
 /// The names of the files in the user's folder.
@@ -476,27 +465,18 @@ mod tests {
             LogSetDef::parse("policy.set", "name = Policy\nfile = a", None).unwrap(),
             own("old.set", "name = My app\nname.sk = Moja appka\nfile = a"),
         ];
-        let files = strings(&["old.set", "A_B.set"]);
-        let hit = |name: &str| collision(&sets, dir, &files, name);
-        let same = |id: &str| {
-            Some(Collision {
-                path: dir.join(id),
-                same_name: true,
-            })
-        };
-        assert_eq!(hit("my APP"), same("old.set"));
-        assert_eq!(hit(" moja appka "), same("old.set"));
-        // Only the file name is taken.
-        assert_eq!(
-            hit("a?b"),
-            Some(Collision {
-                path: dir.join("A_B.set"),
-                same_name: false,
-            })
-        );
+        let old = Some(dir.join("old.set"));
+        assert_eq!(same_name(&sets, "my APP"), old);
+        assert_eq!(same_name(&sets, " moja appka "), old);
         // A predefined set may have the name; the file name of a set is not its name.
-        assert_eq!(hit("Policy"), None);
-        assert_eq!(hit("New"), None);
+        assert_eq!(same_name(&sets, "Policy"), None);
+        assert_eq!(same_name(&sets, "old"), None);
+
+        // A new set never replaces a file.
+        let files = strings(&["old.set", "A_B.set", "a_b (2).set"]);
+        assert_eq!(new_path(dir, &files, "a?b"), dir.join("a_b (3).set"));
+        assert_eq!(new_path(dir, &files, "OLD"), dir.join("OLD (2).set"));
+        assert_eq!(new_path(dir, &files, "New"), dir.join("New.set"));
     }
 
     #[test]

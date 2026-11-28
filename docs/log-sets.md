@@ -123,8 +123,9 @@ When the view mixes logs of this computer and of a remote one, or of several rem
 the paths of the remote ones stay as they are. Older rotated parts are not listed – they are
 found again when the set is opened.
 
-When one of your own sets already has the name (or the file name made from it is taken), the
-window says so and offers **Overwrite**; enter another name to save a new set instead.
+When one of your own sets already has the name, the window says so and offers **Overwrite**;
+enter another name to save a new set instead. A new set never replaces a file: when the file
+name made from the name is taken, a number is added (`My set (2).set`).
 Overwriting a set of the same name keeps its `guide` lines, comments and translations. If the
 view was opened from a set, its name and description are filled in, so saving again updates your
 own set. A built-in set is never changed – saving under its name creates your own set beside it.
