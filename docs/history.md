@@ -501,6 +501,11 @@ Notes for Claude, linked from `CLAUDE.md`.
     synthetic. Verified: unit test `zscaler_tunnel_log`, release build `--export` on the generated
     logs. `gen_testlogs.py` writes `windowsupdate/` and `zscaler/` for #81 / #72. Neither
     definition was looked at in the running window.
+107. #78 *Save as new set* in the Highlight rules window. Decided with the owner: the original set
+    goes back to its state at the opening of the window (unlike *Duplicate*), the button is enabled
+    only after its rules changed, the name is asked for, the new set goes before the original.
+    `rulesets::Baseline`; tests `saving_as_a_new_set_restores_the_original`,
+    `baseline_follows_rename_and_delete`.
 
 ## Ideas not done yet (offered by the owner)
 - `--set "<name>"` command-line option for log sets (#27): would need the set loading, the file

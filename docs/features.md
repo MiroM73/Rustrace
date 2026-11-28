@@ -176,6 +176,16 @@ The logs of one troubleshooting scenario in one step – details in [Log sets](l
   rule to the set shown. The *🖍 Highlighted* filter (#71) and the export criterion *Highlight
   rules* use the rules of the active sets, and so do `--export` and the Rule column of the
   table export (the log definition of the exported file decides about bound sets)
+- **💾 Save as new set** (#78): make a new set out of an existing one without changing the
+  original. Edit the set (add, change, reorder or delete rules; *Create a rule for the component*
+  counts too), click the button, type the name (*name (copy)* is offered) and confirm with ✔ or
+  Enter. The new set gets everything as you see it now and is placed **before** the original, so the
+  rules you added still win and the log keeps its colors; the original set gets back the rules and
+  log types it had when the window was opened (its name and *Active* stay as they are). The button
+  is available once the rules of the set have changed since the window was opened; closing the
+  window keeps the changes and starts afresh. A new set starts with the same *Active* state as the
+  original – switch off the one you do not want to apply. (*📄 Duplicate* copies a set and leaves
+  both with the same rules.)
 - the window is **its own OS window** (#68): drag it outside the main window or onto another
   monitor while you watch the colors change in the log; its position and size are remembered.
   *View → Open windows separately* (on by default) switches back to a window inside the main

@@ -185,6 +185,15 @@ enum UpdateState {
     },
 }
 
+/// What the name typed in the rules window is for.
+#[derive(Clone, Copy, PartialEq)]
+enum NameEdit {
+    /// The new name of the set shown (#70).
+    Rename,
+    /// The name of the set *Save as new set* creates (#78).
+    SaveAs,
+}
+
 enum RowAction {
     ExplainCode(u32),
     ToggleBookmark(usize),
@@ -304,8 +313,10 @@ pub struct App {
     rule_def_ids: Vec<String>,
     /// The rule set shown in the rules window (index into `cfg.rule_sets`, #70).
     rules_set: usize,
-    /// The new name of the set being renamed in the rules window (#70).
-    rules_rename: Option<String>,
+    /// The set name being typed in the rules window and what it is for (#70, #78).
+    rules_name: Option<(NameEdit, String)>,
+    /// The rule sets as they were when the rules window was opened (#78).
+    rules_baseline: crate::rulesets::Baseline,
     /// Rules that set a severity (#50), applied to the entries.
     sev_rules: Arc<SevRules>,
     /// The entries still have to get the severity of `sev_rules`.
@@ -542,7 +553,8 @@ impl App {
             rule_errors: Vec::new(),
             rule_def_ids: Vec::new(),
             rules_set: 0,
-            rules_rename: None,
+            rules_name: None,
+            rules_baseline: Default::default(),
             sev_rules: Arc::default(),
             sev_reapply: false,
             follow: Follow::default(),

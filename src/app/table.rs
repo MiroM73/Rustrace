@@ -715,6 +715,8 @@ impl App {
                     let comp = self.entries.at(i).component.to_owned();
                     // Into the set shown in the rules window (the first one at first).
                     let set = self.rules_set.min(self.cfg.rule_sets.len() - 1);
+                    // With the window closed this rule is already a change of it (#78).
+                    self.rules_baseline.observe(&self.cfg.rule_sets);
                     self.cfg.rule_sets[set].rules.insert(
                         0,
                         HighlightRule {

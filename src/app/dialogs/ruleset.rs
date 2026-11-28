@@ -1,5 +1,6 @@
 //! The rule set bar of the Highlight rules window (#70): choose, switch on, bind to log
-//! definitions, create / rename / duplicate / delete, add a built-in set, import a file.
+//! definitions, create / rename / duplicate / save as new / delete, add a built-in set,
+//! import a file.
 
 use crate::app::*;
 use crate::rulesets::{self, RulesFile};
@@ -9,6 +10,8 @@ impl App {
     pub(in crate::app) fn rule_set_bar(&mut self, ui: &mut egui::Ui) -> bool {
         let mut changed = false;
         self.rules_set = self.rules_set.min(self.cfg.rule_sets.len() - 1);
+        // Before anything below can change a set (#78).
+        self.rules_baseline.observe(&self.cfg.rule_sets);
         let mut select = None;
         let label = |s: &RuleSet| {
             if s.enabled {
@@ -45,10 +48,8 @@ impl App {
                 changed = true;
             }
             if ui.button(format!("✏ {}", t!("rules.set.rename"))).clicked() {
-                self.rules_rename = match self.rules_rename {
-                    Some(_) => None,
-                    None => Some(self.cfg.rule_sets[si].name.clone()),
-                };
+                let name = self.cfg.rule_sets[si].name.clone();
+                self.toggle_name_row(NameEdit::Rename, name);
             }
             let n = self.cfg.rule_sets.len();
             for (text, to, tip) in [
@@ -75,6 +76,20 @@ impl App {
                 select = Some(si + 1);
                 changed = true;
             }
+            let modified = self.rules_baseline.changed(&self.cfg.rule_sets[si]);
+            if ui
+                .add_enabled(
+                    modified,
+                    egui::Button::new(format!("💾 {}", t!("rules.set.save_as"))),
+                )
+                .on_hover_text(t!("rules.set.save_as.tip"))
+                .on_disabled_hover_text(t!("rules.set.save_as.disabled"))
+                .clicked()
+            {
+                let copy = t!("rules.set.copy_name", name = self.cfg.rule_sets[si].name);
+                let name = self.unique_set_name(&copy);
+                self.toggle_name_row(NameEdit::SaveAs, name);
+            }
             if ui
                 .add_enabled(
                     self.cfg.rule_sets.len() > 1,
@@ -83,7 +98,8 @@ impl App {
                 .on_hover_text(t!("rules.set.delete.tip"))
                 .clicked()
             {
-                self.cfg.rule_sets.remove(si);
+                let gone = self.cfg.rule_sets.remove(si);
+                self.rules_baseline.forget(&gone.name);
                 select = Some(si.saturating_sub(1));
                 changed = true;
             }
@@ -101,29 +117,47 @@ impl App {
         });
         if let Some(i) = select {
             self.rules_set = i;
-            self.rules_rename = None;
+            self.rules_name = None;
             self.rules_export_pick = None;
         }
-        changed | self.rename_row(ui)
+        changed | self.name_row(ui)
     }
 
-    /// The name field of a set being renamed; Enter applies it.
-    fn rename_row(&mut self, ui: &mut egui::Ui) -> bool {
+    /// Shows the name row for `what` with `name` filled in, or hides it if it is shown already.
+    fn toggle_name_row(&mut self, what: NameEdit, name: String) {
+        self.rules_name = match self.rules_name {
+            Some((shown, _)) if shown == what => None,
+            _ => Some((what, name)),
+        };
+    }
+
+    /// The name field for *Rename* and *Save as new set*; Enter applies it. Returns whether
+    /// the settings changed.
+    fn name_row(&mut self, ui: &mut egui::Ui) -> bool {
         let si = self.rules_set;
-        let Some(text) = self.rules_rename.clone() else {
+        let Some((what, mut text)) = self.rules_name.clone() else {
             return false;
         };
-        let mut text = text;
+        // The changes were undone: there is nothing to save as a new set.
+        if what == NameEdit::SaveAs && !self.rules_baseline.changed(&self.cfg.rule_sets[si]) {
+            self.rules_name = None;
+            return false;
+        }
+        // A renamed set may keep its name, a new set needs one of its own.
+        let own = (what == NameEdit::Rename).then_some(si);
         let taken = |n: &str| {
             self.cfg
                 .rule_sets
                 .iter()
                 .enumerate()
-                .any(|(i, s)| i != si && s.name == n)
+                .any(|(i, s)| Some(i) != own && s.name == n)
         };
         let mut apply = false;
         let mut cancel = false;
         ui.horizontal(|ui| {
+            if what == NameEdit::SaveAs {
+                ui.label(t!("rules.set.save_as.name"));
+            }
             let edit = ui.add(egui::TextEdit::singleline(&mut text).desired_width(240.0));
             let n = text.trim();
             let ok = !n.is_empty() && !taken(n);
@@ -135,11 +169,24 @@ impl App {
             cancel = ui.button("✖").clicked();
         });
         if apply {
-            self.cfg.rule_sets[si].name = text.trim().to_owned();
-            self.rules_rename = None;
-            return true;
+            let name = text.trim().to_owned();
+            self.rules_name = None;
+            return match what {
+                NameEdit::Rename => {
+                    let old = std::mem::replace(&mut self.cfg.rule_sets[si].name, name);
+                    self.rules_baseline
+                        .rename(&old, &self.cfg.rule_sets[si].name);
+                    true
+                }
+                // The new set takes the place of the set shown, so it is the one shown now.
+                NameEdit::SaveAs => {
+                    self.rules_export_pick = None;
+                    self.rules_baseline
+                        .save_as_new(&mut self.cfg.rule_sets, si, name)
+                }
+            };
         }
-        self.rules_rename = (!cancel).then_some(text);
+        self.rules_name = (!cancel).then_some((what, text));
         false
     }
 

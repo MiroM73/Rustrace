@@ -63,6 +63,9 @@ impl App {
     pub(in crate::app) fn rules_window(&mut self, ctx: &egui::Context) {
         if !self.rules_win.is_open() {
             self.rules_was_open = false;
+            // The next opening starts from the sets as they are then (#78).
+            self.rules_baseline.clear();
+            self.rules_name = None;
             return;
         }
         let just_opened = !self.rules_was_open;
@@ -311,6 +314,10 @@ impl App {
                 app.rules_export_choice(ui);
                 if let Some(m) = &app.rules_msg {
                     ui.label(m.as_str());
+                }
+                if changed {
+                    // The set bar above was drawn before this change.
+                    ui.ctx().request_repaint();
                 }
             },
         );

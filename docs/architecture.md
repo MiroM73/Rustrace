@@ -298,6 +298,18 @@ links in `docs/` (`features.md`, `export.md`, `log-definitions.md`, `log-sets.md
   `dialogs/ruleset.rs` (set bar: choice, Active, binding menu from `App::defs`, new / rename /
   duplicate / delete, built-in menu, import), `dialogs/rules.rs` shows `cfg.rule_sets[App::rules_set]`
   (`rules_export_pick`, `rule_errors` per set).
+- **Save as new set** (#78): `rulesets::Baseline` (pure, tested; `App::rules_baseline`) holds the
+  sets as they were when the rules window was opened, found by **name** (no id in the settings).
+  `observe` runs at the top of the set bar every frame and adds only unknown names, so a set made
+  later (new, duplicate, import) starts from its first state; *Create a rule for the component*
+  calls it before inserting, so the rule counts as a change even when it opens the window. `rename`
+  / `forget` follow Rename / Delete; closing the window clears it, and so does taking over changed
+  rule sets from another instance (`apply_shared_settings`). The button (set bar) is enabled while
+  `changed` = the **rules** differ from the remembered ones (a change of the binding or the On state
+  alone does not count). `save_as_new` inserts the current set under the new name **before** the
+  original (so the added rules keep their priority) and gives the original its remembered rules and
+  binding back; name and On state stay. The name is typed in the row shared with Rename
+  (`App::rules_name: Option<(NameEdit, String)>`).
 - **Rule severity** (#50, `src/sevrules.rs`, pure + tested): `HighlightRule::severity:
   Option<RuleSeverity>` (JSON key `severity`, `info` / `warning` / `error`, omitted when unset, so old
   files load). `store::Rec` got `base` (the parsed severity, in the former padding – the record is still

@@ -82,6 +82,67 @@ pub fn import_set(sets: &mut Vec<RuleSet>, f: RuleSetFile) -> (usize, crate::con
     }
 }
 
+/// The sets as they were when the rules window was opened (#78), found by name. A set that
+/// appears later (new, duplicate, import) is remembered as it was first seen.
+#[derive(Default)]
+pub struct Baseline(Vec<RuleSet>);
+
+impl Baseline {
+    /// Remembers the sets not known yet; a known set keeps its remembered state.
+    pub fn observe(&mut self, sets: &[RuleSet]) {
+        for s in sets {
+            if self.find(&s.name).is_none() {
+                self.0.push(s.clone());
+            }
+        }
+    }
+
+    pub fn clear(&mut self) {
+        self.0.clear();
+    }
+
+    /// The rules of the set differ from the remembered ones.
+    pub fn changed(&self, set: &RuleSet) -> bool {
+        self.find(&set.name).is_some_and(|b| b.rules != set.rules)
+    }
+
+    /// A renamed set keeps its remembered state.
+    pub fn rename(&mut self, from: &str, to: &str) {
+        if from == to {
+            return;
+        }
+        self.forget(to);
+        if let Some(b) = self.0.iter_mut().find(|b| b.name == from) {
+            b.name = to.to_owned();
+        }
+    }
+
+    /// Drops a deleted set: a later set of the same name is a new one.
+    pub fn forget(&mut self, name: &str) {
+        self.0.retain(|b| b.name != name);
+    }
+
+    /// *Save as new set* (#78): set `i` as it is now becomes a new set `name`, inserted before
+    /// it (so its rules keep the priority they had), and set `i` gets its remembered rules and
+    /// binding back; its name and On state stay. Returns `false` (nothing done) for a set that
+    /// was never observed.
+    pub fn save_as_new(&self, sets: &mut Vec<RuleSet>, i: usize, name: String) -> bool {
+        let Some(base) = self.find(&sets[i].name) else {
+            return false;
+        };
+        let mut new = sets[i].clone();
+        new.name = name;
+        sets[i].rules = base.rules.clone();
+        sets[i].logdefs = base.logdefs.clone();
+        sets.insert(i, new);
+        true
+    }
+
+    fn find(&self, name: &str) -> Option<&RuleSet> {
+        self.0.iter().find(|b| b.name == name)
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -140,6 +201,66 @@ mod tests {
         }
         assert!(parse_rules_file("{\"name\": 1}").is_err());
         assert!(parse_rules_file("nonsense").is_err());
+    }
+
+    fn rule(name: &str) -> HighlightRule {
+        HighlightRule {
+            name: name.into(),
+            pattern: name.into(),
+            ..Default::default()
+        }
+    }
+
+    #[test]
+    fn saving_as_a_new_set_restores_the_original() {
+        let mut sets = vec![
+            RuleSet::new("Other".into(), Vec::new()),
+            RuleSet::new("A".into(), vec![rule("old")]),
+        ];
+        let mut base = Baseline::default();
+        // Never observed: nothing to go back to.
+        assert!(!base.save_as_new(&mut sets, 1, "B".into()));
+        base.observe(&sets);
+        assert!(!base.changed(&sets[1]));
+        sets[1].rules.insert(0, rule("added"));
+        sets[1].logdefs = vec!["cbs.log.def".into()];
+        sets[1].enabled = false;
+        assert!(base.changed(&sets[1]) && !base.changed(&sets[0]));
+        // Observing again keeps the first state.
+        base.observe(&sets);
+        assert!(base.changed(&sets[1]));
+
+        assert!(base.save_as_new(&mut sets, 1, "B".into()));
+        let names: Vec<_> = sets.iter().map(|s| s.name.as_str()).collect();
+        assert_eq!(names, ["Other", "B", "A"]);
+        assert_eq!(sets[1].rules, [rule("added"), rule("old")]);
+        assert_eq!(sets[1].logdefs, ["cbs.log.def"]);
+        assert_eq!(sets[2].rules, [rule("old")]);
+        assert!(sets[2].logdefs.is_empty());
+        assert!(!sets[1].enabled && !sets[2].enabled);
+        base.observe(&sets);
+        assert!(!base.changed(&sets[1]) && !base.changed(&sets[2]));
+    }
+
+    #[test]
+    fn baseline_follows_rename_and_delete() {
+        let mut sets = vec![RuleSet::new("A".into(), vec![rule("old")])];
+        let mut base = Baseline::default();
+        base.observe(&sets);
+        sets[0].rules.push(rule("added"));
+        base.rename("A", "A");
+        assert!(base.changed(&sets[0]));
+        base.rename("A", "C");
+        sets[0].name = "C".into();
+        base.observe(&sets);
+        assert!(base.changed(&sets[0]));
+        // Undoing the change by hand: unchanged again.
+        sets[0].rules.pop();
+        assert!(!base.changed(&sets[0]));
+        base.forget("C");
+        sets[0].rules.clear();
+        base.observe(&sets);
+        assert!(!base.changed(&sets[0]));
     }
 
     #[test]

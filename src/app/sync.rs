@@ -99,6 +99,8 @@ impl App {
             self.set_language(&code, false);
         }
         if old.rule_sets != self.cfg.rule_sets {
+            // Changes of another instance are not changes of this rules window (#78).
+            self.rules_baseline.clear();
             self.recompile_rules();
         }
         if old.overview != self.cfg.overview {
