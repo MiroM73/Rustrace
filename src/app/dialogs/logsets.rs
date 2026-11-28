@@ -107,18 +107,11 @@ fn share_problem_text(share: &str, state: &FileState) -> String {
 impl App {
     /// File → Open log set: (re)loads the set files and checks the last chosen set.
     pub(in crate::app) fn open_log_sets(&mut self) {
-        let list = logset::load_all();
-        let mut sets = list.sets;
-        // Predefined first, then own; each group by its name in the current language.
-        let lang = self.lang_code.clone();
-        sets.sort_by_cached_key(|s| (s.is_own(), s.name(&lang).to_lowercase()));
-        let chosen = sets
-            .iter()
-            .position(|s| s.key() == self.cfg.last_log_set)
-            .unwrap_or(0);
+        let (sets, errors) = self.sorted_log_sets();
+        let chosen = self.last_set_index(&sets);
         let mut dlg = LogSetDialog {
             sets,
-            errors: list.errors,
+            errors,
             chosen,
             remote: self.cfg.log_set_remote,
             computer: self
@@ -137,6 +130,35 @@ impl App {
         self.start_set_check(&mut dlg);
         self.log_sets = Some(dlg);
         self.log_sets_win.open();
+    }
+
+    /// Reads the set files again in the open window (a set was saved), keeping the computer and
+    /// choosing the set saved last.
+    pub(in crate::app) fn reload_log_sets(&mut self) {
+        let Some(mut dlg) = self.log_sets.take() else {
+            return;
+        };
+        let (sets, errors) = self.sorted_log_sets();
+        dlg.chosen = self.last_set_index(&sets);
+        dlg.sets = sets;
+        dlg.errors = errors;
+        self.start_set_check(&mut dlg);
+        self.log_sets = Some(dlg);
+    }
+
+    /// All sets – predefined first, then own, each group by its name in the current language –
+    /// and the errors of the files that cannot be used.
+    fn sorted_log_sets(&self) -> (Vec<LogSetDef>, Vec<String>) {
+        let list = logset::load_all();
+        let mut sets = list.sets;
+        sets.sort_by_cached_key(|s| (s.is_own(), s.name(&self.lang_code).to_lowercase()));
+        (sets, list.errors)
+    }
+
+    fn last_set_index(&self, sets: &[LogSetDef]) -> usize {
+        sets.iter()
+            .position(|s| s.key() == self.cfg.last_log_set)
+            .unwrap_or(0)
     }
 
     /// Resolves the files of the chosen set for the chosen computer and checks them in a

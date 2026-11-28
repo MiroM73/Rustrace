@@ -22,6 +22,7 @@ mod i18n;
 mod icon;
 mod logdef;
 mod logset;
+mod logsetsave;
 mod merge;
 mod overview;
 mod parser;

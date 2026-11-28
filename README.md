@@ -30,7 +30,8 @@ that have a guide (File → Open log set…).
 - CMTrace / ConfigMgr and SMS logs, plain text and any other layout described by a small
   [log definition](docs/log-definitions.md) – built in: IIS, Exchange, DISM, CBS, Windows Installer
 - several logs in one view merged by time, rotated parts (`.lo_`) included; [log sets](docs/log-sets.md)
-  open the logs of one scenario at once, also from a remote computer
+  open the logs of one scenario at once, also from a remote computer; the logs you have opened
+  can be saved as your own set
 - adjustable automatic refresh in a background thread – logs of hundreds of MB stay responsive
 - search as you type (text or regex), filter mode, severity toggles, column filters, time range
 - color highlight rules, light / dark theme, overview strip, Δ time column, bookmarks

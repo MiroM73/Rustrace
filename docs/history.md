@@ -507,6 +507,11 @@ Notes for Claude, linked from `CLAUDE.md`.
     `rulesets::Baseline`; tests `saving_as_a_new_set_restores_the_original`,
     `baseline_follows_rename_and_delete`; looked at in the running window with *Open windows
     separately* off.
+108. #76 *File → Save as log set…*: the logs of a merged view become an own set (name,
+   description, `file` lines). Decided with the owner: paths are written with variables (admin
+   share paths as drive paths), and an existing set of that name is overwritten only on request,
+   else another name. `src/logsetsave.rs` + tests (198 in all); looked at in the running window
+   with *Open windows separately* off (save, prefill, overwrite keeps a `guide` line).
 
 ## Ideas not done yet (offered by the owner)
 - `--set "<name>"` command-line option for log sets (#27): would need the set loading, the file

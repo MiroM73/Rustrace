@@ -436,6 +436,9 @@ pub struct App {
     /// File → Open log set window (#27), `None` = closed.
     log_sets: Option<dialogs::logsets::LogSetDialog>,
     log_sets_win: ToolWindow,
+    /// File → Save as log set window (#76), `None` = closed.
+    save_set: Option<dialogs::savelogset::SaveSetDialog>,
+    save_set_win: ToolWindow,
 }
 
 /// Limits of Ctrl + mouse wheel zoom.
@@ -626,6 +629,8 @@ impl App {
             cli_select: None,
             log_sets: None,
             log_sets_win: ToolWindow::new("logsets_window"),
+            save_set: None,
+            save_set_win: ToolWindow::new("save_logset_window"),
         };
         app.load_defs();
         app.check_def_updates();
@@ -779,6 +784,7 @@ impl eframe::App for App {
         self.lookup_window(&ctx);
         self.bookmarks_window(&ctx);
         self.log_sets_window(&ctx);
+        self.save_log_set_window(&ctx);
         self.export_window(&ctx);
         self.table_export_window(&ctx);
         self.def_updates_window(&ctx);

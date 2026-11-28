@@ -69,6 +69,18 @@ impl App {
                         ui.close();
                         self.open_log_sets();
                     }
+                    if ui
+                        .add_enabled(
+                            self.is_merged(),
+                            egui::Button::new(format!("💾 {}", t!("menu.file.logset.save"))),
+                        )
+                        .on_hover_text(t!("menu.file.logset.save.tip"))
+                        .on_disabled_hover_text(t!("menu.file.logset.save.disabled"))
+                        .clicked()
+                    {
+                        ui.close();
+                        self.open_save_log_set();
+                    }
                     if self.is_merged() {
                         ui.menu_button(format!("📚 {}", t!("menu.file.merged")), |ui| {
                             scrolled_submenu(ui, |ui| {

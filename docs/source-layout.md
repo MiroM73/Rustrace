@@ -16,6 +16,8 @@ What every source file and folder of the repository contains.
 - `src/logdef.rs` – log definitions: `.def` file format, loading, choosing by file name / content,
   parsing lines into columns (+ tests)
 - `src/logset.rs` – log sets: `.set` file format, loading, variables, file checks (+ tests)
+- `src/logsetsave.rs` – saving a log set: paths → variables, file name, collisions, editing the
+  text of a `.set` file (+ tests)
 - `src/errcodes.rs` – error code detection and lookup (+ tests)
 - `src/httpstatus.rs` – HTTP status / IIS substatus descriptions, lookup input parsing (+ tests)
 - `src/guides.rs` – the guides of Help → Guides: table of guide files and titles, GitHub URLs (+ tests)

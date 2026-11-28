@@ -54,14 +54,35 @@ pub struct LogSetDef {
     pub guides: Vec<String>,
 }
 
-/// The text of a language: `code` itself, its base language ("de-AT" → "de"), then the default.
-fn localized<'a>(map: &'a BTreeMap<String, String>, code: &str) -> Option<&'a str> {
+/// The entry shown in the language `code`: `code` itself, its base language ("de-AT" → "de"),
+/// then the default (""). Returns (language, text).
+pub fn localized_entry<'a>(
+    map: &'a BTreeMap<String, String>,
+    code: &str,
+) -> Option<(&'a str, &'a str)> {
     let code = code.to_ascii_lowercase().replace('_', "-");
     let base = code.split('-').next().unwrap_or("");
-    map.get(&code)
-        .or_else(|| map.get(base))
-        .or_else(|| map.get(""))
-        .map(String::as_str)
+    map.get_key_value(&code)
+        .or_else(|| map.get_key_value(base))
+        .or_else(|| map.get_key_value(""))
+        .map(|(k, v)| (k.as_str(), v.as_str()))
+}
+
+fn localized<'a>(map: &'a BTreeMap<String, String>, code: &str) -> Option<&'a str> {
+    localized_entry(map, code).map(|(_, text)| text)
+}
+
+/// One `key = value` line of a set file: (key, language or "", value – maybe empty); `None`
+/// for comments and lines without `=`.
+pub fn split_line(line: &str) -> Option<(String, String, &str)> {
+    let line = line.trim_start_matches('\u{feff}').trim();
+    if line.starts_with('#') {
+        return None;
+    }
+    let (k, v) = line.split_once('=')?;
+    let k = k.trim().to_ascii_lowercase();
+    let (key, lang) = k.split_once('.').unwrap_or((&k, ""));
+    Some((key.to_owned(), lang.to_owned(), v.trim()))
 }
 
 impl LogSetDef {
@@ -76,25 +97,16 @@ impl LogSetDef {
             files: Vec::new(),
             guides: Vec::new(),
         };
-        for line in text.lines() {
-            let line = line.trim_start_matches('\u{feff}').trim();
-            if line.is_empty() || line.starts_with('#') {
-                continue;
-            }
-            let Some((k, v)) = line.split_once('=') else {
-                continue;
-            };
-            let (k, v) = (k.trim().to_ascii_lowercase(), v.trim());
+        for (key, lang, v) in text.lines().filter_map(split_line) {
             if v.is_empty() {
                 continue;
             }
-            let (key, lang) = k.split_once('.').unwrap_or((&k, ""));
-            match key {
+            match key.as_str() {
                 "name" => {
-                    set.names.insert(lang.to_owned(), v.to_owned());
+                    set.names.insert(lang, v.to_owned());
                 }
                 "description" => {
-                    set.descriptions.insert(lang.to_owned(), v.to_owned());
+                    set.descriptions.insert(lang, v.to_owned());
                 }
                 "file" if lang.is_empty() => set.files.push(v.to_owned()),
                 "guide" if lang.is_empty() => set.guides.push(v.to_owned()),
@@ -118,6 +130,16 @@ impl LogSetDef {
     /// Description in the language `code` (falls back to the default one).
     pub fn description(&self, code: &str) -> Option<&str> {
         localized(&self.descriptions, code)
+    }
+
+    /// Whether `name` is the name of this set in any language (the file name without `.set`
+    /// when the file has no name), ignoring case.
+    pub fn has_name(&self, name: &str) -> bool {
+        let q = name.trim().to_lowercase();
+        if self.names.is_empty() {
+            return self.name("").to_lowercase() == q;
+        }
+        self.names.values().any(|n| n.to_lowercase() == q)
     }
 
     /// Whether `query` names this set: its file name (with or without `.set`) or its name in any

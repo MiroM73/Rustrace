@@ -10,5 +10,6 @@ pub(in crate::app) mod logsets;
 mod lookup;
 mod rules;
 mod ruleset;
+pub(in crate::app) mod savelogset;
 mod tabexport;
 mod update;

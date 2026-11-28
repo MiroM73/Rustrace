@@ -89,6 +89,35 @@ file = C:\MyApp\Logs\install.log
 | `file` | one log of the set (one line per log, in the order shown) |
 | `guide` | optional, repeatable: a guide for the scenario, shown as a 📖 button next to the set – a file name of [docs/guides](guides/README.md) (e.g. `guide = failed-app-install.md`, opened on GitHub with its translated title), or a URL / path of your own guide (`guide = https://intranet/wiki/AppDeploy`, `guide = \\server\docs\deploy.pdf`) |
 
+## Saving the opened logs as a set
+
+Open the logs you need together (**File → Open**, **➕ Add log to the view**, or a set with some
+logs unticked) and choose **File → Save as log set…** – it is enabled while several logs are
+shown as one merged view. Enter a **name** and, if you like, a **description** that says what the
+set is for; the window shows the `file` lines that will be written. The set is saved as a
+`.set` file in your own sets folder and is offered in **File → Open log set…** right away; the
+window title shows its name.
+
+The paths are saved so that the set also works on **another computer**:
+
+| Opened log | `file` line |
+|---|---|
+| in the ConfigMgr client log folder | `%CCMLOGS%\AppEnforce.log` |
+| in the Windows folder | `%WINDIR%\Logs\CBS\CBS.log` |
+| in ProgramData | `%PROGRAMDATA%\…` |
+| `\\pc01\d$\Logs\app.log` (administrative share) | `D:\Logs\app.log` – on the computer chosen when opening |
+| anything else | the full path as it is |
+
+When the view mixes logs of this computer and of a remote one, or of several remote computers,
+the paths of the remote ones stay as they are. Older rotated parts are not listed – they are
+found again when the set is opened.
+
+When one of your own sets already has the name (or the file name made from it is taken), the
+window says so and offers **Overwrite**; enter another name to save a new set instead.
+Overwriting a set of the same name keeps its `guide` lines, comments and translations. If the
+view was opened from a set, its name and description are filled in, so saving again updates your
+own set. A built-in set is never changed – saving under its name creates your own set beside it.
+
 ## From the command line
 
 `rustrace --set "SCCM client"` (or `--set C:\Sets\my.set`, optionally `--computer PC01`) opens a set
