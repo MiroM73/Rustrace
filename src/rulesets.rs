@@ -1,5 +1,6 @@
-//! Highlight rule sets as files (#70): the file format of an exported set, the built-in sets
-//! and the import of a file (a set file, or the older bare list of rules).
+//! Highlight rule sets as files (#70): the file format of an exported set, the built-in sets,
+//! the import of a file (a set file, or the older bare list of rules) and the sets remembered
+//! for *Save as new set* (#78).
 
 use crate::config::{HighlightRule, RuleSet, RuleSetFile};
 

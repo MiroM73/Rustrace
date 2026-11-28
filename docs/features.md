@@ -179,9 +179,10 @@ The logs of one troubleshooting scenario in one step – details in [Log sets](l
 - **💾 Save as new set** (#78): make a new set out of an existing one without changing the
   original. Edit the set (add, change, reorder or delete rules; *Create a rule for the component*
   counts too), click the button, type the name (*name (copy)* is offered) and confirm with ✔ or
-  Enter. The new set gets everything as you see it now and is placed **before** the original, so the
-  rules you added still win and the log keeps its colors; the original set gets back the rules and
-  log types it had when the window was opened (its name and *Active* stay as they are). The button
+  Enter. The new set gets everything as you see it now and is placed **before** the original, so
+  rules you added or changed still win; the original set gets back the rules and log types it had
+  when the window was opened (its name and *Active* stay as they are), so rules you removed or
+  switched off apply again from the original while it is active. The button
   is available once the rules of the set have changed since the window was opened; closing the
   window keeps the changes and starts afresh. A new set starts with the same *Active* state as the
   original – switch off the one you do not want to apply. (*📄 Duplicate* copies a set and leaves

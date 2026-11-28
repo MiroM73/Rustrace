@@ -52,7 +52,7 @@ What every source file and folder of the repository contains.
   - `widgets.rs` – small shared UI helpers (color button, theme switch, …)
   - `dialogs/` – highlight rules (+ the rule set bar `ruleset.rs`), colors, error code lookup, export, bookmarks, help / about,
     default app (Windows), new versions, open log set
-- `src/rulesets.rs` – highlight rule set files, built-in sets (`rulesets/*.rules`), import (+ tests)
+- `src/rulesets.rs` – highlight rule set files, built-in sets (`rulesets/*.rules`), import, the remembered sets of *Save as new set* (+ tests)
 - `src/main.rs` – window start-up, command line (`src/cli.rs`), renderer choice (OpenGL, wgpu / Direct3D 12 as the fallback)
 - `src/update.rs` – new versions: GitHub release, version comparison, ZIP extraction, SHA-256 check,
   installation over the running program, state for the restart (+ tests)

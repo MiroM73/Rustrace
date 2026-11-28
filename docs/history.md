@@ -505,7 +505,8 @@ Notes for Claude, linked from `CLAUDE.md`.
     goes back to its state at the opening of the window (unlike *Duplicate*), the button is enabled
     only after its rules changed, the name is asked for, the new set goes before the original.
     `rulesets::Baseline`; tests `saving_as_a_new_set_restores_the_original`,
-    `baseline_follows_rename_and_delete`.
+    `baseline_follows_rename_and_delete`; looked at in the running window with *Open windows
+    separately* off.
 
 ## Ideas not done yet (offered by the owner)
 - `--set "<name>"` command-line option for log sets (#27): would need the set loading, the file
