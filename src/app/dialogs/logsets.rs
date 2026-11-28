@@ -2,15 +2,23 @@
 //! computer or on a remote one (over its administrative shares), opened as one view merged by
 //! time. Which files exist is checked in a background thread; the shares of a remote computer
 //! must answer within `logset::REMOTE_TIMEOUT`, so an offline computer never blocks the window.
+//! The sets are listed on the left with a search field; the name and description of an own set
+//! can be edited (#77).
 
 use crate::app::*;
 use crate::logset::{self, FileState, LogSetDef};
+use crate::logsetsave::{self, Changes};
 
 /// State of the open "Open log set" window.
 pub(in crate::app) struct LogSetDialog {
     sets: Vec<LogSetDef>,
     errors: Vec<String>,
     chosen: usize,
+    /// The search text: the list shows only the sets it finds.
+    query: String,
+    focus_search: bool,
+    /// The name and description of the chosen own set are being edited.
+    edit: Option<SetEdit>,
     /// A remote computer is chosen and its name as typed.
     remote: bool,
     computer: String,
@@ -23,6 +31,28 @@ pub(in crate::app) struct LogSetDialog {
     shares_pending: bool,
     /// The first share that could not be used: (share, why).
     share_problem: Option<(String, FileState)>,
+}
+
+/// Editing the name and description of an own set.
+struct SetEdit {
+    path: PathBuf,
+    name: String,
+    description: String,
+    /// As they were shown when editing began: only what differs is written.
+    old_name: String,
+    old_description: String,
+    error: Option<String>,
+}
+
+impl SetEdit {
+    /// Another own set has the new name.
+    fn name_taken(&self, sets: &[LogSetDef]) -> bool {
+        let name = self.name.trim();
+        name != self.old_name
+            && sets
+                .iter()
+                .any(|s| s.is_own() && s.path.as_ref() != Some(&self.path) && s.has_name(name))
+    }
 }
 
 /// Results of the background check.
@@ -113,6 +143,9 @@ impl App {
             sets,
             errors,
             chosen,
+            query: String::new(),
+            focus_search: true,
+            edit: None,
             remote: self.cfg.log_set_remote,
             computer: self
                 .cfg
@@ -142,6 +175,7 @@ impl App {
         dlg.chosen = self.last_set_index(&sets);
         dlg.sets = sets;
         dlg.errors = errors;
+        dlg.edit = None;
         self.start_set_check(&mut dlg);
         self.log_sets = Some(dlg);
     }
@@ -250,134 +284,163 @@ impl App {
         dlg.poll_check(ctx);
         let (mut chosen, mut recheck, mut open_logs, mut close, mut own_folder) =
             (None, false, false, false, false);
+        let mut save_edit = false;
         let mut guide: Option<String> = None;
         let lang = self.lang_code.clone();
         let recent = self.cfg.remote_computers.clone();
+        // The panes have their own scroll areas.
         let spec = ToolSpec::new(
             format!("📑 {}", t!("logset.title")),
-            [860.0, 520.0],
-            [560.0, 300.0],
-        );
+            [1100.0, 560.0],
+            [720.0, 360.0],
+        )
+        .no_scroll();
         let open = self.show_tool(
             ctx,
             |a| &mut a.log_sets_win,
             spec,
             |app, ui, _keep| {
-                ui.horizontal(|ui| {
-                    ui.label(t!("logset.set"));
-                    let label = |s: &LogSetDef| {
-                        if s.is_own() {
-                            format!("{} ({})", s.name(&lang), t!("logset.own"))
-                        } else {
-                            s.name(&lang)
-                        }
-                    };
-                    egui::ComboBox::from_id_salt("logset_combo")
-                        .width(320.0)
-                        .selected_text(dlg.set().map(label).unwrap_or_default())
-                        .show_ui(ui, |ui| {
-                            for (i, s) in dlg.sets.iter().enumerate() {
-                                if ui.selectable_label(i == dlg.chosen, label(s)).clicked() {
-                                    chosen = Some(i);
-                                }
-                            }
-                        });
-                    // Guides of the scenario (#39): built-in ones by their title, others by name.
-                    for g in dlg.set().map(|s| s.guides.as_slice()).unwrap_or_default() {
-                        let title = guides::title_key(g).map_or_else(|| g.clone(), |k| t!(k));
-                        let target = guides::target(REPOSITORY, g);
-                        let tip = if guides::title_key(g).is_some() {
-                            t!("menu.help.guides.tip")
-                        } else {
-                            target.clone()
-                        };
-                        if ui
-                            .button(format!("📖 {title}"))
-                            .on_hover_text(tip)
-                            .clicked()
-                        {
-                            guide = Some(target);
-                        }
-                    }
-                });
-                if let Some(s) = dlg.set() {
-                    if let Some(d) = s.description(&lang) {
-                        ui.add(egui::Label::new(RichText::new(d).weak()).wrap());
-                    }
-                    if let Some(p) = &s.path {
-                        ui.weak(t!("logset.source", path = p.display()));
-                    }
-                }
-                recheck |= computer_row(ui, &mut dlg, &recent);
-                ui.separator();
-                if dlg.remote && dlg.checked_pc.is_none() {
-                    let text = if dlg.computer.trim().is_empty() {
-                        t!("logset.remote.enter")
-                    } else {
-                        t!("logset.remote.invalid", name = dlg.computer.trim())
-                    };
-                    ui.colored_label(ORANGE, text);
-                } else {
-                    app.set_rows(ui, &mut dlg);
-                }
-                ui.separator();
-                let count = dlg
-                    .rows
-                    .iter()
-                    .filter(|r| r.ticked && r.state.as_ref().is_some_and(FileState::exists))
-                    .count();
-                if let Some((share, state)) = &dlg.share_problem {
-                    ui.colored_label(RED, share_problem_text(share, state));
-                } else if dlg.check.is_none()
-                    && !dlg.rows.is_empty()
-                    && !dlg
+                egui::Panel::bottom("logset_buttons").show(ui, |ui| {
+                    ui.add_space(4.0);
+                    let count = dlg
                         .rows
                         .iter()
-                        .any(|r| r.state.as_ref().is_some_and(FileState::exists))
-                {
-                    ui.colored_label(ORANGE, t!("logset.none_found"));
-                }
-                ui.horizontal(|ui| {
-                    if ui
-                        .add_enabled(
-                            count > 0,
-                            egui::Button::new(format!("📂 {}", t!("logset.open", count = count))),
-                        )
-                        .on_hover_text(t!("logset.open.tip"))
-                        .clicked()
+                        .filter(|r| r.ticked && r.state.as_ref().is_some_and(FileState::exists))
+                        .count();
+                    if let Some((share, state)) = &dlg.share_problem {
+                        ui.colored_label(RED, share_problem_text(share, state));
+                    } else if dlg.check.is_none()
+                        && !dlg.rows.is_empty()
+                        && !dlg
+                            .rows
+                            .iter()
+                            .any(|r| r.state.as_ref().is_some_and(FileState::exists))
                     {
-                        open_logs = true;
+                        ui.colored_label(ORANGE, t!("logset.none_found"));
                     }
-                    if ui
-                        .add_enabled(
-                            dlg.check.is_none(),
-                            egui::Button::new(format!("🔄 {}", t!("logset.recheck"))),
-                        )
-                        .clicked()
-                    {
-                        recheck = true;
-                    }
-                    if ui
-                        .button(format!("📁 {}", t!("logset.own_folder")))
-                        .on_hover_text(t!("logset.own_folder.tip"))
-                        .clicked()
-                    {
-                        own_folder = true;
-                    }
-                    if ui.button(t!("progress.cancel")).clicked() {
-                        close = true;
+                    ui.horizontal(|ui| {
+                        if ui
+                            .add_enabled(
+                                count > 0,
+                                egui::Button::new(format!(
+                                    "📂 {}",
+                                    t!("logset.open", count = count)
+                                )),
+                            )
+                            .on_hover_text(t!("logset.open.tip"))
+                            .clicked()
+                        {
+                            open_logs = true;
+                        }
+                        if ui
+                            .add_enabled(
+                                dlg.check.is_none(),
+                                egui::Button::new(format!("🔄 {}", t!("logset.recheck"))),
+                            )
+                            .clicked()
+                        {
+                            recheck = true;
+                        }
+                        if ui
+                            .button(format!("📁 {}", t!("logset.own_folder")))
+                            .on_hover_text(t!("logset.own_folder.tip"))
+                            .clicked()
+                        {
+                            own_folder = true;
+                        }
+                        if ui.button(t!("progress.cancel")).clicked() {
+                            close = true;
+                        }
+                    });
+                    if !dlg.errors.is_empty() {
+                        ui.separator();
+                        ui.colored_label(RED, t!("logset.errors"));
+                        egui::ScrollArea::vertical()
+                            .id_salt("logset_errors")
+                            .max_height(60.0)
+                            .show(ui, |ui| {
+                                for e in &dlg.errors {
+                                    ui.label(RichText::new(e).small().color(RED));
+                                }
+                            });
                     }
                 });
-                if !dlg.errors.is_empty() {
-                    ui.separator();
-                    ui.colored_label(RED, t!("logset.errors"));
-                    for e in &dlg.errors {
-                        ui.label(RichText::new(e).small().color(RED));
+                egui::Panel::left("logset_list")
+                    .resizable(true)
+                    .default_size(280.0)
+                    .min_size(180.0)
+                    .show(ui, |ui| chosen = set_list(ui, &mut dlg, &lang));
+                egui::CentralPanel::default().show(ui, |ui| {
+                    ui.horizontal_wrapped(|ui| {
+                        if let Some(s) = dlg.set() {
+                            ui.heading(s.name(&lang));
+                            if s.is_own()
+                                && dlg.edit.is_none()
+                                && ui
+                                    .button(format!("✏ {}", t!("logset.edit")))
+                                    .on_hover_text(t!("logset.edit.tip"))
+                                    .clicked()
+                                && let Some(path) = s.path.clone()
+                            {
+                                let name = s.name(&lang);
+                                let description =
+                                    s.description(&lang).unwrap_or_default().to_owned();
+                                dlg.edit = Some(SetEdit {
+                                    path,
+                                    old_name: name.clone(),
+                                    old_description: description.clone(),
+                                    name,
+                                    description,
+                                    error: None,
+                                });
+                            }
+                        }
+                        // Guides of the scenario (#39): built-in ones by their title, others by
+                        // name.
+                        for g in dlg.set().map(|s| s.guides.as_slice()).unwrap_or_default() {
+                            let title = guides::title_key(g).map_or_else(|| g.clone(), |k| t!(k));
+                            let target = guides::target(REPOSITORY, g);
+                            let tip = if guides::title_key(g).is_some() {
+                                t!("menu.help.guides.tip")
+                            } else {
+                                target.clone()
+                            };
+                            if ui
+                                .button(format!("📖 {title}"))
+                                .on_hover_text(tip)
+                                .clicked()
+                            {
+                                guide = Some(target);
+                            }
+                        }
+                    });
+                    if dlg.edit.is_some() {
+                        save_edit = edit_form(ui, &mut dlg);
+                    } else if let Some(d) = dlg.set().and_then(|s| s.description(&lang)) {
+                        ui.add(egui::Label::new(RichText::new(d).weak()).wrap());
                     }
-                }
+                    if let Some(p) = dlg.set().and_then(|s| s.path.as_ref()) {
+                        ui.weak(t!("logset.source", path = p.display()));
+                    }
+                    recheck |= computer_row(ui, &mut dlg, &recent);
+                    ui.separator();
+                    if dlg.remote && dlg.checked_pc.is_none() {
+                        let text = if dlg.computer.trim().is_empty() {
+                            t!("logset.remote.enter")
+                        } else {
+                            t!("logset.remote.invalid", name = dlg.computer.trim())
+                        };
+                        ui.colored_label(ORANGE, text);
+                    } else {
+                        app.set_rows(ui, &mut dlg);
+                    }
+                });
             },
         );
 
+        if save_edit {
+            self.save_set_edit(&mut dlg);
+        }
         if let Some(link) = guide {
             self.open_link(&link);
         }
@@ -389,6 +452,7 @@ impl App {
         }
         if let Some(i) = chosen.filter(|&i| i != dlg.chosen) {
             dlg.chosen = i;
+            dlg.edit = None;
             if let Some(s) = dlg.set() {
                 self.cfg.last_log_set = s.key();
                 self.cfg_dirty = true;
@@ -429,6 +493,42 @@ impl App {
         }
     }
 
+    /// ✔ of the edit form: writes the name and description into the file of the set, keeping
+    /// the rest of it, and reads the sets again.
+    fn save_set_edit(&mut self, dlg: &mut LogSetDialog) {
+        let Some(edit) = &dlg.edit else {
+            return;
+        };
+        let (name, description) = (edit.name.trim(), edit.description.trim());
+        let changes = Changes {
+            name: (name != edit.old_name).then_some(name),
+            description: (description != edit.old_description).then_some(description),
+            files: None,
+        };
+        if changes.name.is_none() && changes.description.is_none() {
+            dlg.edit = None;
+            return;
+        }
+        if let Err(e) = logsetsave::save(&edit.path, true, &self.lang_code, &changes) {
+            let text = t!("logset.save.error", file = edit.path.display(), error = e);
+            if let Some(edit) = &mut dlg.edit {
+                edit.error = Some(text);
+            }
+            return;
+        }
+        // The window title follows a renamed set whose logs are open.
+        if changes.name.is_some() && self.set_name.as_ref() == Some(&edit.old_name) {
+            self.set_name = Some(name.to_owned());
+        }
+        let key = dlg.set().map(LogSetDef::key);
+        let (sets, errors) = self.sorted_log_sets();
+        // The order may have changed; the logs of the set have not.
+        dlg.chosen = sets.iter().position(|s| Some(s.key()) == key).unwrap_or(0);
+        dlg.sets = sets;
+        dlg.errors = errors;
+        dlg.edit = None;
+    }
+
     /// The table of the logs of the set: tick, state, path, size, last write time.
     fn set_rows(&self, ui: &mut egui::Ui, dlg: &mut LogSetDialog) {
         let green = if self.dark {
@@ -437,9 +537,9 @@ impl App {
             Color32::from_rgb(20, 130, 40)
         };
         let no_wrap = |ui: &mut egui::Ui, text: RichText| ui.add(egui::Label::new(text).extend());
-        egui::ScrollArea::vertical()
-            .max_height(360.0)
-            .auto_shrink([false, true])
+        egui::ScrollArea::both()
+            .id_salt("logset_rows")
+            .auto_shrink([false, false])
             .show(ui, |ui| {
                 egui::Grid::new("logset_grid")
                     .striped(true)
@@ -519,6 +619,121 @@ impl App {
                     });
             });
     }
+}
+
+/// The search field and the list of the sets it finds; returns the set that was clicked.
+fn set_list(ui: &mut egui::Ui, dlg: &mut LogSetDialog, lang: &str) -> Option<usize> {
+    let mut clicked = None;
+    ui.horizontal(|ui| {
+        ui.label("🔍");
+        // The button first, so the field takes exactly the rest (a wider one would make the
+        // panel grow).
+        ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+            if !dlg.query.is_empty() && ui.small_button("✖").clicked() {
+                dlg.query.clear();
+            }
+            let r = ui.add(
+                egui::TextEdit::singleline(&mut dlg.query)
+                    // The button appearing before it must not change its id (focus).
+                    .id_salt("logset_search")
+                    .hint_text(t!("logset.search.hint"))
+                    .desired_width(f32::INFINITY),
+            );
+            if dlg.focus_search {
+                r.request_focus();
+                dlg.focus_search = false;
+            }
+        });
+    });
+    ui.separator();
+    egui::ScrollArea::vertical()
+        .id_salt("logset_sets")
+        .auto_shrink([false, false])
+        .show(ui, |ui| {
+            // Full width entries with the names on the left.
+            let layout = egui::Layout::top_down_justified(egui::Align::LEFT);
+            ui.with_layout(layout, |ui| clicked = set_entries(ui, dlg, lang));
+        });
+    clicked
+}
+
+/// The entries of the list of sets: name and, under it, the description.
+fn set_entries(ui: &mut egui::Ui, dlg: &LogSetDialog, lang: &str) -> Option<usize> {
+    let mut clicked = None;
+    let mut any = false;
+    for (i, s) in dlg.sets.iter().enumerate() {
+        if !s.found_by(&dlg.query) {
+            continue;
+        }
+        any = true;
+        let name = if s.is_own() {
+            format!("{} ({})", s.name(lang), t!("logset.own"))
+        } else {
+            s.name(lang)
+        };
+        let button = egui::Button::selectable(i == dlg.chosen, name).truncate();
+        let mut r = ui.add(button);
+        if let Some(d) = s.description(lang) {
+            let text = egui::Label::new(RichText::new(d).small().weak())
+                .truncate()
+                .selectable(false)
+                .sense(egui::Sense::click());
+            r |= ui.add(text).on_hover_text(d);
+        }
+        if r.clicked() {
+            clicked = Some(i);
+        }
+        ui.add_space(2.0);
+    }
+    if !any {
+        ui.weak(t!("logset.search.none"));
+    }
+    clicked
+}
+
+/// Name and description of the edited set with ✔ / ✖; true = save.
+fn edit_form(ui: &mut egui::Ui, dlg: &mut LogSetDialog) -> bool {
+    let Some(edit) = &mut dlg.edit else {
+        return false;
+    };
+    let taken = edit.name_taken(&dlg.sets);
+    let (mut save, mut cancel) = (false, false);
+    egui::Grid::new("logset_edit")
+        .num_columns(2)
+        .spacing([12.0, 6.0])
+        .show(ui, |ui| {
+            ui.label(t!("logset.save.name"));
+            ui.add(egui::TextEdit::singleline(&mut edit.name).desired_width(420.0));
+            ui.end_row();
+            ui.label(t!("logset.save.description"));
+            ui.add(
+                egui::TextEdit::multiline(&mut edit.description)
+                    .hint_text(t!("logset.save.description.hint"))
+                    .desired_rows(2)
+                    .desired_width(420.0),
+            );
+            ui.end_row();
+        });
+    if taken {
+        ui.colored_label(RED, t!("logset.name_taken"));
+    }
+    if let Some(e) = &edit.error {
+        ui.colored_label(RED, e);
+    }
+    ui.horizontal(|ui| {
+        let ok = !taken && !edit.name.trim().is_empty();
+        save = ui
+            .add_enabled(
+                ok,
+                egui::Button::new(format!("✔ {}", t!("logset.save.button"))),
+            )
+            .clicked();
+        cancel = ui.button(format!("✖ {}", t!("progress.cancel"))).clicked();
+    });
+    if cancel {
+        dlg.edit = None;
+    }
+    save
 }
 
 /// Text, color and tooltip (a long error message) of a checked file.

@@ -512,6 +512,12 @@ Notes for Claude, linked from `CLAUDE.md`.
    share paths as drive paths), and an existing set of that name is overwritten only on request,
    else another name. `src/logsetsave.rs` + tests (198 in all); looked at in the running window
    with *Open windows separately* off (save, prefill, overwrite keeps a `guide` line).
+109. #77 Description of log sets and looking them up. The `.set` format already had `description`
+   and the window showed it; new: the description is entered when a set is saved (#76), and,
+   decided with the owner, the Open log set window lists all sets with descriptions and a search
+   field (instead of the combo box) and edits the name / description of own sets (no deleting).
+   Test `logset::tests::search`; looked at in the running window with *Open windows separately*
+   off (search, edit of a translated set, taken name), not as a separate window.
 
 ## Ideas not done yet (offered by the owner)
 - `--set "<name>"` command-line option for log sets (#27): would need the set loading, the file

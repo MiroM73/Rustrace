@@ -152,6 +152,22 @@ impl LogSetDef {
             || self.names.values().any(|n| n.to_lowercase() == q)
     }
 
+    /// Whether every word of `query` is somewhere in the names or descriptions (any language)
+    /// or in the `file` lines, ignoring case – the search of the Open log set window (#77).
+    pub fn found_by(&self, query: &str) -> bool {
+        let name = self.name("");
+        let texts: Vec<String> = std::iter::once(&name)
+            .chain(self.names.values())
+            .chain(self.descriptions.values())
+            .chain(&self.files)
+            .map(|t| t.to_lowercase())
+            .collect();
+        query
+            .to_lowercase()
+            .split_whitespace()
+            .all(|word| texts.iter().any(|t| t.contains(word)))
+    }
+
     /// A set from the user's folder.
     pub fn is_own(&self) -> bool {
         self.priority == PRIO_USER
@@ -644,6 +660,32 @@ mod tests {
         );
         assert_eq!(check_file(&base, true), FileState::NotAFile);
         let _ = std::fs::remove_dir_all(&base);
+    }
+
+    #[test]
+    fn search() {
+        let text = "name = App deployment\nname.sk = Nasadenie aplikácií\n\
+                    description.de = Prüfung\nfile = %CCMLOGS%\\AppEnforce.log\nguide = x.md";
+        let s = LogSetDef::parse("my-set.set", text, None).unwrap();
+        // Every language, the file lines, parts of words; all words must be found.
+        for q in [
+            "",
+            "  ",
+            "deploy",
+            "NASADENIE APLIKÁCIÍ",
+            "prüf",
+            "appenforce",
+            "ccmlogs enforce nasad",
+        ] {
+            assert!(s.found_by(q), "{q}");
+        }
+        // Neither the guides nor the file name of a set that has a name.
+        for q in ["x.md", "my-set", "deploy cbs"] {
+            assert!(!s.found_by(q), "{q}");
+        }
+        // A set without a name is found by its file name.
+        let s = LogSetDef::parse("my-set.set", "file = a.log", None).unwrap();
+        assert!(s.found_by("my-set"));
     }
 
     #[test]

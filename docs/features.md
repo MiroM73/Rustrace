@@ -66,6 +66,8 @@ The logs of one troubleshooting scenario in one step – details in [Log sets](l
   the window never freezes
 - built in: application deployment, software updates, client installation, policy, Intune /
   co-management; your own sets are small text files
+- the window lists the sets with their descriptions and has a **search** field (names,
+  descriptions, log paths); the name and description of your own sets can be **edited** there
 - **File → Save as log set…** saves the logs of a merged view as your own set, with a name and a
   description; known folders are written as variables, so the set also works on a remote computer
 

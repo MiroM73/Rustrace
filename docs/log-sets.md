@@ -5,13 +5,24 @@ Groups of logs for one troubleshooting scenario, opened together on this or a re
 [← Back to README](../README.md)
 
 A **log set** is a named group of logs for one troubleshooting scenario. **File → Open log set…**
-opens a window: choose the set (the last one is remembered) and the computer, and the window checks
-in the background which of its logs exist – ✔ *Found* with the size, the last write time
+opens a window with the list of sets (name and description) on the left: choose the set (the last
+one is remembered) and the computer, and the window checks in the background which of its logs exist – ✔ *Found* with the size, the last write time
 and the number of rotated older parts that are opened with it (`AppEnforce.lo_`,
 `AppEnforce-20261027-101500.log`), ✖ *Not found*, 🔒 *Access denied*. Found logs are ticked; untick
 the ones you do not need and press **Open** – the logs are opened as **one view merged by time**
 (the same as opening several files, see [Several logs in one view](features.md#several-logs-in-one-view-sorted-by-time)). **Check again**
 repeats the check (e.g. after starting the scenario on the client).
+
+**Search**: type in the field above the list to show only the sets you are looking for. Every
+word must appear in the name or the description (in any language) or in the path of one of the
+logs, e.g. `deploy`, `CBS` or `ccmsetup client`; case does not matter. The set shown on the right
+stays until you click another one. **✖** clears the search.
+
+**Name and description**: say what a set is for when you [save it](#saving-the-opened-logs-as-a-set),
+or change it later – choose one of **your own** sets and press **✏ Edit**. Only the name and
+description change; the logs, guides and comments of the file stay, and so does its file name. In
+a set with translations the text of the current language is changed. An empty description removes
+it. Another of your own sets cannot have the same name. Built-in sets cannot be edited.
 
 Built-in sets (`%CCMLOGS%` = the log folder of the ConfigMgr client, see below); *Application
 deployment*, *Software updates* and *Client installation* have a 📖 button that opens their guide:
