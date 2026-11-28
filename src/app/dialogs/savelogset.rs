@@ -159,7 +159,8 @@ impl App {
                             ui.add(egui::TextEdit::singleline(&mut dlg.name).desired_width(420.0));
                         if dlg.focus {
                             r.request_focus();
-                            dlg.focus = false;
+                            // A new native window gets the keyboard focus a few frames later.
+                            dlg.focus = !ui.input(|i| i.focused);
                         }
                         enter = r.lost_focus() && ui.input(|i| i.key_pressed(Key::Enter));
                         ui.end_row();

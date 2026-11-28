@@ -641,7 +641,8 @@ fn set_list(ui: &mut egui::Ui, dlg: &mut LogSetDialog, lang: &str) -> Option<usi
             );
             if dlg.focus_search {
                 r.request_focus();
-                dlg.focus_search = false;
+                // A new native window gets the keyboard focus a few frames later.
+                dlg.focus_search = !ui.input(|i| i.focused);
             }
         });
     });
